@@ -23,5 +23,3 @@ container.bind(ExternalRouter).toSelf().inTransientScope();
 container.bind(ArabProcController).toSelf().inTransientScope();
 container.bind(ArabProcService).toSelf().inTransientScope();
 container.bind(ArabProcRouter).toSelf().inTransientScope();
-
-

@@ -1,3 +1,3 @@
-export interface IExternalRow{
-    row: number
+export interface IExternalRow {
+  row: number;
 }

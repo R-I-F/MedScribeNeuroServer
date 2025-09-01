@@ -9,7 +9,8 @@ export const createHospitalValidator = checkSchema({
       options: {
         max: 100,
       },
-      errorMessage: "hospital arabic name should have a maximum of 100 characters",
+      errorMessage:
+        "hospital arabic name should have a maximum of 100 characters",
     },
     trim: true,
   },
@@ -21,7 +22,8 @@ export const createHospitalValidator = checkSchema({
       options: {
         max: 100,
       },
-      errorMessage: "hospital english name should have a maximum of 100 characters",
+      errorMessage:
+        "hospital english name should have a maximum of 100 characters",
     },
     trim: true,
   },

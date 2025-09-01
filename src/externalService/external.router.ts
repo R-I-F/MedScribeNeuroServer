@@ -21,12 +21,12 @@ export class ExternalRouter {
       "",
       getArabProcDataValidator,
       async (req: Request, res: Response) => {
-          const result = validationResult(req);
-        if(result.isEmpty()){
-            const data = await this.externalController.getArabProcData(req, res);
-            res.json(data);
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          const data = await this.externalController.getArabProcData(req, res);
+          res.json(data);
         } else {
-            res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }
     );

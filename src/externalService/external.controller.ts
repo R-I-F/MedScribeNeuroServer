@@ -13,19 +13,29 @@ export class ExternalController {
   ) {}
   async getArabProcData(req: Request, res: Response) {
     const validatedData: IExternalQuery = matchedData(req);
-    let apiString: string
-    if(validatedData.row){
-        console.log(true)
-        apiString = `${process.env.GETTER_API_ENDPOINT}?spreadsheetName=${encodeURIComponent(validatedData.spreadsheetName)}&sheetName=${encodeURIComponent(validatedData.sheetName)}&row=${validatedData.row}`
+    let apiString: string;
+    if (validatedData.row) {
+      console.log(true);
+      apiString = `${
+        process.env.GETTER_API_ENDPOINT
+      }?spreadsheetName=${encodeURIComponent(
+        validatedData.spreadsheetName
+      )}&sheetName=${encodeURIComponent(validatedData.sheetName)}&row=${
+        validatedData.row
+      }`;
     } else {
-        apiString = `${process.env.GETTER_API_ENDPOINT}?spreadsheetName=${encodeURIComponent(validatedData.spreadsheetName)}&sheetName=${encodeURIComponent(validatedData.sheetName)}`
+      apiString = `${
+        process.env.GETTER_API_ENDPOINT
+      }?spreadsheetName=${encodeURIComponent(
+        validatedData.spreadsheetName
+      )}&sheetName=${encodeURIComponent(validatedData.sheetName)}`;
     }
     try {
       const data = await this.externalService.fetchExternalData(apiString);
-    //   console.log(`external controller return data: ${data}`)
-        return data
+      //   console.log(`external controller return data: ${data}`)
+      return data;
     } catch (err: any) {
-        throw new Error(err)
+      throw new Error(err);
     }
   }
 }
