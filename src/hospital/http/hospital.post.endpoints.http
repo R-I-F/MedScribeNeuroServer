@@ -1,0 +1,83 @@
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "مستشفى المنيل (الطابق الرابع)",
+    "engName": "El Manial Hospital (4th floor)",
+    "location": {
+        "long": 31.225832174876317,
+        "lat": 30.03067133573892
+    }
+}
+
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "مستشفى قصر العيني",
+    "engName": "Qasr Al Aini Hospital",
+    "location": {
+        "long": 31.226073350634568,
+        "lat": 30.031646913796372
+    }
+}
+
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "المستشفى التعليمي الجديد قصر العيني (الفرنساوي)",
+    "engName": "New Qasr El Aini Teaching Hospital (French)",
+    "location": {
+        "long": 31.231506857673264,
+        "lat": 30.030246312651318
+    }
+}
+
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "مستشفى أبو الريش (الياباني) – عمليات الخامس",
+    "engName": "Abou El Reesh Hospital (Japanese) – Fifth Operations",
+    "location": {
+        "long": 31.233338300000003,
+        "lat": 30.02858150055618
+    }
+}
+
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "مستشفى أبو الريش (الياباني) – طوارئ",
+    "engName": "Abou El Reesh Hospital (Japanese) – Emergency",
+    "location": {
+        "long": 31.233338300000003,
+        "lat": 30.02858150055618
+    }
+}
+
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "طوارئ ١٨٥",
+    "engName": "Emergency 185",
+    "location": {
+        "long": 31.226558974583277,
+        "lat": 30.032347306290703
+    }
+}
+
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "مستشفى منيرة",
+    "engName": "Mounira Hospital",
+    "location": {
+        "long": 31.238070681428415,
+        "lat": 30.034818587519982
+    }
+}
+
+POST http://localhost:3001/hospital/create
+Content-Type: application/json
+{
+    "arabName": "مستشفيات أخرى تابعة",
+    "engName": "Other Affiliated Hospitals",
+}

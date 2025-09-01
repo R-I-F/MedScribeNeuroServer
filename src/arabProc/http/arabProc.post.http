@@ -1,0 +1,19 @@
+POST http://localhost:3001/arabProc/createArabProc
+Content-Type: application/json
+
+{
+    "title": "تنظيف جرح",
+    "alphaCode": "MNR",
+    "numCode": "11044",
+    "description": "Wound Debridement"
+}
+
+POST http://localhost:3001/arabProc/createArabProcFromExternal
+Content-Type: application/json
+
+{"row": 12}
+
+POST http://localhost:3001/arabProc/createArabProcFromExternal
+Content-Type: application/json
+
+{}

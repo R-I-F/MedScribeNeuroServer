@@ -7,4 +7,4 @@ dist/
 
 
 # Environment files (secrets)
-src/.env
+.env

@@ -1,0 +1,4 @@
+GET https://script.google.com/macros/s/AKfycbwCSaIWehjfr1QJIs4OIvzur761nsEF9Lz_ZR6cYadwONLVo9oW2U0vUF-KD_z6ZaqgaQ/exec?spreadsheetName=procListSheet&sheetName=arabProcList
+Content-Type: application/json
+
+https://script.google.com/macros/s/AKfycbwCSaIWehjfr1QJIs4OIvzur761nsEF9Lz_ZR6cYadwONLVo9oW2U0vUF-KD_z6ZaqgaQ/exec??spreadsheetName=procListSheet&sheetName=arabProcList
