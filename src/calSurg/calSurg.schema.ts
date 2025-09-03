@@ -1,5 +1,5 @@
 import { Model, Schema, model } from "mongoose";
-import { ICalSurg } from "./calSug.interface";
+import { ICalSurg } from "./calSurg.interface";
 
 export const calSurgSchema: Schema<ICalSurg> = new Schema(
   {
@@ -38,6 +38,10 @@ export const calSurgSchema: Schema<ICalSurg> = new Schema(
       type: String,
       required: false,
     }, //opt
+    formLink: {
+      type: String,
+      required: false 
+    }
   },
   {
     timestamps: true,

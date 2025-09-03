@@ -22,8 +22,13 @@ export class ArabProcService {
   }
 
   public async createArabProc(arabProcData: IArabProc) {
-    const newArabProc = await new this.arabProcModel(arabProcData).save();
-    return newArabProc;
+    try {
+      const newArabProc = await new this.arabProcModel(arabProcData).save();
+      return newArabProc;
+      
+    } catch (err: any) {
+      throw new Error(err)
+    }
   }
 
   public async createArabProcsFromExternal(

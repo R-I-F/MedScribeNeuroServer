@@ -9,4 +9,5 @@ export interface ICalSurg {
   arabProc?: Types.ObjectId; // mongoDb object / model -> arabProc
   procDate: Date;
   google_uid?: string; //opt
+  formLink?: string
 }

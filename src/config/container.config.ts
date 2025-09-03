@@ -1,4 +1,6 @@
 import { Container } from "inversify";
+import { UtilService } from "../utils/utils.service";
+
 import { HospitalController } from "../hospital/hospital.controller";
 import { HospitalRouter } from "../hospital/hospital.router";
 import { HospitalService } from "../hospital/hospital.service";
@@ -11,7 +13,14 @@ import { ArabProcController } from "../arabProc/arabProc.controller";
 import { ArabProcService } from "../arabProc/arabProc.service";
 import { ArabProcRouter } from "../arabProc/arabProc.router";
 
+import { CalSurgController } from "../calSurg/calSurg.controller";
+import { CalSurgRouter } from "../calSurg/calSurg.router";
+import { CalSurgService } from "../calSurg/calSurg.service";
+
 export const container: Container = new Container();
+
+container.bind(UtilService).toSelf().inTransientScope();
+
 container.bind(HospitalController).toSelf().inTransientScope();
 container.bind(HospitalRouter).toSelf().inTransientScope();
 container.bind(HospitalService).toSelf().inTransientScope();
@@ -23,3 +32,7 @@ container.bind(ExternalRouter).toSelf().inTransientScope();
 container.bind(ArabProcController).toSelf().inTransientScope();
 container.bind(ArabProcService).toSelf().inTransientScope();
 container.bind(ArabProcRouter).toSelf().inTransientScope();
+
+container.bind(CalSurgController).toSelf().inTransientScope();
+container.bind(CalSurgRouter).toSelf().inTransientScope();
+container.bind(CalSurgService).toSelf().inTransientScope();

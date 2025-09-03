@@ -1,6 +1,6 @@
 import { checkSchema } from "express-validator";
 
-export const createArabProcFromExternalValidator = checkSchema({
+export const createFromExternalValidator = checkSchema({
   row: {
     in: ["body"],
   },
