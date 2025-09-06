@@ -17,6 +17,11 @@ import { CalSurgController } from "../calSurg/calSurg.controller";
 import { CalSurgRouter } from "../calSurg/calSurg.router";
 import { CalSurgService } from "../calSurg/calSurg.service";
 
+import { CandController } from "../cand/cand.controller";
+import { CandRouter } from "../cand/cand.router";
+import { CandService } from "../cand/cand.service";
+import { CandProvider } from "../cand/cand.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -36,3 +41,8 @@ container.bind(ArabProcRouter).toSelf().inTransientScope();
 container.bind(CalSurgController).toSelf().inTransientScope();
 container.bind(CalSurgRouter).toSelf().inTransientScope();
 container.bind(CalSurgService).toSelf().inTransientScope();
+
+container.bind(CandController).toSelf().inTransientScope();
+container.bind(CandService).toSelf().inTransientScope();
+container.bind(CandRouter).toSelf().inTransientScope();
+container.bind(CandProvider).toSelf().inTransientScope();

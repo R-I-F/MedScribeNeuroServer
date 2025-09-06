@@ -1,7 +1,7 @@
 import express, { Request, Response, Router } from "express";
 import { inject, injectable } from "inversify";
 import { CalSurgController } from "./calSurg.controller";
-import { createFromExternalValidator } from "../validators/createArabProcFromExternal.validator";
+import { createFromExternalValidator } from "../validators/createFromExternal.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 

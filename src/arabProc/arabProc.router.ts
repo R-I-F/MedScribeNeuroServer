@@ -4,7 +4,7 @@ import { inject, injectable } from "inversify";
 import { StatusCodes } from "http-status-codes";
 import { createArabProcValidator } from "../validators/createArabProc.validators";
 import { validationResult } from "express-validator";
-import { createFromExternalValidator } from "../validators/createArabProcFromExternal.validator";
+import { createFromExternalValidator } from "../validators/createFromExternal.validator";
 
 @injectable()
 export class ArabProcRouter {

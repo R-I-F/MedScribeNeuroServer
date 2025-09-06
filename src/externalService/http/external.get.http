@@ -6,3 +6,9 @@ Content-Type: application/json
 
 GET http://localhost:3001/external?spreadsheetName=calSurgLogSheet&sheetName=Form%20Responses%201
 Content-Type: application/json
+
+GET http://localhost:3001/external?spreadsheetName=candRegResponses&sheetName=Form%20Responses%201
+Content-Type: application/json
+
+GET http://localhost:3001/external?spreadsheetName=procListSheet&sheetName=aggProcSheet
+Content-Type: application/json

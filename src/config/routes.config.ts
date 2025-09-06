@@ -4,6 +4,7 @@ import { ArabProcRouter } from "../arabProc/arabProc.router";
 import { CalSurgRouter } from "../calSurg/calSurg.router";
 import { ExternalRouter } from "../externalService/external.router";
 import { container } from "./container.config";
+import { CandRouter } from "../cand/cand.router";
 
 export function addRoutes(app: Application) {
   const hospitalRouter: HospitalRouter =
@@ -13,10 +14,13 @@ export function addRoutes(app: Application) {
   const arabProcRouter: ArabProcRouter =
     container.get<ArabProcRouter>(ArabProcRouter);
   const calSurgRouter: CalSurgRouter =  
-    container.get<CalSurgRouter>(CalSurgRouter)
+    container.get<CalSurgRouter>(CalSurgRouter);
+  const candRouter: CandRouter = 
+    container.get<CandRouter>(CandRouter);
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
+  app.use("/cand", candRouter.router);
   app.use("/external", externalRouter.router);
 
   return app;
