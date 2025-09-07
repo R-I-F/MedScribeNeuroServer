@@ -22,6 +22,10 @@ import { CandRouter } from "../cand/cand.router";
 import { CandService } from "../cand/cand.service";
 import { CandProvider } from "../cand/cand.provider";
 
+import { ProcCptController } from "../procCpt/procCpt.controller";
+import { ProcCptRouter } from "../procCpt/procCpt.router";
+import { ProcCptService } from "../procCpt/procCpt.service";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -46,3 +50,7 @@ container.bind(CandController).toSelf().inTransientScope();
 container.bind(CandService).toSelf().inTransientScope();
 container.bind(CandRouter).toSelf().inTransientScope();
 container.bind(CandProvider).toSelf().inTransientScope();
+
+container.bind(ProcCptController).toSelf().inTransientScope();
+container.bind(ProcCptRouter).toSelf().inTransientScope();
+container.bind(ProcCptService).toSelf().inTransientScope();
