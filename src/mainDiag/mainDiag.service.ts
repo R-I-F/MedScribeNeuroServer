@@ -1,29 +1,20 @@
 import { inject, injectable } from "inversify";
-import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
-import { ICand, ICandDoc } from "./cand.interface";
+import { IMainDiag, IMainDiagDoc } from "./mainDiag.interface";
 import { Model } from "mongoose";
-import { Cand } from "./cand.schema";
-import { CandProvider } from "./cand.provider";
+import { MainDiag } from "./mainDiag.schema";
+import { MainDiagProvider } from "./mainDiag.provider"
 
 injectable();
 export class CandService {
-  constructor(@inject(CandProvider) private candProvider: CandProvider) {}
-  private candModel: Model<ICand> = Cand;
+  constructor(@inject(MainDiagProvider) private mainDiagProvider: MainDiagProvider) {}
+  private mainDiagModel: Model<IMainDiag> = MainDiag;
 
-  public async createBulkCands(candData: ICand[]) {
+  public async createMainDiag(mainDiagData: IMainDiag) {
     try {
-      const newCandArr: ICandDoc[] = await this.candModel.insertMany(candData);
-      return newCandArr;
+      const newMainDiag: IMainDiag = await new this.mainDiagModel(mainDiagData);
+      return newMainDiag;
     } catch (err: any) {
       throw new Error(err);
     }
-  }
-
-  public async createCandsFromExternal(validatedReq: Partial<IExternalRow>) {
-    const items = await this.candProvider.provideCandsFromExternal(
-      validatedReq
-    );
-    const newCandArr = await this.createBulkCands(items);
-    return newCandArr;
   }
 }

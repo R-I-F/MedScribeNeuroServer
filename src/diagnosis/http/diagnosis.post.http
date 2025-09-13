@@ -1,0 +1,59 @@
+# HTTP test requests for diagnosis endpoints
+
+### POST bulk diagnosis (with all fields)
+POST http://localhost:3001/diagnosis/bulk
+Content-Type: application/json
+
+[
+  {
+    "icdCode": "G93.1",
+    "icdName": "Anoxic brain damage, not elsewhere classified",
+    "neuroLogName": "Anoxic Brain Injury"
+  },
+  {
+    "icdCode": "G93.2",
+    "icdName": "Benign intracranial hypertension",
+    "neuroLogName": "Idiopathic Intracranial Hypertension"
+  }
+]
+
+### POST bulk diagnosis (with only required field)
+POST http://localhost:3001/diagnosis/bulk
+Content-Type: application/json
+
+[
+  {
+    "neuroLogName": "Chronic Fatigue Syndrome"
+  },
+  {
+    "neuroLogName": "Migraine Headache"
+  }
+]
+
+### POST bulk diagnosis (mixed optional fields)
+POST http://localhost:3001/diagnosis/bulk
+Content-Type: application/json
+
+[
+  {
+    "icdCode": "G93.1",
+    "neuroLogName": "Brain Injury"
+  },
+  {
+    "icdName": "Hypertension",
+    "neuroLogName": "High Blood Pressure"
+  },
+  {
+    "neuroLogName": "Simple Headache"
+  }
+]
+
+### POST single diagnosis (if you add this endpoint later)
+# POST http://localhost:3001/diagnosis
+# Content-Type: application/json
+# 
+# {
+#   "icdCode": "G93.1",
+#   "icdName": "Anoxic brain damage, not elsewhere classified",
+#   "neuroLogName": "Anoxic Brain Injury"
+# }

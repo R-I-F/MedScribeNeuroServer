@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { inject, injectable } from "inversify";
 import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
 import { ExternalService } from "../externalService/external.service";
-import { IProcCpt } from "./procCpt.interface";
+import { IProcCpt, IProcCptDoc } from "./procCpt.interface";
 import { UtilService } from "../utils/utils.service";
 import { Model } from "mongoose";
 import { ProcCpt } from "./procCpt.schema";
@@ -15,6 +15,18 @@ export class ProcCptService {
   ) {}
 
   private procCptModel: Model<IProcCpt> = ProcCpt;
+
+  public async findByNumCode(data: Pick<IProcCpt, "numCode">): Promise<IProcCptDoc | null> | never{
+    try {
+      const foundProcCpt: IProcCptDoc | null = await ProcCpt.findOne({numCode: data.numCode})
+      if(foundProcCpt){
+        return foundProcCpt
+      } 
+      return null
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 
   public async createProcCpt(procCptData: IProcCpt) {
     try {

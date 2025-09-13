@@ -1,33 +1,28 @@
-import { User } from "../user/user.interface";
 import { Types } from "mongoose";
+import { IProcCptDoc } from "../procCpt/procCpt.interface";
 
-export enum Rank {
-  Professor = "professor",
-  AssistantProfessor = "assistant professor",
-  Lecturer = "lecturer",
-  AssistantLecturer = "assistant lecturer",
-  Resident = "resident",
-  Guest = "guest",
-  Other = "other",
-  None = "none",
+export enum CongAnomDiag {
+  ArnoldChiari = "arnold chiari malformation",
+  Encephaloceles = "encephaloceles",
+  Lipomeningocele = "lipomeningocele",
+  Meningoceles = "meningoceles",
+  MultilocularHydrocephalus = "multilocular hydrocephalus",
+  Myelomeningoceles = "myelomeningoceles",
+  CraniofacialMalformations = "craniofacial malformations",
+  DandyWalker = "dandywalker malformation",
+  CommunicatingHydrocephalus = "communicating hydrocephalus- post Hemorrhagic, post infectous",
+  NonCommunicatingAqueductal = "noncommunicating hydrocephalus- aqueductal stenosis",
+  NonCommunicatingOther = "non communicating hydrocephalus- otherwise",
+  TetheredCord = "tethered cord",
+  ArachnoidCyst = "arachnoidcyst",
 }
 
-export enum RegDegree {
-  Msc = "msc",
-  DoctorOfMedicine = "doctor of medicine (md)",
-  EgyptianFellowship = "egyptian fellowship",
-  SelfRegistration = "self registration",
-  Other = "other",
-}
-export interface ICand extends User {
-  timeStamp?: Date;
-  regNum: string;
-  nationality: string;
-  rank: Rank;
-  regDeg: RegDegree;  
-  google_uid?: string;
+export interface IMainDiag {
+  title: string;
+  procs: Types.ObjectId[];
+  diagnosis: Types.ObjectId[];
 }
 
-export interface ICandDoc extends ICand {
+export interface IMainDiagDoc extends IMainDiag {
   _id: Types.ObjectId
 }

@@ -6,3 +6,7 @@ export interface IProcCpt {
   numCode: string;
   description: string;
 }
+
+export interface IProcCptDoc extends IProcCpt {
+  _id: Types.ObjectId
+}

@@ -5,7 +5,7 @@ import { ExternalService } from "../externalService/external.service";
 import { ICand, ICandDoc } from "./cand.interface";
 
 @injectable()
-export class CandProvider {
+export class MainDiagProvider {
   constructor(
     @inject(UtilService) private utilsService: UtilService,
     @inject(ExternalService) private externalService: ExternalService
