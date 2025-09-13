@@ -1,52 +1,63 @@
 # HTTP test requests for diagnosis endpoints
 
 ### POST bulk diagnosis (with all fields)
-POST http://localhost:3001/diagnosis/bulk
+POST http://localhost:3001/diagnosis/postBulk
 Content-Type: application/json
 
-[
   {
-    "icdCode": "G93.1",
-    "icdName": "Anoxic brain damage, not elsewhere classified",
-    "neuroLogName": "Anoxic Brain Injury"
+    "diagnoses": [
+  {
+    "icdCode": "8B22.40",
+    "icdName": "Arteriovenous malformation of cerebral vessels",
+    "neuroLogName": "Arteriovenous malformation"
   },
   {
     "icdCode": "G93.2",
     "icdName": "Benign intracranial hypertension",
     "neuroLogName": "Idiopathic Intracranial Hypertension"
   }
-]
+  ]
+}
 
-### POST bulk diagnosis (with only required field)
-POST http://localhost:3001/diagnosis/bulk
+### POST bulk diagnosis (with only required fields - icdCode and icdName)
+POST http://localhost:3001/diagnosis/postBulk
 Content-Type: application/json
 
-[
   {
-    "neuroLogName": "Chronic Fatigue Syndrome"
-  },
-  {
-    "neuroLogName": "Migraine Headache"
-  }
-]
+    "diagnoses": [
+    {
+      "icdCode": "G93.3",
+      "icdName": "Postviral fatigue syndrome"
+    },
+    {
+      "icdCode": "G43.9",
+      "icdName": "Migraine, unspecified"
+    }
+  ]
+}
 
-### POST bulk diagnosis (mixed optional fields)
-POST http://localhost:3001/diagnosis/bulk
+### POST bulk diagnosis (mixed with optional neuroLogName field)
+POST http://localhost:3001/diagnosis/postBulk
 Content-Type: application/json
 
-[
   {
-    "icdCode": "G93.1",
-    "neuroLogName": "Brain Injury"
-  },
-  {
-    "icdName": "Hypertension",
-    "neuroLogName": "High Blood Pressure"
-  },
-  {
-    "neuroLogName": "Simple Headache"
-  }
-]
+    "diagnoses": [
+    {
+      "icdCode": "G93.1",
+      "icdName": "Anoxic brain damage, not elsewhere classified",
+      "neuroLogName": "Brain Injury"
+    },
+    {
+      "icdCode": "I10",
+      "icdName": "Essential hypertension",
+      "neuroLogName": "High Blood Pressure"
+    },
+    {
+      "icdCode": "R51",
+      "icdName": "Headache"
+    }
+  ]
+}
 
 ### POST single diagnosis (if you add this endpoint later)
 # POST http://localhost:3001/diagnosis

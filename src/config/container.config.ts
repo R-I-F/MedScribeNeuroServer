@@ -29,6 +29,7 @@ import { ProcCptService } from "../procCpt/procCpt.service";
 import { DiagnosisController } from "../diagnosis/diagnosis.controller";
 import { DiagnosisRouter } from "../diagnosis/diagnosis.router";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
+import { DiagnosisProvider } from "../diagnosis/diagnosis.provider";
 
 export const container: Container = new Container();
 
@@ -62,3 +63,4 @@ container.bind(ProcCptService).toSelf().inTransientScope();
 container.bind(DiagnosisController).toSelf().inTransientScope();
 container.bind(DiagnosisRouter).toSelf().inTransientScope();
 container.bind(DiagnosisService).toSelf().inTransientScope();
+container.bind(DiagnosisProvider).toSelf().inTransientScope();

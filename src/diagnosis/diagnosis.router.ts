@@ -19,9 +19,10 @@ export class DiagnosisRouter {
 
   private async initRoutes() {
     this.router.post(
-      "/bulk",
+      "/postBulk",
       createBulkDiagnosisValidator,
       async (req: Request, res: Response) => {
+        console.log("req.body", req.body);
         const result = validationResult(req);
         if (result.isEmpty()) {
           try {

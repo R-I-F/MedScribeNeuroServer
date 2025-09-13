@@ -5,7 +5,7 @@ export const diagnosisSchema: Schema<IDiagnosis> = new Schema(
   {
     icdCode: {
       type: String,
-      required: true,
+      required: true
     },
     icdName: {
       type: String,
