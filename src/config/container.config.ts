@@ -16,6 +16,7 @@ import { ArabProcRouter } from "../arabProc/arabProc.router";
 import { CalSurgController } from "../calSurg/calSurg.controller";
 import { CalSurgRouter } from "../calSurg/calSurg.router";
 import { CalSurgService } from "../calSurg/calSurg.service";
+import { CalSurgProvider } from "../calSurg/calSurg.provider";
 
 import { CandController } from "../cand/cand.controller";
 import { CandRouter } from "../cand/cand.router";
@@ -50,6 +51,7 @@ container.bind(ArabProcRouter).toSelf().inTransientScope();
 container.bind(CalSurgController).toSelf().inTransientScope();
 container.bind(CalSurgRouter).toSelf().inTransientScope();
 container.bind(CalSurgService).toSelf().inTransientScope();
+container.bind(CalSurgProvider).toSelf().inTransientScope();
 
 container.bind(CandController).toSelf().inTransientScope();
 container.bind(CandService).toSelf().inTransientScope();

@@ -11,3 +11,10 @@ export interface ICalSurg {
   google_uid?: string; //opt
   formLink?: string
 }
+
+export interface ICalSurgDoc extends ICalSurg {
+  _id: Types.ObjectId;
+  __v?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}

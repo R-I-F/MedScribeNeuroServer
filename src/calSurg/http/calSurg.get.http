@@ -1,0 +1,24 @@
+# HTTP test requests for calSurg GET endpoints
+
+### GET all calSurg records
+GET http://localhost:3001/calSurg/getAll
+
+### GET calSurg records for a specific month (January 2024)
+GET http://localhost:3001/calSurg/getAll?month=2025-06
+
+### GET calSurg records for a specific year (2024)
+GET http://localhost:3001/calSurg/getAll?year=2025
+
+### GET calSurg records for a specific day
+GET http://localhost:3001/calSurg/getAll?day=2025-06-30
+
+### GET calSurg records within a date range
+GET http://localhost:3001/calSurg/getAll?startDate=2025-07-01&endDate=2025-07-02
+
+### GET calSurg by ID
+GET http://localhost:3001/calSurg/getById
+Content-Type: application/json
+
+{
+  "_id": "68b859751d491d005c5515d4"
+}
