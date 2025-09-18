@@ -1,7 +1,344 @@
-POST http://localhost:3001/cand/createCandsFromExternal
+### Create Congenital anomalies, infantile Hydrocephalus mainDiag
+POST http://localhost:3001/mainDiag
 Content-Type: application/json
-{}
 
-POST http://localhost:3001/cand/createCandsFromExternal
+{
+  "title": "Congenital anomalies, infantile Hydrocephalus",
+  "procsArray": [
+    "62201-00",
+    "61107-00",
+    "62161-00",
+    "62161-01",
+    "62223-00",
+    "61322-00",
+    "22612-00",
+    "62270-00",
+    "64493-00",
+    "61020-00",
+    "61000-00",
+    "63709-00",
+    "63200-00",
+    "62160-00",
+    "61516-00",
+    "00000-00"
+  ],
+  "diagnosis": [
+    "LA03",
+    "LA07.4",
+    "LA01",
+    "LA07.Y",
+    "LA02.Y",
+    "LA02.01",
+    "LA05.7",
+    "LB70",
+    "LA06.0",
+    "8D64.0Z",
+    "8D64.02",
+    "8D64.0Y",
+    "LA04.0",
+    "8D64.1Z",
+    "LA07.0",
+    "8D67",
+    "8D68",
+    "8E60"
+  ]
+}
+
+### Create CNS Tumors mainDiag
+POST http://localhost:3001/mainDiag
 Content-Type: application/json
-{"row": 45}
+
+{
+  "title": "CNS Tumors",
+  "procsArray": [
+    "61140-00",
+    "61510-00",
+    "61510-01",
+    "63709-01",
+    "62223-00",
+    "61107-01"
+  ],
+  "diagnosis": [
+    "2A00.0Z",
+    "2A00.00",
+    "2A00.10",
+    "2A01.0Z",
+    "2A02.3",
+    "LD2D.10",
+    "LD2D.11",
+    "2F7A.Y",
+    "5A61.Y",
+    "2F37.0",
+    "5A60.0",
+    "2F37.Y",
+    "5A70.0",
+    "5A02.6",
+    "2F7C",
+    "2B33.5",
+    "2B5J",
+    "2A00.0Y",
+    "2F7Z",
+    "2A00.11",
+    "2A00.20",
+    "2A00.21",
+    "2D12.Y",
+    "2A00.22",
+    "2A00.3",
+    "2A02.2"
+  ]
+}
+
+### Create CNS Infection mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "CNS Infection",
+  "procsArray": [
+    "61107-01",
+    "61020-01",
+    "11044-00",
+    "62160-01",
+    "13121-00",
+    "97605-00",
+    "11044-01",
+    "61570-00",
+    "61210-00"
+  ],
+  "diagnosis": [
+    "1D03.3Z",
+    "1D03.3Y",
+    "1D0Y",
+    "NE81.2Z",
+    "FA9Z",
+    "NE83.1",
+    "1D0Z",
+    "1D00.Z"
+  ]
+}
+
+### Create Cranial Trauma mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "Cranial Trauma",
+  "procsArray": [
+    "62000-00",
+    "61312-00",
+    "61570-00",
+    "61322-01",
+    "61322-02",
+    "61322-03",
+    "61107-01",
+    "61210-00",
+    "62223-00"
+  ],
+  "diagnosis": [
+    "NA02.0",
+    "NA07.5",
+    "NA07.6",
+    "8B02",
+    "NA07.1",
+    "8B00.4",
+    "8D64.Z",
+    "8B01",
+    "NA01.3",
+    "8D60.1",
+    "NA07.3Z",
+    "8D62"
+  ]
+}
+
+### Create Spinal Trauma mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "Spinal Trauma",
+  "procsArray": [
+    "22841-00",
+    "22842-00",
+    "22845-00",
+    "22842-01",
+    "22842-02",
+    "22612-01",
+    "22511-00",
+    "22513-00",
+    "63047-00",
+    "63050-00",
+    "63087-00",
+    "20660-00",
+    "63047-01"
+  ],
+  "diagnosis": [
+    "NA22.Z",
+    "NA82.0",
+    "NB52.0",
+    "NB52.10",
+    "NB52.11",
+    "NA23.4Z",
+    "LB73.22"
+  ]
+}
+
+### Create Spinal Degenerative Diseases mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "Spinal Degenerative Diseases",
+  "procsArray": [
+    "22845-00",
+    "22842-01",
+    "22841-00",
+    "22842-00",
+    "22842-02",
+    "22630-00",
+    "22612-02",
+    "22612-03",
+    "0274T-00",
+    "22630-01",
+    "63047-00",
+    "63042-00",
+    "63050-00",
+    "64493-01",
+    "64483-00",
+    "64636-00"
+  ],
+  "diagnosis": [
+    "FA80.1",
+    "FA80.5",
+    "FA80.9",
+    "FA82",
+    "FA8Z",
+    "FA84.Z",
+    "FA81.Z",
+    "FA70.1",
+    "FA70.0",
+    "FA92.01",
+    "8D65"
+  ]
+}
+
+### Create Peripheral nerve Diseases mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "Peripheral nerve Diseases",
+  "procsArray": [
+    "64721-00",
+    "64718-00",
+    "64861-00",
+    "64858-00",
+    "64856-00",
+    "64790-00",
+    "28035-00"
+  ],
+  "diagnosis": [
+    "8C10.0",
+    "8C10.1",
+    "8C10.2",
+    "NA41.Z",
+    "8C11.0",
+    "8C11.1",
+    "8C11.2",
+    "8C11.3",
+    "8C11.4",
+    "8C11.5",
+    "ND56.4",
+    "2C4Z",
+    "2F3Y"
+  ]
+}
+
+### Create Neuro-vascular Diseases mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "Neuro-vascular Diseases",
+  "procsArray": [
+    "61703-00",
+    "61624-00",
+    "61635-00",
+    "62223-00",
+    "61107-01",
+    "61313-00",
+    "61711-00",
+    "61711-01",
+    "61640-00",
+    "61697-00"
+  ],
+  "diagnosis": [
+    "8B22.40",
+    "8B22.41",
+    "8B22.42",
+    "8B22.43",
+    "8B22.5",
+    "8B22.B",
+    "LA90.20",
+    "8B01.0",
+    "8B11",
+    "8B00"
+  ]
+}
+
+### Create Functional Neurosurgery mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "Functional Neurosurgery",
+  "procsArray": [
+    "64493-02",
+    "63650-00",
+    "63185-00",
+    "63170-00",
+    "63197-00",
+    "61863-00",
+    "61715-00",
+    "61534-00",
+    "61537-00",
+    "61543-00",
+    "61566-00",
+    "0908T-00",
+    "61541-00",
+    "61458-00",
+    "64636-00"
+  ],
+  "diagnosis": [
+    "8A00",
+    "8A02",
+    "8B88.2",
+    "8A04",
+    "8A6Z",
+    "8B82.0",
+    "8A04.1",
+    "MG30.0Z",
+    "MB47.3"
+  ]
+}
+
+### Create CSF Disorders- other than Infantile hydrocephalus mainDiag
+POST http://localhost:3001/mainDiag
+Content-Type: application/json
+
+{
+  "title": "CSF Disorders- other than Infantile hydrocephalus",
+  "procsArray": [
+    "62272-00",
+    "62272-01",
+    "62223-01",
+    "62223-02",
+    "62201-00",
+    "61107-04",
+    "63741-00"
+  ],
+  "diagnosis": [
+    "8D64.04",
+    "8D64.1",
+    "8D66"
+  ]
+}

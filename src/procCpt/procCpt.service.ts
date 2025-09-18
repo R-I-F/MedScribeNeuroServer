@@ -28,10 +28,42 @@ export class ProcCptService {
     }
   }
 
+  public async findByNumCodes(numCodes: string[]): Promise<IProcCptDoc[]> | never {
+    try {
+      const foundProcCpts: IProcCptDoc[] = await ProcCpt.find({ numCode: { $in: numCodes } }).exec();
+      return foundProcCpts;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async createProcCpt(procCptData: IProcCpt) {
     try {
       const newProcCpt = await new this.procCptModel(procCptData).save();
       return newProcCpt;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async upsertProcCpt(procCptData: IProcCpt): Promise<IProcCptDoc> {
+    try {
+      // Check if ProcCpt exists by numCode
+      const existingProcCpt = await this.findByNumCode({ numCode: procCptData.numCode });
+      
+      if (existingProcCpt) {
+        // Update existing record
+        const updatedProcCpt = await this.procCptModel.findByIdAndUpdate(
+          existingProcCpt._id,
+          procCptData,
+          { new: true, runValidators: true }
+        ).exec();
+        return updatedProcCpt as IProcCptDoc;
+      } else {
+        // Create new record
+        const newProcCpt = await new this.procCptModel(procCptData).save();
+        return newProcCpt;
+      }
     } catch (err: any) {
       throw new Error(err);
     }

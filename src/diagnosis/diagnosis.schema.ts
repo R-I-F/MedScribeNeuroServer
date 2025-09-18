@@ -12,7 +12,7 @@ export const diagnosisSchema: Schema<IDiagnosis> = new Schema(
       required: true,
     },
     neuroLogName: {
-      type: String,
+      type: [String],
       required: false,
     }
   },

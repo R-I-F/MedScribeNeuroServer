@@ -1,22 +1,6 @@
 import { Types } from "mongoose";
 import { IProcCptDoc } from "../procCpt/procCpt.interface";
 
-export enum CongAnomDiag {
-  ArnoldChiari = "arnold chiari malformation",
-  Encephaloceles = "encephaloceles",
-  Lipomeningocele = "lipomeningocele",
-  Meningoceles = "meningoceles",
-  MultilocularHydrocephalus = "multilocular hydrocephalus",
-  Myelomeningoceles = "myelomeningoceles",
-  CraniofacialMalformations = "craniofacial malformations",
-  DandyWalker = "dandywalker malformation",
-  CommunicatingHydrocephalus = "communicating hydrocephalus- post Hemorrhagic, post infectous",
-  NonCommunicatingAqueductal = "noncommunicating hydrocephalus- aqueductal stenosis",
-  NonCommunicatingOther = "non communicating hydrocephalus- otherwise",
-  TetheredCord = "tethered cord",
-  ArachnoidCyst = "arachnoidcyst",
-}
-
 export interface IMainDiag {
   title: string;
   procs: Types.ObjectId[];
@@ -24,5 +8,12 @@ export interface IMainDiag {
 }
 
 export interface IMainDiagDoc extends IMainDiag {
-  _id: Types.ObjectId
+  _id: Types.ObjectId;
+}
+
+// Input interface for creating mainDiag with codes
+export interface IMainDiagInput {
+  title: string;
+  procsArray?: string[]; // Array of numCodes
+  diagnosis?: string[]; // Array of icdCodes
 }

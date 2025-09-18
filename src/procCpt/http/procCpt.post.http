@@ -7,3 +7,26 @@ POST http://localhost:3001/procCpt/postAllFromExternal
 Content-Type: application/json
 
 {"row": 12}
+
+
+### Upsert Vagal nerve compression ProcCpt
+POST http://localhost:3001/procCpt/upsert
+Content-Type: application/json
+
+{
+  "title": "Vagal nerve compression",
+  "alphaCode": "PRPH",
+  "numCode": "0908T-00",
+  "description": "Vagal nerve stimulator implantation"
+}
+
+### Upsert Foraminotomy ProcCpt
+POST http://localhost:3001/procCpt/upsert
+Content-Type: application/json
+
+{
+  "title": "Foraminotomy",
+  "alphaCode": "LAM",
+  "numCode": "0274T-00",
+  "description": "Percutaneous foraminotomy"
+}

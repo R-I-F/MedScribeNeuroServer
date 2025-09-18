@@ -1,0 +1,28 @@
+### Update supervisor
+PUT http://localhost:3000/api/supervisor/507f1f77bcf86cd799439011
+Content-Type: application/json
+
+{
+  "email": "updated.supervisor@example.com",
+  "fullName": "Updated Name",
+  "approved": true,
+  "approvedSubs": ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012", "507f1f77bcf86cd799439015"],
+  "pendingSubs": [],
+  "rejectedSubs": ["507f1f77bcf86cd799439014"]
+}
+
+### Update supervisor (partial update)
+PUT http://localhost:3000/api/supervisor/507f1f77bcf86cd799439011
+Content-Type: application/json
+
+{
+  "approved": false
+}
+
+### Update supervisor (invalid ID)
+PUT http://localhost:3000/api/supervisor/invalid-id
+Content-Type: application/json
+
+{
+  "email": "test@example.com"
+}

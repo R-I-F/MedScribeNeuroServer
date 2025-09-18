@@ -71,21 +71,35 @@ export class DiagnosisProvider {
     const processedData: IDiagnosis = {
       icdCode: diagnosisData.icdCode.trim().toUpperCase(), // Normalize ICD code
       icdName: this.utilService.stringToLowerCaseTrim(diagnosisData.icdName), // Sanitize name using utils service
-      neuroLogName: diagnosisData.neuroLogName ? this.utilService.stringToLowerCaseTrim(diagnosisData.neuroLogName) : undefined // Sanitize optional field using utils service
+      neuroLogName: diagnosisData.neuroLogName ? diagnosisData.neuroLogName.map(name => this.utilService.stringToLowerCaseTrim(name)) : undefined // Sanitize optional field array using utils service
     };
 
     return processedData;
   }
 
   /**
-   * Checks for duplicate diagnosis based on ICD code
+   * Checks for duplicate diagnosis based on ICD code or ICD name
    * @param diagnosisData - Diagnosis data to check
    * @throws Error if duplicate found
    */
   private async checkForDuplicateDiagnosis(diagnosisData: IDiagnosis): Promise<void> {
-    // Business logic: Implement duplicate checking logic here
-    // This could involve querying existing diagnoses
-    // For now, we'll skip this check, but the structure is ready
+    try {
+      const existingDiagnosis = await this.diagnosisService.findExistingDiagnosis(
+        diagnosisData.icdCode,
+        diagnosisData.icdName
+      );
+
+      if (existingDiagnosis) {
+        if (existingDiagnosis.icdCode === diagnosisData.icdCode) {
+          throw new Error(`Diagnosis with ICD code '${diagnosisData.icdCode}' already exists`);
+        }
+        if (existingDiagnosis.icdName === diagnosisData.icdName) {
+          throw new Error(`Diagnosis with ICD name '${diagnosisData.icdName}' already exists`);
+        }
+      }
+    } catch (error: any) {
+      throw new Error(`Duplicate check failed: ${error.message}`);
+    }
   }
 
   /**
@@ -96,15 +110,22 @@ export class DiagnosisProvider {
   private async checkForDuplicateDiagnoses(diagnosisDataArray: IDiagnosis[]): Promise<void> {
     // Business logic: Check for duplicates within the array itself
     const icdCodes = diagnosisDataArray.map(data => data.icdCode);
+    const icdNames = diagnosisDataArray.map(data => data.icdName);
     const uniqueIcdCodes = new Set(icdCodes);
+    const uniqueIcdNames = new Set(icdNames);
     
     if (icdCodes.length !== uniqueIcdCodes.size) {
       throw new Error("Duplicate ICD codes found in the request");
     }
 
+    if (icdNames.length !== uniqueIcdNames.size) {
+      throw new Error("Duplicate ICD names found in the request");
+    }
+
     // Business logic: Check against existing diagnoses in database
-    // This could involve querying existing diagnoses
-    // For now, we'll skip this check, but the structure is ready
+    for (const diagnosisData of diagnosisDataArray) {
+      await this.checkForDuplicateDiagnosis(diagnosisData);
+    }
   }
 
   /**

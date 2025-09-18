@@ -1,0 +1,5 @@
+### Delete supervisor
+DELETE http://localhost:3000/supervisor/507f1f77bcf86cd799439011
+
+### Delete supervisor (invalid ID)
+DELETE http://localhost:3000/supervisor/invalid-id

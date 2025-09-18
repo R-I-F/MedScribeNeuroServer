@@ -1,6 +1,522 @@
-# HTTP test requests for diagnosis endpoints
 
-### POST bulk diagnosis (with all fields)
+### POST bulk diagnosis (Congenital Anomalies and Hydrocephalus data)
+POST http://localhost:3001/diagnosis/postBulk
+Content-Type: application/json
+
+{
+  "diagnoses": [
+    {
+      "icdCode": "LA03",
+      "icdName": "Arnold-Chiari malformation type II",
+      "neuroLogName": ["Arnold Chiari Malformation"]
+    },
+    {
+      "icdCode": "LA07.4",
+      "icdName": "Arnold-Chiari malformation type I",
+      "neuroLogName": ["Arnold Chiari Malformation"]
+    },
+    {
+      "icdCode": "LA01",
+      "icdName": "Encephaloceles",
+      "neuroLogName": ["Encephaloceles"]
+    },
+    {
+      "icdCode": "LA07.Y",
+      "icdName": "Leptomyelolipoma",
+      "neuroLogName": ["Lipomeningocele"]
+    },
+    {
+      "icdCode": "LA02.Y",
+      "icdName": "Meningoceles",
+      "neuroLogName": ["Meningoceles"]
+    },
+    {
+      "icdCode": "LA02.01",
+      "icdName": "Myelomeningoceles",
+      "neuroLogName": ["Myelomeningoceles"]
+    },
+    {
+      "icdCode": "LA05.7",
+      "icdName": "Brain cystic malformations (Multilocular hydrocephalus)",
+      "neuroLogName": ["Multilocular Hydrocephalus"]
+    },
+    {
+      "icdCode": "LB70",
+      "icdName": "Structural developmental anomalies of cranium",
+      "neuroLogName": ["Craniofacial Malformations"]
+    },
+    {
+      "icdCode": "LA06.0",
+      "icdName": "Dandywalker Malformation",
+      "neuroLogName": ["Dandywalker Malformation"]
+    },
+    {
+      "icdCode": "8D64.0Z",
+      "icdName": "Communicating hydrocephalus",
+      "neuroLogName": ["Communicating Hydrocephalus- Post Hemorrhagic, Post infectous"]
+    },
+    {
+      "icdCode": "8D64.02",
+      "icdName": "Post hemorrhagic hydrocephalus"
+    },
+    {
+      "icdCode": "8D64.0Y",
+      "icdName": "Post infectious hydrocephalus"
+    },
+    {
+      "icdCode": "LA04.0",
+      "icdName": "Hydrocephalus with stenosis of the aqueduct of Sylvius",
+      "neuroLogName": ["Noncommunicating hydrocephalus- Aqueductal stenosis"]
+    },
+    {
+      "icdCode": "8D64.1Z",
+      "icdName": "Non-communicating hydrocephalus, unspecified",
+      "neuroLogName": ["Non Communicating Hydrocephalus- Otherwise"]
+    },
+    {
+      "icdCode": "LA07.0",
+      "icdName": "Primary tethered cord syndrome",
+      "neuroLogName": ["Tethered cord"]
+    },
+    {
+      "icdCode": "8D67",
+      "icdName": "Intracranial arachnoid cyst",
+      "neuroLogName": ["Arachnoidcyst"]
+    },
+    {
+      "icdCode": "8D68",
+      "icdName": "Porencephalic cyst"
+    },
+    {
+      "icdCode": "8E60",
+      "icdName": "Post ventricular shunting leak"
+    }
+  ]
+}
+
+### POST bulk diagnosis (Brain and CNS Tumors data)
+POST http://localhost:3001/diagnosis/postBulk
+Content-Type: application/json
+
+{
+  "diagnoses": [
+    {
+      "icdCode": "2A00.0Z",
+      "icdName": "Gliomas of brain, unspecified",
+      "neuroLogName": ["Glioma (C71)"]
+    },
+    {
+      "icdCode": "2A00.00",
+      "icdName": "Glioblastoma of brain"
+    },
+    {
+      "icdCode": "2A00.10",
+      "icdName": "Medulloblastoma of brain"
+    },
+    {
+      "icdCode": "2A01.0Z",
+      "icdName": "Meningiomas, unspecified",
+      "neuroLogName": ["Meningioma (D32)"]
+    },
+    {
+      "icdCode": "2A02.3",
+      "icdName": "Vestibular Schwannoma",
+      "neuroLogName": ["Vestibular Schwannoma (D33)"]
+    },
+    {
+      "icdCode": "LD2D.10",
+      "icdName": "Neurofibromatosis type 1"
+    },
+    {
+      "icdCode": "LD2D.11",
+      "icdName": "Neurofibromatosis type 2"
+    },
+    {
+      "icdCode": "2F7A.Y",
+      "icdName": "Craniopharyngioma",
+      "neuroLogName": ["Craniopharyngioma (D44)"]
+    },
+    {
+      "icdCode": "5A61.Y",
+      "icdName": "Rathkes cleft cyst",
+      "neuroLogName": ["Rathkes cleft cyst (D44)"]
+    },
+    {
+      "icdCode": "2F37.0",
+      "icdName": "Non-secreting pituitary adenoma",
+      "neuroLogName": ["Pituitary adenoma (D35)"]
+    },
+    {
+      "icdCode": "5A60.0",
+      "icdName": "Acromegaly or pituitary gigantism"
+    },
+    {
+      "icdCode": "2F37.Y",
+      "icdName": "Prolactinoma"
+    },
+    {
+      "icdCode": "5A70.0",
+      "icdName": "Pituitary-dependent Cushing disease"
+    },
+    {
+      "icdCode": "5A02.6",
+      "icdName": "Secondary hyperthyroidism"
+    },
+    // {
+    //   "icdCode": "LA05.7",
+    //   "icdName": "Colloid cyst",
+    //   "neuroLogName": ["Colloid cyst. (D34)"]
+    // },
+    {
+      "icdCode": "2F7C",
+      "icdName": "Hemangioblastoma",
+      "neuroLogName": ["Hemangioblastoma (D18)"]
+    },
+    {
+      "icdCode": "2B33.5",
+      "icdName": "CNS lymphoma",
+      "neuroLogName": ["CNS lymphoma (C85)"]
+    },
+    {
+      "icdCode": "2B5J",
+      "icdName": "Chordoma",
+      "neuroLogName": ["Chordoma (C71)"]
+    },
+    {
+      "icdCode": "2A00.0Y",
+      "icdName": "Ependymoma",
+      "neuroLogName": ["Gliomas: Ependymoma (C71)"]
+    },
+    {
+      "icdCode": "2F7Z",
+      "icdName": "Epidermoid/ Dermoid Tumors",
+      "neuroLogName": ["Epidermoid,Dermoid Tumors (L72)"]
+    },
+    {
+      "icdCode": "2A00.11",
+      "icdName": "PNET",
+      "neuroLogName": ["PNET (C71)"]
+    },
+    {
+      "icdCode": "2A00.20",
+      "icdName": "Tumors of the pineal gland or pineal region"
+    },
+    {
+      "icdCode": "2A00.21",
+      "icdName": "Mixed neuronal-glial tumors"
+    },
+    {
+      "icdCode": "2D12.Y",
+      "icdName": "Paraganglioma",
+      "neuroLogName": ["Ganglioma, paraganglioma (D44)"]
+    },
+    {
+      "icdCode": "2A00.22",
+      "icdName": "Choroid plexus tumors",
+      "neuroLogName": ["Choroid plexus tumors (C71)"]
+    },
+    {
+      "icdCode": "2A00.3",
+      "icdName": "Central Neurocytoma",
+      "neuroLogName": ["Central Neurocytoma (C71)"]
+    },
+    {
+      "icdCode": "2A02.2",
+      "icdName": "Primary neoplasm of spinal cord"
+    }
+  ]
+}
+
+### POST bulk diagnosis (CNS Infections data)
+POST http://localhost:3001/diagnosis/postBulk
+Content-Type: application/json
+
+{
+  "diagnoses": [
+    {
+      "icdCode": "1D03.3Z",
+      "icdName": "Brain Abscess",
+      "neuroLogName": ["Brain Abscess"]
+    },
+    {
+      "icdCode": "1D03.3Y",
+      "icdName": "Epidural Abscess",
+      "neuroLogName": ["Epidural Abcess, collection"]
+    },
+    {
+      "icdCode": "1D0Y",
+      "icdName": "Ventriculitis, primary",
+      "neuroLogName": ["Ventriculitis, primary"]
+    },
+    {
+      "icdCode": "NE81.2Z",
+      "icdName": "Surgical Site Infection",
+      "neuroLogName": ["Wound infection - Cranial", "Wound infection- Spinal"]
+    },
+    {
+      "icdCode": "FA9Z",
+      "icdName": "Discitis, spinal infection",
+      "neuroLogName": ["Discitis, spinal infection"]
+    },
+    {
+      "icdCode": "NE83.1",
+      "icdName": "Infected VP Shunt"
+    },
+    {
+      "icdCode": "1D0Z",
+      "icdName": "Acute CNS infection",
+      "neuroLogName": ["Infection, otherwise"]
+    },
+    {
+      "icdCode": "1D00.Z",
+      "icdName": "Cerebral ventriculitis, NOS",
+      "neuroLogName": ["Ventriculitis after previous CSF access procedure"]
+    }
+  ]
+}
+
+### POST bulk diagnosis (Trauma and Hemorrhage data)
+POST http://localhost:3001/diagnosis/postBulk
+Content-Type: application/json
+
+{
+  "diagnoses": [
+    {
+      "icdCode": "NA02.0",
+      "icdName": "Depressed Fracture",
+      "neuroLogName": ["Depressed Fracture"]
+    },
+    {
+      "icdCode": "NA07.5",
+      "icdName": "Extradural Hematoma",
+      "neuroLogName": ["Extradural Hematoma"]
+    },
+    {
+      "icdCode": "NA07.6",
+      "icdName": "Acute subdural hematoma",
+      "neuroLogName": ["Acute subdural hematoma"]
+    },
+    {
+      "icdCode": "8B02",
+      "icdName": "Chronic Subdural Hematoma",
+      "neuroLogName": ["Chronic Subdural Hematoma"]
+    },
+    {
+      "icdCode": "NA07.1",
+      "icdName": "Intracerebral Hematoma",
+      "neuroLogName": ["Intracereberal Hematoma"]
+    },
+    {
+      "icdCode": "8B00.4",
+      "icdName": "Intraventricular Hemorrhage",
+      "neuroLogName": ["Intraventricular Hemorhhage"]
+    },
+    {
+      "icdCode": "8D64.Z",
+      "icdName": "Hydrocephalus",
+      "neuroLogName": ["Hydrocephalus"]
+    },
+    {
+      "icdCode": "8B01",
+      "icdName": "Subarachnoid Hemorrhage",
+      "neuroLogName": ["Subarachnoid Hemorrhage"]
+    },
+    {
+      "icdCode": "NA01.3",
+      "icdName": "Laceration with foreign body of head",
+      "neuroLogName": ["Foreign Body"]
+    },
+    {
+      "icdCode": "8D60.1",
+      "icdName": "Cerebral oedema",
+      "neuroLogName": ["Massive Brain Edema"]
+    },
+    {
+      "icdCode": "NA07.3Z",
+      "icdName": "Diffuse axonal injury",
+      "neuroLogName": ["Diffuse axonal injury"]
+    },
+    {
+      "icdCode": "8D62",
+      "icdName": "Cerebrospinal fluid rhinorrhoea"
+    }
+  ]
+}
+
+### POST bulk diagnosis (Spinal Trauma data)
+POST http://localhost:3001/diagnosis/postBulk
+Content-Type: application/json
+
+{
+  "diagnoses": [
+    {
+      "icdCode": "NA22.Z",
+      "icdName": "Cervical Fracture",
+      "neuroLogName": ["Cervical Fracture"]
+    },
+    {
+      "icdCode": "NA82.0",
+      "icdName": "Dorsal spine fracture",
+      "neuroLogName": ["Dorsal spine fracture"]
+    },
+    {
+      "icdCode": "NB52.0",
+      "icdName": "Lumbar spine fracture",
+      "neuroLogName": ["Lumbar spine fracture"]
+    },
+    {
+      "icdCode": "NB52.10",
+      "icdName": "Sacral fracture",
+      "neuroLogName": ["Sacral-coccygeal fracture"]
+    },
+    {
+      "icdCode": "NB52.11",
+      "icdName": "Coccygeal fracture"
+    },
+    {
+      "icdCode": "NA23.4Z",
+      "icdName": "Whiplash Injury",
+      "neuroLogName": ["Whiplash Injury"]
+    },
+    {
+      "icdCode": "LB73.22",
+      "icdName": "Atlanto-axial instability or subluxation",
+      "neuroLogName": ["Craniocervical Instability"]
+    }
+  ]
+}
+
+### POST bulk diagnosis (Spinal Disorders data)
+POST http://localhost:3001/diagnosis/postBulk
+Content-Type: application/json
+
+{
+  "diagnoses": [
+    {
+      "icdCode": "FA80.1",
+      "icdName": "Intervertebral disc degeneration of cervical spine with prolapsed disc",
+      "neuroLogName": ["Central Disc Prolapse"]
+    },
+    {
+      "icdCode": "FA80.5",
+      "icdName": "Intervertebral disc degeneration of thoracic spine with prolapsed disc",
+      "neuroLogName": ["Foraminal/axillary disc prolapse"]
+    },
+    {
+      "icdCode": "FA80.9",
+      "icdName": "Intervertebral disc degeneration of lumbar spine with prolapsed disc"
+    },
+    {
+      "icdCode": "FA82",
+      "icdName": "Spinal Canal stenosis",
+      "neuroLogName": ["Canal stenosis"]
+    },
+    {
+      "icdCode": "FA8Z",
+      "icdName": "Facet arthropathy",
+      "neuroLogName": ["Facet arthropathy"]
+    },
+    {
+      "icdCode": "FA84.Z",
+      "icdName": "Spondylolisthesis",
+      "neuroLogName": ["Spondylolithesis"]
+    },
+    {
+      "icdCode": "FA81.Z",
+      "icdName": "Spondylolysis"
+    },
+    {
+      "icdCode": "FA70.1",
+      "icdName": "Scoliosis",
+      "neuroLogName": ["Scoliosis"]
+    },
+    {
+      "icdCode": "FA70.0",
+      "icdName": "Kyphosis",
+      "neuroLogName": ["Kyphosis"]
+    },
+    {
+      "icdCode": "FA92.01",
+      "icdName": "Sacroiliitis",
+      "neuroLogName": ["Sacroiliitis"]
+    },
+    {
+      "icdCode": "8D65",
+      "icdName": "Cerebrospinal fluid fistula"
+    }
+  ]
+}
+
+### POST bulk diagnosis (Peripheral Nerve Disorders data)
+POST http://localhost:3001/diagnosis/postBulk
+Content-Type: application/json
+
+{
+  "diagnoses": [
+    {
+      "icdCode": "8C10.0",
+      "icdName": "Carpal tunnel syndrome",
+      "neuroLogName": ["Carpal tunnel syndrome"]
+    },
+    {
+      "icdCode": "8C10.1",
+      "icdName": "Lesion of ulnar nerve",
+      "neuroLogName": ["Ulnar nerve entrapment (Cubital tunnel syndrome)"]
+    },
+    {
+      "icdCode": "8C10.2",
+      "icdName": "Lesion of radial nerve"
+    },
+    {
+      "icdCode": "NA41.Z",
+      "icdName": "Brachial Plexus injury",
+      "neuroLogName": ["Brachial Plexus injury"]
+    },
+    {
+      "icdCode": "8C11.0",
+      "icdName": "Lesion of sciatic nerve",
+      "neuroLogName": ["Sciatic nerve injury"]
+    },
+    {
+      "icdCode": "8C11.1",
+      "icdName": "Meralgia paraesthetica"
+    },
+    {
+      "icdCode": "8C11.2",
+      "icdName": "Lesion of femoral nerve"
+    },
+    {
+      "icdCode": "8C11.3",
+      "icdName": "Lesion of common peroneal nerve"
+    },
+    {
+      "icdCode": "8C11.4",
+      "icdName": "Lesion of tibial nerve"
+    },
+    {
+      "icdCode": "8C11.5",
+      "icdName": "Tarsal tunnel syndrome",
+      "neuroLogName": ["Tarsal tunnel syndrome"]
+    },
+    {
+      "icdCode": "ND56.4",
+      "icdName": "Nerve injury otherwise",
+      "neuroLogName": ["Nerve injury otherwise"]
+    },
+    {
+      "icdCode": "2C4Z",
+      "icdName": "Malignant neoplasms of peripheral nerves",
+      "neuroLogName": ["Peripheral nerve tumor"]
+    },
+    {
+      "icdCode": "2F3Y",
+      "icdName": "Benign peripheral nerve sheath tumor",
+      "neuroLogName": ["Peripheral nerve tumor"]
+    }
+  ]
+}
+
+### POST bulk diagnosis (Cerebrovascular Disorders data)
 POST http://localhost:3001/diagnosis/postBulk
 Content-Type: application/json
 
@@ -9,62 +525,128 @@ Content-Type: application/json
   {
     "icdCode": "8B22.40",
     "icdName": "Arteriovenous malformation of cerebral vessels",
-    "neuroLogName": "Arteriovenous malformation"
-  },
-  {
-    "icdCode": "G93.2",
-    "icdName": "Benign intracranial hypertension",
-    "neuroLogName": "Idiopathic Intracranial Hypertension"
-  }
+      "neuroLogName": ["Arteriovenous malformation"]
+    },
+    {
+      "icdCode": "8B22.41",
+      "icdName": "Cerebral cavernous malformation"
+    },
+    {
+      "icdCode": "8B22.42",
+      "icdName": "Dural arteriovenous fistula",
+      "neuroLogName": ["Dural AV Fistula"]
+    },
+    {
+      "icdCode": "8B22.43",
+      "icdName": "Carotid cavernous fistula"
+    },
+    {
+      "icdCode": "8B22.5",
+      "icdName": "Cerebral aneurysm, nonruptured",
+      "neuroLogName": ["Non Ruptured aneurysm"]
+    },
+    {
+      "icdCode": "8B22.B",
+      "icdName": "Moyamoya syndrome",
+      "neuroLogName": ["Moya Moya Disease"]
+    },
+    {
+      "icdCode": "LA90.20",
+      "icdName": "Vein of Galen aneurysm"
+    },
+    {
+      "icdCode": "8B01.0",
+      "icdName": "Aneurysmal subarachnoid haemorrhage",
+      "neuroLogName": ["Ruptured Aneurysm"]
+    },
+    {
+      "icdCode": "8B11",
+      "icdName": "Cerebral ischaemic stroke",
+      "neuroLogName": ["Cerebro-occlusive diseases"]
+    },
+    {
+      "icdCode": "8B00",
+      "icdName": "Intracerebral haemorrhage",
+      "neuroLogName": ["Intracereberal Hemorrhage"]
+    }
   ]
 }
 
-### POST bulk diagnosis (with only required fields - icdCode and icdName)
+### POST bulk diagnosis (Movement Disorders and Neurological Conditions data)
 POST http://localhost:3001/diagnosis/postBulk
 Content-Type: application/json
 
   {
     "diagnoses": [
     {
-      "icdCode": "G93.3",
-      "icdName": "Postviral fatigue syndrome"
+      "icdCode": "8A00",
+      "icdName": "Parkinsonism",
+      "neuroLogName": ["Parkinsonism"]
     },
     {
-      "icdCode": "G43.9",
-      "icdName": "Migraine, unspecified"
+      "icdCode": "8A02",
+      "icdName": "Dystonic disorders",
+      "neuroLogName": ["Dystonia"]
+    },
+    {
+      "icdCode": "8B88.2",
+      "icdName": "Hemifacial spasm",
+      "neuroLogName": ["Hemifacial spasm"]
+    },
+    {
+      "icdCode": "8A04",
+      "icdName": "Disorders associated with tremor",
+      "neuroLogName": ["Essential tremors"]
+    },
+    {
+      "icdCode": "8A6Z",
+      "icdName": "Epilepsy",
+      "neuroLogName": ["Drug resistant Epilepsy"]
+    },
+    {
+      "icdCode": "8B82.0",
+      "icdName": "Trigeminal neuralgia",
+      "neuroLogName": ["Trigeminal Neualgia"]
+    },
+    {
+      "icdCode": "8A04.1",
+      "icdName": "Essential tremors",
+      "neuroLogName": ["Tremors"]
+    },
+    {
+      "icdCode": "MG30.0Z",
+      "icdName": "Chronic Pain Syndomes",
+      "neuroLogName": ["Chronic Pain Syndomes"]
+    },
+    {
+      "icdCode": "MB47.3",
+      "icdName": "Spasticity",
+      "neuroLogName": ["Spasticity"]
     }
   ]
 }
 
-### POST bulk diagnosis (mixed with optional neuroLogName field)
+### POST bulk diagnosis (Hydrocephalus and Syringomyelia data)
 POST http://localhost:3001/diagnosis/postBulk
 Content-Type: application/json
 
   {
     "diagnoses": [
     {
-      "icdCode": "G93.1",
-      "icdName": "Anoxic brain damage, not elsewhere classified",
-      "neuroLogName": "Brain Injury"
+      "icdCode": "8D64.04",
+      "icdName": "Normal-pressure hydrocephalus"
+    },
+    // {
+    //   "icdCode": "8D64.0Z",
+    //   "icdName": "Communicating hydrocephalus, unspecified"
+    // },
+    {
+      "icdCode": "8D64.1",
+      "icdName": "Non-communicating hydrocephalus"
     },
     {
-      "icdCode": "I10",
-      "icdName": "Essential hypertension",
-      "neuroLogName": "High Blood Pressure"
-    },
-    {
-      "icdCode": "R51",
-      "icdName": "Headache"
+      "icdCode": "8D66",
+      "icdName": "Syringomyelia or syringobulbia"
     }
   ]
 }
-
-### POST single diagnosis (if you add this endpoint later)
-# POST http://localhost:3001/diagnosis
-# Content-Type: application/json
-# 
-# {
-#   "icdCode": "G93.1",
-#   "icdName": "Anoxic brain damage, not elsewhere classified",
-#   "neuroLogName": "Anoxic Brain Injury"
-# }

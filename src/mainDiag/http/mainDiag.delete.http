@@ -1,0 +1,5 @@
+### Delete mainDiag
+DELETE http://localhost:3001/mainDiag/507f1f77bcf86cd799439011
+
+### Delete mainDiag (invalid ID)
+DELETE http://localhost:3001/mainDiag/invalid-id

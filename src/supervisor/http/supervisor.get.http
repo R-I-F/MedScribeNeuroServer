@@ -1,0 +1,8 @@
+### Get all supervisors
+GET http://localhost:3000/supervisor
+
+### Get supervisor by ID
+GET http://localhost:3000/supervisor/507f1f77bcf86cd799439011
+
+### Get supervisor by ID (invalid)
+GET http://localhost:3000/supervisor/invalid-id

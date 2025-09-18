@@ -1,0 +1,179 @@
+### Create Ahmed El Ashry
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "elashry10@yahoo.com",
+  "password": "MEDSuper01#",
+  "fullName": "Ahmed El Ashry",
+  "phoneNum": "MEDSuper01#",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Mohamed Salama
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "mohamedsalama@kasralainy.edu.eg",
+  "password": "MEDSuper02#",
+  "fullName": "Mohamed Salama",
+  "phoneNum": "01001003854",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Hisham EL Shitany
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "helshitany@gmail.com",
+  "password": "MEDSuper03#",
+  "fullName": "Hisham EL Shitany",
+  "phoneNum": "",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Ehab El Refaee
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "Ehab_refaee@kasralainy.edu.eg",
+  "password": "MEDSuper04#",
+  "fullName": "Ehab El Refaee",
+  "phoneNum": "01001792965",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Mohammad ElBaroody
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "mohammad.elbaroody@kasralainy.edu.eg",
+  "password": "MEDSuper05#",
+  "fullName": "Mohammad ElBaroody",
+  "phoneNum": "",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Mohamed Abdelsalam Eltoukhy
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "makt2000@gmail.com",
+  "password": "MEDSuper06#",
+  "fullName": "Mohamed Abdelsalam Eltoukhy",
+  "phoneNum": "",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Mohamed Fathalla
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "Mohamed.elsawy@kasralainy.edu.eg",
+  "password": "MEDSuper07#",
+  "fullName": "Mohamed Fathalla",
+  "phoneNum": "01143262927",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Hossam ElDin Mostafa
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "hosameldin6@gmail.com",
+  "password": "MEDSuper08#",
+  "fullName": "Hossam ElDin Mostafa",
+  "phoneNum": "",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Mohamed Fathy
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "dr.mohamedfathy2006@gmail.com",
+  "password": "MEDSuper09#",
+  "fullName": "Mohamed Fathy",
+  "phoneNum": "01003736075",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Abd El Rahman Enayet
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "Abdoenayet@gmail.com",
+  "password": "MEDSuper10#",
+  "fullName": "Abd El Rahman Enayet",
+  "phoneNum": "01009294871",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Mohamed Amr Gouda
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "Magouda2015@kasralainy.edu.eg",
+  "password": "MEDSuper11#",
+  "fullName": "Mohamed Amr Gouda",
+  "phoneNum": "",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
+### Create Amr Helmy
+POST http://localhost:3000/supervisor
+Content-Type: application/json
+
+{
+  "email": "amr.helmy92@gmail.com",
+  "password": "MEDSuper12#",
+  "fullName": "Amr Helmy",
+  "phoneNum": "01005414500",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}

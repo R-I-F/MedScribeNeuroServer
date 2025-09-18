@@ -1,0 +1,8 @@
+### Get all mainDiags
+GET http://localhost:3001/mainDiag
+
+### Get mainDiag by ID
+GET http://localhost:3001/mainDiag/507f1f77bcf86cd799439011
+
+### Get mainDiag by ID (invalid)
+GET http://localhost:3001/mainDiag/invalid-id

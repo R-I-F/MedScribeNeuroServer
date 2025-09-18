@@ -32,6 +32,16 @@ import { DiagnosisRouter } from "../diagnosis/diagnosis.router";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
 import { DiagnosisProvider } from "../diagnosis/diagnosis.provider";
 
+import { SupervisorController } from "../supervisor/supervisor.controller";
+import { SupervisorRouter } from "../supervisor/supervisor.router";
+import { SupervisorService } from "../supervisor/supervisor.service";
+import { SupervisorProvider } from "../supervisor/supervisor.provider";
+
+import { MainDiagController } from "../mainDiag/mainDiag.controller";
+import { MainDiagRouter } from "../mainDiag/mainDiag.router";
+import { MainDiagService } from "../mainDiag/mainDiag.service";
+import { MainDiagProvider } from "../mainDiag/mainDiag.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -66,3 +76,13 @@ container.bind(DiagnosisController).toSelf().inTransientScope();
 container.bind(DiagnosisRouter).toSelf().inTransientScope();
 container.bind(DiagnosisService).toSelf().inTransientScope();
 container.bind(DiagnosisProvider).toSelf().inTransientScope();
+
+container.bind(SupervisorController).toSelf().inTransientScope();
+container.bind(SupervisorRouter).toSelf().inTransientScope();
+container.bind(SupervisorService).toSelf().inTransientScope();
+container.bind(SupervisorProvider).toSelf().inTransientScope();
+
+container.bind(MainDiagController).toSelf().inTransientScope();
+container.bind(MainDiagRouter).toSelf().inTransientScope();
+container.bind(MainDiagService).toSelf().inTransientScope();
+container.bind(MainDiagProvider).toSelf().inTransientScope();
