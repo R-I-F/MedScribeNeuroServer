@@ -17,3 +17,11 @@ export interface IMainDiagInput {
   procsArray?: string[]; // Array of numCodes
   diagnosis?: string[]; // Array of icdCodes
 }
+
+// Input interface for updating mainDiag with codes (appends to existing arrays)
+export interface IMainDiagUpdateInput {
+  id: string;
+  title?: string;
+  procs?: string[]; // Array of numCodes to append
+  diagnosis?: string[]; // Array of icdCodes to append
+}

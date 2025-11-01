@@ -25,14 +25,38 @@ export const updateMainDiagValidator = checkSchema({
     in: ["body"],
     optional: true,
     isArray: {
-      errorMessage: "procs must be an array",
+      options: {
+        min: 1,
+      },
+      errorMessage: "procs must be a non-empty array if provided",
+    },
+    custom: {
+      options: (value: any) => {
+        if (value && Array.isArray(value)) {
+          return value.every((item: any) => typeof item === 'string' && item.trim().length > 0);
+        }
+        return true;
+      },
+      errorMessage: "procs must contain only non-empty strings",
     },
   },
   diagnosis: {
     in: ["body"],
     optional: true,
     isArray: {
-      errorMessage: "diagnosis must be an array",
+      options: {
+        min: 1,
+      },
+      errorMessage: "diagnosis must be a non-empty array if provided",
+    },
+    custom: {
+      options: (value: any) => {
+        if (value && Array.isArray(value)) {
+          return value.every((item: any) => typeof item === 'string' && item.trim().length > 0);
+        }
+        return true;
+      },
+      errorMessage: "diagnosis must contain only non-empty strings",
     },
   },
 });

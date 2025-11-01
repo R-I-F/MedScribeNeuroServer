@@ -25,8 +25,8 @@ POST http://localhost:3001/procCpt/upsert
 Content-Type: application/json
 
 {
-  "title": "Foraminotomy",
-  "alphaCode": "LAM",
-  "numCode": "0274T-00",
-  "description": "Percutaneous foraminotomy"
+  "title": "Burr holes",
+  "alphaCode": "CRAN",
+  "numCode": "61108-00",
+  "description": "Small skull openings to relieve pressure or access brain."
 }

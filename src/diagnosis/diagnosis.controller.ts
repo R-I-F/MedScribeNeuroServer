@@ -20,4 +20,14 @@ export class DiagnosisController {
       throw new Error(err);
     }
   }
+
+  public async handlePostDiagnosis(req: Request, res: Response) {
+    try {
+      const validatedReq: IDiagnosis = matchedData(req);
+      const newDiagnosis = await this.diagnosisProvider.createDiagnosis(validatedReq);
+      return newDiagnosis;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

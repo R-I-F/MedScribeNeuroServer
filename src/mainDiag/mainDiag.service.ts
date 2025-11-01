@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { IMainDiag, IMainDiagDoc, IMainDiagInput } from "./mainDiag.interface";
+import { IMainDiag, IMainDiagDoc, IMainDiagInput, IMainDiagUpdateInput } from "./mainDiag.interface";
 import { MainDiagProvider } from "./mainDiag.provider";
 
 @injectable()
@@ -30,7 +30,7 @@ export class MainDiagService {
     }
   }
 
-  public async updateMainDiag(validatedReq: Partial<IMainDiag> & { id: string }): Promise<IMainDiagDoc | null> | never {
+  public async updateMainDiag(validatedReq: IMainDiagUpdateInput): Promise<IMainDiagDoc | null> | never {
     try {
       return await this.mainDiagProvider.updateMainDiag(validatedReq);
     } catch (err: any) {

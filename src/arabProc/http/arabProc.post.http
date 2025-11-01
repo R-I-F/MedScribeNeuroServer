@@ -2,10 +2,10 @@ POST http://localhost:3001/arabProc/createArabProc
 Content-Type: application/json
 
 {
-    "title": "تنظيف جرح",
+    "title": "بذل من اليافوج",
     "alphaCode": "MNR",
-    "numCode": "11044",
-    "description": "Wound Debridement"
+    "numCode": "61000",
+    "description": "inserting a needle into the cerebral ventricles to withdraw CSF or relieve pressure."
 }
 
 POST http://localhost:3001/arabProc/createArabProcFromExternal

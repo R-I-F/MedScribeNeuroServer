@@ -1,12 +1,12 @@
 ### Create Ahmed El Ashry
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
   "email": "elashry10@yahoo.com",
   "password": "MEDSuper01#",
   "fullName": "Ahmed El Ashry",
-  "phoneNum": "MEDSuper01#",
+  "phoneNum": "01000000000",
   "approved": true,
   "approvedSubs": [],
   "pendingSubs": [],
@@ -14,7 +14,7 @@ Content-Type: application/json
 }
 
 ### Create Mohamed Salama
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
@@ -29,14 +29,14 @@ Content-Type: application/json
 }
 
 ### Create Hisham EL Shitany
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
   "email": "helshitany@gmail.com",
   "password": "MEDSuper03#",
   "fullName": "Hisham EL Shitany",
-  "phoneNum": "",
+  "phoneNum": "01000000000",
   "approved": true,
   "approvedSubs": [],
   "pendingSubs": [],
@@ -44,7 +44,7 @@ Content-Type: application/json
 }
 
 ### Create Ehab El Refaee
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
@@ -59,14 +59,14 @@ Content-Type: application/json
 }
 
 ### Create Mohammad ElBaroody
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
   "email": "mohammad.elbaroody@kasralainy.edu.eg",
   "password": "MEDSuper05#",
   "fullName": "Mohammad ElBaroody",
-  "phoneNum": "",
+  "phoneNum": "01000000000",
   "approved": true,
   "approvedSubs": [],
   "pendingSubs": [],
@@ -74,14 +74,14 @@ Content-Type: application/json
 }
 
 ### Create Mohamed Abdelsalam Eltoukhy
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
   "email": "makt2000@gmail.com",
   "password": "MEDSuper06#",
   "fullName": "Mohamed Abdelsalam Eltoukhy",
-  "phoneNum": "",
+  "phoneNum": "01000000000",
   "approved": true,
   "approvedSubs": [],
   "pendingSubs": [],
@@ -89,7 +89,7 @@ Content-Type: application/json
 }
 
 ### Create Mohamed Fathalla
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
@@ -104,14 +104,14 @@ Content-Type: application/json
 }
 
 ### Create Hossam ElDin Mostafa
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
   "email": "hosameldin6@gmail.com",
   "password": "MEDSuper08#",
   "fullName": "Hossam ElDin Mostafa",
-  "phoneNum": "",
+  "phoneNum": "01000000000",
   "approved": true,
   "approvedSubs": [],
   "pendingSubs": [],
@@ -119,7 +119,7 @@ Content-Type: application/json
 }
 
 ### Create Mohamed Fathy
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
@@ -134,7 +134,7 @@ Content-Type: application/json
 }
 
 ### Create Abd El Rahman Enayet
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
@@ -149,14 +149,14 @@ Content-Type: application/json
 }
 
 ### Create Mohamed Amr Gouda
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {
   "email": "Magouda2015@kasralainy.edu.eg",
   "password": "MEDSuper11#",
   "fullName": "Mohamed Amr Gouda",
-  "phoneNum": "",
+  "phoneNum": "01000000000",
   "approved": true,
   "approvedSubs": [],
   "pendingSubs": [],
@@ -164,7 +164,7 @@ Content-Type: application/json
 }
 
 ### Create Amr Helmy
-POST http://localhost:3000/supervisor
+POST http://localhost:3001/supervisor
 Content-Type: application/json
 
 {

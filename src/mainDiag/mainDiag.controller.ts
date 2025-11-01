@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { matchedData } from "express-validator";
 import { inject, injectable } from "inversify";
 import { MainDiagService } from "./mainDiag.service";
-import { IMainDiagInput, IMainDiag } from "./mainDiag.interface";
+import { IMainDiagInput, IMainDiag, IMainDiagUpdateInput } from "./mainDiag.interface";
 
 @injectable()
 export class MainDiagController {
@@ -49,7 +49,9 @@ export class MainDiagController {
     req: Request, 
     res: Response
   ) {
-    const validatedReq = matchedData(req) as Partial<IMainDiag> & { id: string };
+    const validatedReq = matchedData(req) as IMainDiagUpdateInput;
+    // Merge id from params into validatedReq
+    validatedReq.id = req.params.id;
     try {
       return await this.mainDiagService.updateMainDiag(validatedReq);
     } catch (err: any) {

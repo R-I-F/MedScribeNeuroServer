@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { IMainDiag, IMainDiagDoc, IMainDiagInput } from "./mainDiag.interface";
+import { IMainDiag, IMainDiagDoc, IMainDiagInput, IMainDiagUpdateInput } from "./mainDiag.interface";
 import { MainDiag } from "./mainDiag.schema";
 import { ProcCptService } from "../procCpt/procCpt.service";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
@@ -76,19 +76,69 @@ export class MainDiagProvider {
     }
   }
 
-  public async updateMainDiag(validatedReq: Partial<IMainDiag> & { id: string }): Promise<IMainDiagDoc | null> | never {
+  public async updateMainDiag(validatedReq: IMainDiagUpdateInput): Promise<IMainDiagDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;
       if (!Types.ObjectId.isValid(id)) {
         throw new Error("Invalid mainDiag ID");
       }
-      
-      // Sanitize title if it's being updated
-      if (updateData.title) {
-        updateData.title = this.utilService.stringToLowerCaseTrim(updateData.title);
+
+      // Fetch existing mainDiag
+      const existingMainDiag = await MainDiag.findById(id);
+      if (!existingMainDiag) {
+        throw new Error("MainDiag not found");
       }
-      
-      return await MainDiag.findByIdAndUpdate(id, updateData, { new: true }).populate('procs').populate('diagnosis').exec();
+
+      const updateFields: Partial<IMainDiag> = {};
+
+      // Update title if provided
+      if (updateData.title !== undefined) {
+        updateFields.title = this.utilService.stringToLowerCaseTrim(updateData.title);
+      }
+
+      // Handle procs: append new ones to existing array
+      if (updateData.procs && updateData.procs.length > 0) {
+        const procDocs = await this.procCptService.findByNumCodes(updateData.procs);
+        
+        // Check if all requested numCodes were found
+        const foundNumCodes = procDocs.map(doc => doc.numCode);
+        const missingNumCodes = updateData.procs.filter(code => !foundNumCodes.includes(code));
+        if (missingNumCodes.length > 0) {
+          throw new Error(`The following numCodes were not found: ${missingNumCodes.join(', ')}`);
+        }
+
+        const newProcIds = procDocs.map(doc => doc._id);
+        // Merge with existing procs, avoiding duplicates
+        const existingProcIdStrings = existingMainDiag.procs.map(id => id.toString());
+        const uniqueNewProcIds = newProcIds.filter(id => !existingProcIdStrings.includes(id.toString()));
+        updateFields.procs = [...existingMainDiag.procs, ...uniqueNewProcIds];
+      } else {
+        // If no new procs provided, keep existing ones
+        updateFields.procs = existingMainDiag.procs;
+      }
+
+      // Handle diagnosis: append new ones to existing array
+      if (updateData.diagnosis && updateData.diagnosis.length > 0) {
+        const diagnosisDocs = await this.diagnosisService.findByIcdCodes(updateData.diagnosis);
+        
+        // Check if all requested icdCodes were found
+        const foundIcdCodes = diagnosisDocs.map(doc => doc.icdCode);
+        const missingIcdCodes = updateData.diagnosis.filter(code => !foundIcdCodes.includes(code));
+        if (missingIcdCodes.length > 0) {
+          throw new Error(`The following icdCodes were not found: ${missingIcdCodes.join(', ')}`);
+        }
+
+        const newDiagnosisIds = diagnosisDocs.map(doc => doc._id);
+        // Merge with existing diagnosis, avoiding duplicates
+        const existingDiagnosisIdStrings = existingMainDiag.diagnosis.map(id => id.toString());
+        const uniqueNewDiagnosisIds = newDiagnosisIds.filter(id => !existingDiagnosisIdStrings.includes(id.toString()));
+        updateFields.diagnosis = [...existingMainDiag.diagnosis, ...uniqueNewDiagnosisIds];
+      } else {
+        // If no new diagnosis provided, keep existing ones
+        updateFields.diagnosis = existingMainDiag.diagnosis;
+      }
+
+      return await MainDiag.findByIdAndUpdate(id, updateFields, { new: true }).populate('procs').populate('diagnosis').exec();
     } catch (err: any) {
       throw new Error(err);
     }

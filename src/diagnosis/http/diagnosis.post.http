@@ -1,3 +1,12 @@
+### POST single diagnosis
+POST http://localhost:3001/diagnosis/post
+Content-Type: application/json
+
+{
+  "icdCode": "LA05.7",
+  "icdName": "Colloid cyst",
+  "neuroLogName": ["Colloid cyst. (D34)"]
+}
 
 ### POST bulk diagnosis (Congenital Anomalies and Hydrocephalus data)
 POST http://localhost:3001/diagnosis/postBulk

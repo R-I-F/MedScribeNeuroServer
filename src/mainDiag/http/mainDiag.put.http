@@ -1,19 +1,50 @@
-### Update mainDiag
-PUT http://localhost:3001/mainDiag/507f1f77bcf86cd799439011
+### Update mainDiag - Add new procCpt and diagnosis (appends to existing)
+PUT http://localhost:3001/mainDiag/68cc18e702ad5de90f3e6cd0
 Content-Type: application/json
 
 {
-  "title": "Updated Arnold Chiari Malformation",
-  "procs": ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012"],
-  "diagnosis": ["507f1f77bcf86cd799439013"]
+  "diagnosis": ["LA05.7"]
 }
 
-### Update mainDiag (partial update)
+### Update mainDiag - Add only new procCpt (appends to existing)
+PUT http://localhost:3001/mainDiag/68cc2a8e02ad5de90f3e6cea
+Content-Type: application/json
+
+{
+  "procs": ["00000-00", "12001-00", "61108-00", "61304-00"]
+}
+
+PUT http://localhost:3001/mainDiag/68cc290c02ad5de90f3e6ce1
+Content-Type: application/json
+
+{
+  "procs": ["00000-00", "12001-00"]
+}
+
+### Update mainDiag - Add only new diagnosis (appends to existing)
+PUT http://localhost:3001/mainDiag/68cc2a8e02ad5de90f3e6cea
+Content-Type: application/json
+
+{
+  "diagnosis": ["8D64.0Z"]
+}
+
+### Update mainDiag (title only)
 PUT http://localhost:3001/mainDiag/507f1f77bcf86cd799439011
 Content-Type: application/json
 
 {
   "title": "Updated Title Only"
+}
+
+### Update mainDiag (title and add new items)
+PUT http://localhost:3001/mainDiag/507f1f77bcf86cd799439011
+Content-Type: application/json
+
+{
+  "title": "Updated Arnold Chiari Malformation",
+  "procs": ["0274T-00"],
+  "diagnosis": ["LA03"]
 }
 
 ### Update mainDiag (invalid ID)
