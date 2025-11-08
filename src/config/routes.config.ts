@@ -9,6 +9,7 @@ import { ProcCptRouter } from "../procCpt/procCpt.router";
 import { DiagnosisRouter } from "../diagnosis/diagnosis.router";
 import { SupervisorRouter } from "../supervisor/supervisor.router";
 import { MainDiagRouter } from "../mainDiag/mainDiag.router";
+import { SubRouter } from "../sub/sub.router";
 
 export function addRoutes(app: Application) {
   const hospitalRouter: HospitalRouter =
@@ -38,6 +39,9 @@ export function addRoutes(app: Application) {
   const mainDiagRouter: MainDiagRouter = 
   container.get<MainDiagRouter>(MainDiagRouter);
 
+  const subRouter: SubRouter = 
+  container.get<SubRouter>(SubRouter);
+
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
@@ -47,6 +51,7 @@ export function addRoutes(app: Application) {
   app.use("/diagnosis", diagnosisRouter.router);
   app.use("/supervisor", supervisorRouter.router);
   app.use("/mainDiag", mainDiagRouter.router);
+  app.use("/sub", subRouter.router);
 
   return app;
 }

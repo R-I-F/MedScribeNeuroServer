@@ -13,6 +13,21 @@ Content-Type: application/json
   "rejectedSubs": []
 }
 
+### Create Tester
+POST http://localhost:3001/supervisor
+Content-Type: application/json
+
+{
+  "email": "medixlogi@gmail.com",
+  "password": "MEDSuper00#",
+  "fullName": "Tester",
+  "phoneNum": "01090650946",
+  "approved": true,
+  "approvedSubs": [],
+  "pendingSubs": [],
+  "rejectedSubs": []
+}
+
 ### Create Mohamed Salama
 POST http://localhost:3001/supervisor
 Content-Type: application/json

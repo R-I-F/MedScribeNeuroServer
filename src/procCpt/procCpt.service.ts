@@ -96,16 +96,16 @@ export class ProcCptService {
           const normalizedItem: IProcCpt = {
             title: this.utilService.stringToLowerCaseTrim(
               rawItem["Procedure Name"]
-            ),
+            ) as string,
             alphaCode: this.utilService
-              .stringToLowerCaseTrim(rawItem["Alpha Code"])
-              .toUpperCase(),
+              .stringToLowerCaseTrim(rawItem["Alpha Code"]) 
+              .toUpperCase() as string,
             numCode: this.utilService.stringToLowerCaseTrim(
               rawItem["Num Code"]
-            ),
+            ) as string,
             description: this.utilService.stringToLowerCaseTrim(
               rawItem["Description"]
-            ),
+            ) as string,
           };
           items.push(normalizedItem);
         }

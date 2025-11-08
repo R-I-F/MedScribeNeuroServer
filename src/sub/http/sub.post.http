@@ -1,0 +1,4 @@
+### POST Bulk subs
+POST http://localhost:3001/sub/postAllFromExternal
+Content-Type: application/json
+{}

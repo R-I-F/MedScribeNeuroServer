@@ -15,3 +15,6 @@ Content-Type: application/json
 
 GET http://localhost:3001/external?spreadsheetName=procListSheet&sheetName=Sheet1
 Content-Type: application/json
+
+GET http://localhost:3001/external?spreadsheetName=neuroLogResponses&sheetName=Form%20Responses%201
+Content-Type: application/json

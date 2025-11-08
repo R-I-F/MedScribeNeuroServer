@@ -42,6 +42,11 @@ import { MainDiagRouter } from "../mainDiag/mainDiag.router";
 import { MainDiagService } from "../mainDiag/mainDiag.service";
 import { MainDiagProvider } from "../mainDiag/mainDiag.provider";
 
+import { SubController } from "../sub/sub.controller";
+import { SubRouter } from "../sub/sub.router";
+import { SubProvider } from "../sub/sub.provider";
+import { SubService } from "../sub/sub.service";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -86,3 +91,8 @@ container.bind(MainDiagController).toSelf().inTransientScope();
 container.bind(MainDiagRouter).toSelf().inTransientScope();
 container.bind(MainDiagService).toSelf().inTransientScope();
 container.bind(MainDiagProvider).toSelf().inTransientScope();
+
+container.bind(SubController).toSelf().inTransientScope();
+container.bind(SubRouter).toSelf().inTransientScope();
+container.bind(SubProvider).toSelf().inTransientScope();
+container.bind(SubService).toSelf().inTransientScope();
