@@ -24,6 +24,7 @@ import {
 } from "./interfaces/sub.interface";
 import { Types } from "mongoose";
 import { SubService } from "./sub.service";
+import { IExternalResponse } from "../externalService/external.interface";
 
 @injectable()
 export class SubProvider {
@@ -330,6 +331,42 @@ export class SubProvider {
 
       default:
         throw new Error(`Unsupported main diagnosis title: ${mainDiagTitle}`);
+    }
+  }
+
+  public async updateStatusFromExternal(validatedReq: Partial<IExternalRow>): Promise<ISub[] | any> {
+    try {
+      console.log("sub.provider update status hit")
+      const indexes = this.utilService.returnSubIndexes();
+      const apiString = this.buildExternalApiString(validatedReq);
+      const externalData: IExternalResponse |  never =
+        await this.externalService.fetchExternalData(apiString);
+      const rawItems: ISubRawData[] = externalData.data.data
+      const allSubDocs: ISubDoc[] = await this.subService.getAllSubs();
+      const updatedSubDocs: ISubDoc[] = [];
+      for(let i: number = 0 ; i < externalData.data.data.length; i++){
+        const rawItem:ISubRawData = rawItems[i];
+        const rawItemArr = Object.values(rawItem);
+        const subDoc = allSubDocs.find((sub) => sub.subGoogleUid === rawItemArr[indexes.subUid]);
+        if(subDoc){
+          if(rawItemArr[indexes.subStatus] === "Approved" && subDoc.subStatus !== "approved"){
+            console.log("changed status to approved ", i + 1)
+            subDoc.subStatus = "approved";
+            await subDoc.save();
+            updatedSubDocs.push(subDoc);
+          }
+          else if(rawItemArr[indexes.subStatus] === "Rejected" && subDoc.subStatus !== "rejected"){
+            console.log("changed status to rejected ", i + 1)
+            subDoc.subStatus = "rejected";
+            await subDoc.save();
+            updatedSubDocs.push(subDoc);
+
+          } 
+        }
+      }
+      return updatedSubDocs;
+    } catch (err: any) {
+      throw new Error(err);
     }
   }
 }

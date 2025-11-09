@@ -36,5 +36,23 @@ export class SubRouter {
         }
       }
     )
+    this.router.patch(
+      "/updateStatusFromExternal",
+      createFromExternalValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if(result.isEmpty()){
+          try{
+            const updatedSubs = await this.subController.handleUpdateStatusFromExternal(req, res);
+            res.status(StatusCodes.OK).json(updatedSubs);
+          }
+          catch(err: any){
+            throw new Error(err)
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    )
   }
 }

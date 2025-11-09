@@ -17,4 +17,13 @@ export class SubService {
       throw new Error(error.message);
     }
   }
+
+  public async getAllSubs(): Promise<ISubDoc[]> {
+    try {
+      const allSubs = await this.subModel.find({});
+      return allSubs;
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
 }

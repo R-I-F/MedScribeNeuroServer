@@ -20,4 +20,15 @@ export class SubController {
       throw new Error(err);
     }
   }
+
+  public async handleUpdateStatusFromExternal(req: Request, res: Response) {
+    console.log("handling update status from external")
+    try {
+      const matched = matchedData(req)
+      const updatedSubs = await this.subProvider.updateStatusFromExternal(matched)
+      return updatedSubs;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

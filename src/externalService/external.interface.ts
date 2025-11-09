@@ -7,3 +7,14 @@ export interface IExternalQuery {
   sheetName: string;
   row?: number;
 }
+
+export interface IExternalResponse {
+  success: boolean;
+  data: {
+    headers: any[];
+    data: any[];
+    totalRows: number;
+    totalColumns: number;
+  };
+  timestamp: any;
+}

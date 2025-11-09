@@ -2,10 +2,10 @@ POST http://localhost:3001/arabProc/createArabProc
 Content-Type: application/json
 
 {
-    "title": "بذل من اليافوج",
-    "alphaCode": "MNR",
-    "numCode": "61000",
-    "description": "inserting a needle into the cerebral ventricles to withdraw CSF or relieve pressure."
+    "title": "مراجعة صمام اوميا",
+    "alphaCode": "VSHN",
+    "numCode": "61070",
+    "description": "Ommaya valve reservoir check and fluid sampling procedure."
 }
 
 POST http://localhost:3001/arabProc/createArabProcFromExternal

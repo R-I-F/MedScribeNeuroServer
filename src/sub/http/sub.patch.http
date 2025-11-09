@@ -1,0 +1,6 @@
+### PATCH STATUS FROM EXTERNAL
+
+PATCH http://localhost:3001/sub/updateStatusFromExternal
+Content-Type: application/json
+
+{}
