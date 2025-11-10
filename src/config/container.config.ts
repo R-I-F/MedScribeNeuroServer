@@ -47,6 +47,10 @@ import { SubRouter } from "../sub/sub.router";
 import { SubProvider } from "../sub/sub.provider";
 import { SubService } from "../sub/sub.service";
 
+import { MailerController } from "../mailer/mailer.controller";
+import { MailerRouter } from "../mailer/mailer.router";
+import { MailerService } from "../mailer/mailer.service";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -96,3 +100,7 @@ container.bind(SubController).toSelf().inTransientScope();
 container.bind(SubRouter).toSelf().inTransientScope();
 container.bind(SubProvider).toSelf().inTransientScope();
 container.bind(SubService).toSelf().inTransientScope();
+
+container.bind(MailerController).toSelf().inTransientScope();
+container.bind(MailerRouter).toSelf().inTransientScope();
+container.bind(MailerService).toSelf().inTransientScope();
