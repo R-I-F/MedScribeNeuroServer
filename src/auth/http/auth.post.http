@@ -1,0 +1,14 @@
+###
+# Reset all candidate passwords
+POST http://localhost:3001/auth/resetCandPass
+
+###
+# Login as candidate
+POST http://localhost:3001/auth/loginCand
+Content-Type: application/json
+
+{
+  "email": "r.elwy87@gmail.com",
+  "password": "MEDscrobe01$"
+}
+

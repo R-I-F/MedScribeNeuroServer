@@ -11,6 +11,7 @@ import { SupervisorRouter } from "../supervisor/supervisor.router";
 import { MainDiagRouter } from "../mainDiag/mainDiag.router";
 import { SubRouter } from "../sub/sub.router";
 import { MailerRouter } from "../mailer/mailer.router";
+import { AuthRouter } from "../auth/auth.router";
 
 export function addRoutes(app: Application) {
   const hospitalRouter: HospitalRouter =
@@ -46,6 +47,9 @@ export function addRoutes(app: Application) {
   const mailerRouter: MailerRouter =
     container.get<MailerRouter>(MailerRouter);
 
+  const authRouter: AuthRouter =
+    container.get<AuthRouter>(AuthRouter);
+
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
@@ -57,6 +61,7 @@ export function addRoutes(app: Application) {
   app.use("/mainDiag", mainDiagRouter.router);
   app.use("/sub", subRouter.router);
   app.use("/mailer", mailerRouter.router);
+  app.use("/auth", authRouter.router);
 
   return app;
 }

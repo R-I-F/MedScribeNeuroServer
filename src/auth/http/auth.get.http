@@ -1,0 +1,5 @@
+###
+# Validate token (replace {{TOKEN}} with an actual bearer token)
+GET http://localhost:3001/auth/validate
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InIuZWx3eTg3QGdtYWlsLmNvbSIsImlhdCI6MTc2MjgwNTIyNCwiZXhwIjozNTI1OTY4OTkyLCJpc3MiOiJtZWRzY3JpYmUubmV1cm8ucWFzcmVsYWlueSJ9.NQ5smJ0UB7h1Y3jUKJa-fwNSgYOW55RN_6B2h_-yg1g
+

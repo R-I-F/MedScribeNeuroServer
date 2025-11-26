@@ -51,6 +51,11 @@ import { MailerController } from "../mailer/mailer.controller";
 import { MailerRouter } from "../mailer/mailer.router";
 import { MailerService } from "../mailer/mailer.service";
 
+import { AuthController } from "../auth/auth.controller";
+import { AuthRouter } from "../auth/auth.router";
+import { AuthTokenService } from "../auth/authToken.service";
+// import { AuthService } from "../auth/auth.service";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -104,3 +109,8 @@ container.bind(SubService).toSelf().inTransientScope();
 container.bind(MailerController).toSelf().inTransientScope();
 container.bind(MailerRouter).toSelf().inTransientScope();
 container.bind(MailerService).toSelf().inTransientScope();
+
+container.bind(AuthController).toSelf().inTransientScope();
+container.bind(AuthRouter).toSelf().inTransientScope();
+container.bind(AuthTokenService).toSelf().inTransientScope();
+// container.bind(AuthService).toSelf().inTransientScope();
