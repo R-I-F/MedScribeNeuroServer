@@ -1,0 +1,27 @@
+### Create SuperAdmin (Requires authentication as a SuperAdmin)
+# Login as a SuperAdmin and use the JWT token to create more SuperAdmins
+POST http://localhost:3001/superAdmin
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "email": "superadmin2@example.com",
+  "password": "SuperAdmin123$",
+  "fullName": "Super Admin User",
+  "phoneNum": "01000000000",
+  "approved": true
+}
+
+### Create Another SuperAdmin
+POST http://localhost:3001/superAdmin
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "email": "admin2@example.com",
+  "password": "SuperAdmin456$",
+  "fullName": "Second Super Admin",
+  "phoneNum": "01000000001",
+  "approved": true
+}
+

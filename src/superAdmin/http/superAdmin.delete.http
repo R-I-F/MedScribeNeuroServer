@@ -1,0 +1,5 @@
+### Delete SuperAdmin
+# Note: This endpoint requires authentication as a SuperAdmin
+DELETE http://localhost:3001/superAdmin/SUPER_ADMIN_ID_HERE
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+

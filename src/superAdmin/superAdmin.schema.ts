@@ -1,13 +1,14 @@
 import { Model, Schema, model } from "mongoose";
-import { ISupervisor } from "./supervisor.interface";
+import { ISuperAdmin } from "./superAdmin.interface";
 import { UserRole } from "../types/role.types";
 
-export const supervisorSchema: Schema<ISupervisor> = new Schema(
+export const superAdminSchema: Schema<ISuperAdmin> = new Schema<ISuperAdmin>(
   {
     email: {
       type: String,
       required: [true, "user email is required"],
       trim: true,
+      unique: true,
     },
     password: {
       type: String,
@@ -29,28 +30,17 @@ export const supervisorSchema: Schema<ISupervisor> = new Schema(
     approved: {
       type: Boolean,
       required: [true, "user approval status is required"],
-      trim: true,
+      default: true, // SuperAdmins are auto-approved
     },
-    approvedSubs: [{
-      type: Schema.Types.ObjectId,
-      ref: "Component", // Reference to the component that's still under development
-    }],
-    pendingSubs: [{
-      type: Schema.Types.ObjectId,
-      ref: "Component", // Reference to the component that's still under development
-    }],
-    rejectedSubs: [{
-      type: Schema.Types.ObjectId,
-      ref: "Component", // Reference to the component that's still under development
-    }],
     role: {
       type: String,
       enum: Object.values(UserRole),
-      default: UserRole.SUPERVISOR,
+      default: UserRole.SUPER_ADMIN,
       required: true,
-    },
+    } as any,
   },
   { timestamps: true }
 );
 
-export const Supervisor: Model<ISupervisor> = model("Supervisor", supervisorSchema);
+export const SuperAdmin: Model<ISuperAdmin> = model("SuperAdmin", superAdminSchema);
+

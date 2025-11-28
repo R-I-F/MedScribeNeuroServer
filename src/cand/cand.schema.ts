@@ -1,5 +1,6 @@
 import { Model, Schema, model } from "mongoose";
 import { ICand, Rank, RegDegree } from "./cand.interface";
+import { UserRole } from "../types/role.types";
 
 export const candSchema: Schema<ICand> = new Schema(
   {
@@ -54,6 +55,12 @@ export const candSchema: Schema<ICand> = new Schema(
       type: Boolean,
       required: [true, "user approval status is required"],
       trim: true,
+    },
+    role: {
+      type: String,
+      enum: Object.values(UserRole),
+      default: UserRole.CANDIDATE,
+      required: true,
     },
   },
   { timestamps: true }

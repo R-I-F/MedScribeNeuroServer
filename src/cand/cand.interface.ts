@@ -1,5 +1,6 @@
 import { User } from "../user/user.interface";
 import { Types } from "mongoose";
+import { TUserRole } from "../types/role.types";
 
 export enum Rank {
   Professor = "professor",
@@ -26,6 +27,7 @@ export interface ICand extends User {
   rank: Rank;
   regDeg: RegDegree;  
   google_uid?: string;
+  role?: TUserRole;
 }
 
 export interface ICandDoc extends ICand {

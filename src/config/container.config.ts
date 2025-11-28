@@ -56,6 +56,16 @@ import { AuthRouter } from "../auth/auth.router";
 import { AuthTokenService } from "../auth/authToken.service";
 // import { AuthService } from "../auth/auth.service";
 
+import { SuperAdminController } from "../superAdmin/superAdmin.controller";
+import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
+import { SuperAdminService } from "../superAdmin/superAdmin.service";
+import { SuperAdminProvider } from "../superAdmin/superAdmin.provider";
+
+import { InstituteAdminController } from "../instituteAdmin/instituteAdmin.controller";
+import { InstituteAdminRouter } from "../instituteAdmin/instituteAdmin.router";
+import { InstituteAdminService } from "../instituteAdmin/instituteAdmin.service";
+import { InstituteAdminProvider } from "../instituteAdmin/instituteAdmin.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -114,3 +124,13 @@ container.bind(AuthController).toSelf().inTransientScope();
 container.bind(AuthRouter).toSelf().inTransientScope();
 container.bind(AuthTokenService).toSelf().inTransientScope();
 // container.bind(AuthService).toSelf().inTransientScope();
+
+container.bind(SuperAdminController).toSelf().inTransientScope();
+container.bind(SuperAdminRouter).toSelf().inTransientScope();
+container.bind(SuperAdminService).toSelf().inTransientScope();
+container.bind(SuperAdminProvider).toSelf().inTransientScope();
+
+container.bind(InstituteAdminController).toSelf().inTransientScope();
+container.bind(InstituteAdminRouter).toSelf().inTransientScope();
+container.bind(InstituteAdminService).toSelf().inTransientScope();
+container.bind(InstituteAdminProvider).toSelf().inTransientScope();

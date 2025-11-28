@@ -1,0 +1,20 @@
+### Update InstituteAdmin
+# Note: This endpoint requires authentication as InstituteAdmin or SuperAdmin
+PUT http://localhost:3001/instituteAdmin/INSTITUTE_ADMIN_ID_HERE
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "fullName": "Updated Institute Admin Name",
+  "phoneNum": "01000000002"
+}
+
+### Update InstituteAdmin Password
+PUT http://localhost:3001/instituteAdmin/INSTITUTE_ADMIN_ID_HERE
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "password": "NewPassword123$"
+}
+

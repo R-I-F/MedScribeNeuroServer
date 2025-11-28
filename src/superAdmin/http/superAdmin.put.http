@@ -1,0 +1,20 @@
+### Update SuperAdmin
+# Note: This endpoint requires authentication as a SuperAdmin
+PUT http://localhost:3001/superAdmin/SUPER_ADMIN_ID_HERE
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "fullName": "Updated Super Admin Name",
+  "phoneNum": "01000000002"
+}
+
+### Update SuperAdmin Password
+PUT http://localhost:3001/superAdmin/SUPER_ADMIN_ID_HERE
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "password": "NewPassword123$"
+}
+

@@ -1,0 +1,5 @@
+### Delete InstituteAdmin
+# Note: This endpoint requires authentication as InstituteAdmin or SuperAdmin
+DELETE http://localhost:3001/instituteAdmin/INSTITUTE_ADMIN_ID_HERE
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+

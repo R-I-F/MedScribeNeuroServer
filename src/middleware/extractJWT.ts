@@ -6,16 +6,24 @@ const NAMESPACE = "Auth";
 
 export const extractJWT = (req: Request, res: Response, next: NextFunction) => {
   console.log(NAMESPACE, "Validating Token");
-  const authHeader = req.headers.authorization;
+  
+  // Try to get token from cookie first (preferred method)
+  let token = req.cookies?.auth_token;
+  
+  // Fallback to Authorization header (for backward compatibility)
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      token = authHeader.startsWith("Bearer ")
+        ? authHeader.split(" ")[1]
+        : authHeader;
+    }
+  }
 
-  if (!authHeader) {
+  if (!token) {
     res.locals.jwtError = "Unauthorized";
     return next();
   }
-
-  const token = authHeader.startsWith("Bearer ")
-    ? authHeader.split(" ")[1]
-    : authHeader;
 
   try {
     const decoded = jwt.verify(token, config.server.token.secret, {

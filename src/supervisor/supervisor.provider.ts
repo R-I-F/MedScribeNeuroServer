@@ -33,6 +33,14 @@ export class SupervisorProvider {
     }
   }
 
+  public async getSupervisorByEmail(email: string): Promise<ISupervisorDoc | null> | never {
+    try {
+      return await Supervisor.findOne({ email }).exec();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async updateSupervisor(validatedReq: Partial<ISupervisor> & { id: string }): Promise<ISupervisorDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;

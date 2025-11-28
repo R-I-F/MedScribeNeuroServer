@@ -1,22 +1,44 @@
 # MedScribe Neuro Server API Documentation
 
-Base URL: `http://localhost:3001` (or your configured server URL)
-
-All responses follow a standardized format:
-```json
-{
-  "status": "success" | "error",
-  "statusCode": 200,
-  "message": "OK",
-  "data": { ... },
-  "error": { ... },
-  "meta": { ... }
-}
-```
+**Base URL**: `http://localhost:3001` (or your configured server URL)
 
 ---
 
-## Authentication (`/auth`)
+## Table of Contents
+
+1. [Authentication](#authentication)
+2. [User Management](#user-management)
+3. [Submissions](#submissions)
+4. [Candidates](#candidates)
+5. [Supervisors](#supervisors)
+6. [Super Admins](#super-admins)
+7. [Institute Admins](#institute-admins)
+8. [Calendar Surgery](#calendar-surgery)
+9. [Diagnosis](#diagnosis)
+10. [Procedure CPT](#procedure-cpt)
+11. [Main Diagnosis](#main-diagnosis)
+12. [Arabic Procedures](#arabic-procedures)
+13. [Hospitals](#hospitals)
+14. [Mailer](#mailer)
+15. [External Service](#external-service)
+16. [Error Responses](#error-responses)
+
+---
+
+## Authentication
+
+### JWT Token Structure
+
+All JWT tokens contain the following payload:
+```json
+{
+  "email": "user@example.com",
+  "role": "candidate" | "supervisor" | "superAdmin" | "instituteAdmin",
+  "_id": "507f1f77bcf86cd799439011"
+}
+```
+
+**Important**: The `_id` field is the MongoDB ObjectId of the authenticated user as a string. Use this directly in API calls without needing to query by email.
 
 ### Validate Token
 **GET** `/auth/validate`
@@ -32,7 +54,11 @@ Authorization: Bearer <token>
 ```json
 {
   "authorized": true,
-  "tokenPayload": { "email": "user@example.com", ... }
+  "tokenPayload": {
+    "email": "user@example.com",
+    "role": "candidate",
+    "_id": "507f1f77bcf86cd799439011"
+  }
 }
 ```
 
@@ -45,10 +71,141 @@ Authorization: Bearer <token>
 
 ---
 
+### Login Endpoints
+
+All login endpoints return the same response format with a JWT token and user data.
+
+#### Login Candidate
+**POST** `/auth/loginCand`
+
+**Request Body:**
+```json
+{
+  "email": "candidate@example.com",
+  "password": "securePassword123"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "candidate@example.com",
+    "fullName": "John Doe",
+    "phoneNum": "+1234567890",
+    "regNum": "REG123456",
+    "nationality": "Egyptian",
+    "rank": "professor",
+    "regDeg": "msc",
+    "approved": false,
+    "role": "candidate"
+  },
+  "role": "candidate"
+}
+```
+
+**Response (401 Unauthorized):**
+```json
+{
+  "error": "UnAuthorized: wrong password"
+}
+```
+
+---
+
+#### Login Supervisor
+**POST** `/auth/loginSupervisor`
+
+**Request Body:**
+```json
+{
+  "email": "supervisor@example.com",
+  "password": "securePassword123"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "supervisor@example.com",
+    "fullName": "Dr. Jane Smith",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "supervisor"
+  },
+  "role": "supervisor"
+}
+```
+
+---
+
+#### Login Super Admin
+**POST** `/auth/loginSuperAdmin`
+
+**Request Body:**
+```json
+{
+  "email": "superadmin@example.com",
+  "password": "securePassword123"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "superadmin@example.com",
+    "fullName": "Super Admin",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "superAdmin"
+  },
+  "role": "superAdmin"
+}
+```
+
+---
+
+#### Login Institute Admin
+**POST** `/auth/loginInstituteAdmin`
+
+**Request Body:**
+```json
+{
+  "email": "instituteadmin@example.com",
+  "password": "securePassword123"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "instituteadmin@example.com",
+    "fullName": "Institute Admin",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "instituteAdmin"
+  },
+  "role": "instituteAdmin"
+}
+```
+
+---
+
 ### Register Candidate
 **POST** `/auth/registerCand`
 
-Registers a new candidate user.
+Registers a new candidate user. No authentication required.
 
 **Request Body:**
 ```json
@@ -67,49 +224,16 @@ Registers a new candidate user.
 **Response (201 Created):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "email": "candidate@example.com",
-    "fullName": "John Doe",
-    ...
-  }
-}
-```
-
----
-
-### Login Candidate
-**POST** `/auth/loginCand`
-
-Authenticates a candidate and returns a JWT token.
-
-**Request Body:**
-```json
-{
+  "_id": "507f1f77bcf86cd799439011",
   "email": "candidate@example.com",
-  "password": "securePassword123"
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "candidate": {
-      "_id": "...",
-      "email": "candidate@example.com",
-      "fullName": "John Doe",
-      ...
-    }
-  }
-}
-```
-
-**Response (401 Unauthorized):**
-```json
-{
-  "error": "UnAuthorized: wrong password"
+  "fullName": "John Doe",
+  "phoneNum": "+1234567890",
+  "regNum": "REG123456",
+  "nationality": "Egyptian",
+  "rank": "professor",
+  "regDeg": "msc",
+  "approved": false,
+  "role": "candidate"
 }
 ```
 
@@ -118,53 +242,252 @@ Authenticates a candidate and returns a JWT token.
 ### Reset All Candidate Passwords
 **POST** `/auth/resetCandPass`
 
-Resets all candidate passwords to the default encrypted password (`MEDscrobe01$`).
+Resets all candidate passwords to the default encrypted password (`MEDscrobe01$`). No authentication required.
 
 **Response (200 OK):**
 ```json
 {
-  "data": {
-    "updatedCount": 42,
-    "defaultPassword": "MEDscrobe01$"
-  }
+  "modifiedCount": 42,
+  "defaultPassword": "MEDscrobe01$"
 }
 ```
 
 ---
 
-### Get All Users
-**GET** `/auth/get/all`
+## User Management
 
-Retrieves all users (currently not implemented).
+### Super Admins (`/superAdmin`)
 
----
+All Super Admin endpoints require authentication as a Super Admin.
 
-## Mailer (`/mailer`)
+**Required Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
 
-### Send Email
-**POST** `/mailer/send`
-
-Sends an email using the configured SMTP server.
+#### Create Super Admin
+**POST** `/superAdmin`
 
 **Request Body:**
 ```json
 {
-  "to": "recipient@example.com",
-  "subject": "Test Email",
-  "text": "Plain text content",
-  "html": "<p>HTML content</p>",
-  "from": "sender@example.com" // optional
+  "email": "superadmin2@example.com",
+  "password": "SuperAdmin123$",
+  "fullName": "Super Admin User",
+  "phoneNum": "01000000000",
+  "approved": true
 }
 ```
 
-**Note:** At least one of `text` or `html` must be provided.
+**Response (201 Created):**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "superadmin2@example.com",
+  "fullName": "Super Admin User",
+  "phoneNum": "01000000000",
+  "approved": true,
+  "role": "superAdmin"
+}
+```
+
+---
+
+#### Get All Super Admins
+**GET** `/superAdmin`
+
+**Response (200 OK):**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "superadmin@example.com",
+    "fullName": "Super Admin",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "superAdmin"
+  }
+]
+```
+
+---
+
+#### Get Super Admin by ID
+**GET** `/superAdmin/:id`
 
 **Response (200 OK):**
 ```json
 {
-  "data": {
-    "message": "Email sent successfully to recipient@example.com"
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "superadmin@example.com",
+  "fullName": "Super Admin",
+  "phoneNum": "+1234567890",
+  "approved": true,
+  "role": "superAdmin"
+}
+```
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Super admin not found"
+}
+```
+
+---
+
+#### Update Super Admin
+**PUT** `/superAdmin/:id`
+
+**Request Body:**
+```json
+{
+  "fullName": "Updated Super Admin",
+  "phoneNum": "+9876543210"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "superadmin@example.com",
+  "fullName": "Updated Super Admin",
+  "phoneNum": "+9876543210",
+  "approved": true,
+  "role": "superAdmin"
+}
+```
+
+---
+
+#### Delete Super Admin
+**DELETE** `/superAdmin/:id`
+
+**Response (200 OK):**
+```json
+{
+  "message": "Super admin deleted successfully"
+}
+```
+
+---
+
+### Institute Admins (`/instituteAdmin`)
+
+All Institute Admin endpoints require authentication as a Super Admin (for creation) or Institute Admin/Super Admin (for other operations).
+
+**Required Headers:**
+```
+Authorization: Bearer <token>
+```
+
+#### Create Institute Admin
+**POST** `/instituteAdmin`
+
+**Requires:** Super Admin authentication
+
+**Request Body:**
+```json
+{
+  "email": "instituteadmin@example.com",
+  "password": "InstituteAdmin123$",
+  "fullName": "Institute Admin User",
+  "phoneNum": "01000000000",
+  "approved": true
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "instituteadmin@example.com",
+  "fullName": "Institute Admin User",
+  "phoneNum": "01000000000",
+  "approved": true,
+  "role": "instituteAdmin"
+}
+```
+
+---
+
+#### Get All Institute Admins
+**GET** `/instituteAdmin`
+
+**Requires:** Institute Admin or Super Admin authentication
+
+**Response (200 OK):**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "instituteadmin@example.com",
+    "fullName": "Institute Admin",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "instituteAdmin"
   }
+]
+```
+
+---
+
+#### Get Institute Admin by ID
+**GET** `/instituteAdmin/:id`
+
+**Requires:** Institute Admin or Super Admin authentication
+
+**Response (200 OK):**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "instituteadmin@example.com",
+  "fullName": "Institute Admin",
+  "phoneNum": "+1234567890",
+  "approved": true,
+  "role": "instituteAdmin"
+}
+```
+
+---
+
+#### Update Institute Admin
+**PUT** `/instituteAdmin/:id`
+
+**Requires:** Institute Admin or Super Admin authentication
+
+**Request Body:**
+```json
+{
+  "fullName": "Updated Institute Admin",
+  "phoneNum": "+9876543210"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "instituteadmin@example.com",
+  "fullName": "Updated Institute Admin",
+  "phoneNum": "+9876543210",
+  "approved": true,
+  "role": "instituteAdmin"
+}
+```
+
+---
+
+#### Delete Institute Admin
+**DELETE** `/instituteAdmin/:id`
+
+**Requires:** Institute Admin or Super Admin authentication
+
+**Response (200 OK):**
+```json
+{
+  "message": "Institute admin deleted successfully"
 }
 ```
 
@@ -180,22 +503,29 @@ Creates submissions from external data source (Google Sheets).
 **Request Body:**
 ```json
 {
-  "row": 46  // optional, specific row number
+  "row": 46
 }
 ```
 
+**Note:** `row` is optional. If omitted, all rows are processed.
+
 **Response (201 Created):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "timeStamp": "2025-07-14T04:49:35.286Z",
-      "candDocId": "...",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "timeStamp": "2025-07-14T04:49:35.286Z",
+    "candDocId": "507f1f77bcf86cd799439012",
+    "procDocId": "507f1f77bcf86cd799439013",
+    "supervisorDocId": "507f1f77bcf86cd799439014",
+    "roleInSurg": "operator",
+    "subStatus": "pending",
+    "procedureName": ["Procedure A", "Procedure B"],
+    "diagnosisName": ["Diagnosis X"],
+    "procCptDocId": ["507f1f77bcf86cd799439015"],
+    "icdDocId": ["507f1f77bcf86cd799439016"]
+  }
+]
 ```
 
 ---
@@ -208,21 +538,18 @@ Updates submission statuses from external data source.
 **Request Body:**
 ```json
 {
-  "row": 46  // optional, specific row number
+  "row": 46
 }
 ```
 
 **Response (200 OK):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "subStatus": "approved",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "subStatus": "approved"
+  }
+]
 ```
 
 ---
@@ -237,27 +564,144 @@ Creates candidates from external data source (Google Sheets).
 **Request Body:**
 ```json
 {
-  "row": 46  // optional, specific row number
+  "row": 46
+}
+```
+
+**Response (201 Created):**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "candidate@example.com",
+    "fullName": "John Doe",
+    "phoneNum": "+1234567890",
+    "regNum": "REG123456",
+    "nationality": "Egyptian",
+    "rank": "professor",
+    "regDeg": "msc",
+    "approved": false,
+    "role": "candidate"
+  }
+]
+```
+
+---
+
+## Supervisors (`/supervisor`)
+
+### Create Supervisor
+**POST** `/supervisor`
+
+No authentication required.
+
+**Request Body:**
+```json
+{
+  "email": "supervisor@example.com",
+  "password": "Supervisor123$",
+  "fullName": "Dr. Jane Smith",
+  "phoneNum": "+1234567890",
+  "approved": true
 }
 ```
 
 **Response (201 Created):**
 ```json
 {
-  "data": [
-    {
-      "_id": "...",
-      "email": "candidate@example.com",
-      "fullName": "John Doe",
-      ...
-    }
-  ]
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "supervisor@example.com",
+  "fullName": "Dr. Jane Smith",
+  "phoneNum": "+1234567890",
+  "approved": true,
+  "role": "supervisor"
 }
 ```
 
 ---
 
-## CalSurg (`/calSurg`)
+### Get All Supervisors
+**GET** `/supervisor`
+
+No authentication required.
+
+**Response (200 OK):**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "supervisor@example.com",
+    "fullName": "Dr. Jane Smith",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "supervisor"
+  }
+]
+```
+
+---
+
+### Get Supervisor by ID
+**GET** `/supervisor/:id`
+
+No authentication required.
+
+**Response (200 OK):**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "supervisor@example.com",
+  "fullName": "Dr. Jane Smith",
+  "phoneNum": "+1234567890",
+  "approved": true,
+  "role": "supervisor"
+}
+```
+
+---
+
+### Update Supervisor
+**PUT** `/supervisor/:id`
+
+No authentication required.
+
+**Request Body:**
+```json
+{
+  "fullName": "Dr. Jane Smith Updated",
+  "phoneNum": "+9876543210"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",
+  "email": "supervisor@example.com",
+  "fullName": "Dr. Jane Smith Updated",
+  "phoneNum": "+9876543210",
+  "approved": true,
+  "role": "supervisor"
+}
+```
+
+---
+
+### Delete Supervisor
+**DELETE** `/supervisor/:id`
+
+No authentication required.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Supervisor deleted successfully"
+}
+```
+
+---
+
+## Calendar Surgery (`/calSurg`)
 
 ### Create CalSurg from External
 **POST** `/calSurg/postAllFromExternal`
@@ -267,21 +711,20 @@ Creates calendar surgery entries from external data source.
 **Request Body:**
 ```json
 {
-  "row": 46  // optional, specific row number
+  "row": 46
 }
 ```
 
 **Response (201 Created):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "google_uid": "...",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "google_uid": "unique-google-id",
+    "date": "2025-01-15",
+    "time": "10:00"
+  }
+]
 ```
 
 ---
@@ -289,19 +732,16 @@ Creates calendar surgery entries from external data source.
 ### Get CalSurg by ID
 **GET** `/calSurg/getById`
 
-Retrieves a calendar surgery entry by ID.
-
 **Query Parameters:**
 - `id` (required): MongoDB ObjectId
 
 **Response (200 OK):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "google_uid": "...",
-    ...
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "google_uid": "unique-google-id",
+  "date": "2025-01-15",
+  "time": "10:00"
 }
 ```
 
@@ -310,22 +750,23 @@ Retrieves a calendar surgery entry by ID.
 ### Get All CalSurg with Filters
 **GET** `/calSurg/getAll`
 
-Retrieves calendar surgery entries with optional filters.
-
-**Query Parameters:**
-- Various filter parameters (see validator)
+**Query Parameters (all optional):**
+- `startDate`: Start date filter
+- `endDate`: End date filter
+- `month`: Month filter
+- `year`: Year filter
+- `day`: Day filter
 
 **Response (200 OK):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "google_uid": "...",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "google_uid": "unique-google-id",
+    "date": "2025-01-15",
+    "time": "10:00"
+  }
+]
 ```
 
 ---
@@ -335,16 +776,17 @@ Retrieves calendar surgery entries with optional filters.
 ### Create Bulk Diagnoses
 **POST** `/diagnosis/postBulk`
 
-Creates multiple diagnoses in bulk.
-
 **Request Body:**
 ```json
 {
   "diagnoses": [
     {
       "icdCode": "G93.1",
-      "title": "Anoxic brain damage",
-      ...
+      "icdName": "Anoxic brain damage"
+    },
+    {
+      "icdCode": "G93.2",
+      "icdName": "Benign intracranial hypertension"
     }
   ]
 }
@@ -352,15 +794,13 @@ Creates multiple diagnoses in bulk.
 
 **Response (201 Created):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "icdCode": "G93.1",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "icdCode": "G93.1",
+    "icdName": "Anoxic brain damage"
+  }
+]
 ```
 
 ---
@@ -368,25 +808,20 @@ Creates multiple diagnoses in bulk.
 ### Create Single Diagnosis
 **POST** `/diagnosis/post`
 
-Creates a single diagnosis.
-
 **Request Body:**
 ```json
 {
   "icdCode": "G93.1",
-  "title": "Anoxic brain damage",
-  ...
+  "icdName": "Anoxic brain damage"
 }
 ```
 
 **Response (201 Created):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "icdCode": "G93.1",
-    ...
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "icdCode": "G93.1",
+  "icdName": "Anoxic brain damage"
 }
 ```
 
@@ -402,21 +837,21 @@ Creates procedure CPT codes from external data source.
 **Request Body:**
 ```json
 {
-  "row": 46  // optional, specific row number
+  "row": 46
 }
 ```
 
 **Response (201 Created):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "numCode": "61783",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "numCode": "61783",
+    "alphaCode": "A",
+    "title": "Craniotomy for tumor resection",
+    "description": "Procedure description"
+  }
+]
 ```
 
 ---
@@ -431,135 +866,19 @@ Creates or updates a procedure CPT code.
 {
   "numCode": "61783",
   "alphaCode": "A",
-  "title": "Procedure title",
-  ...
+  "title": "Craniotomy for tumor resection",
+  "description": "Procedure description"
 }
 ```
 
 **Response (200 OK):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "numCode": "61783",
-    ...
-  }
-}
-```
-
----
-
-## Supervisor (`/supervisor`)
-
-### Create Supervisor
-**POST** `/supervisor/`
-
-Creates a new supervisor.
-
-**Request Body:**
-```json
-{
-  "fullName": "Dr. Jane Smith",
-  "email": "jane.smith@example.com",
-  ...
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "data": {
-    "_id": "...",
-    "fullName": "Dr. Jane Smith",
-    ...
-  }
-}
-```
-
----
-
-### Get All Supervisors
-**GET** `/supervisor/`
-
-Retrieves all supervisors.
-
-**Response (200 OK):**
-```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "fullName": "Dr. Jane Smith",
-      ...
-    }
-  ]
-}
-```
-
----
-
-### Get Supervisor by ID
-**GET** `/supervisor/:id`
-
-Retrieves a supervisor by MongoDB ObjectId.
-
-**Response (200 OK):**
-```json
-{
-  "data": {
-    "_id": "...",
-    "fullName": "Dr. Jane Smith",
-    ...
-  }
-}
-```
-
-**Response (404 Not Found):**
-```json
-{
-  "error": "Supervisor not found"
-}
-```
-
----
-
-### Update Supervisor
-**PUT** `/supervisor/:id`
-
-Updates a supervisor by ID.
-
-**Request Body:**
-```json
-{
-  "fullName": "Dr. Jane Smith Updated",
-  ...
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "data": {
-    "_id": "...",
-    "fullName": "Dr. Jane Smith Updated",
-    ...
-  }
-}
-```
-
----
-
-### Delete Supervisor
-**DELETE** `/supervisor/:id`
-
-Deletes a supervisor by ID.
-
-**Response (200 OK):**
-```json
-{
-  "data": {
-    "message": "Supervisor deleted successfully"
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "numCode": "61783",
+  "alphaCode": "A",
+  "title": "Craniotomy for tumor resection",
+  "description": "Procedure description"
 }
 ```
 
@@ -568,47 +887,42 @@ Deletes a supervisor by ID.
 ## Main Diagnosis (`/mainDiag`)
 
 ### Create Main Diagnosis
-**POST** `/mainDiag/`
-
-Creates a new main diagnosis category.
+**POST** `/mainDiag`
 
 **Request Body:**
 ```json
 {
   "title": "cns tumors",
-  ...
+  "procsArray": ["61783", "61108-00"],
+  "diagnosis": ["G93.1", "G93.2"]
 }
 ```
 
 **Response (201 Created):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "title": "cns tumors",
-    ...
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "title": "cns tumors",
+  "procs": ["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
+  "diagnosis": ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
 }
 ```
 
 ---
 
 ### Get All Main Diagnoses
-**GET** `/mainDiag/`
-
-Retrieves all main diagnosis categories.
+**GET** `/mainDiag`
 
 **Response (200 OK):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      "title": "cns tumors",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "title": "cns tumors",
+    "procs": ["507f1f77bcf86cd799439012"],
+    "diagnosis": ["507f1f77bcf86cd799439014"]
+  }
+]
 ```
 
 ---
@@ -616,16 +930,13 @@ Retrieves all main diagnosis categories.
 ### Get Main Diagnosis by ID
 **GET** `/mainDiag/:id`
 
-Retrieves a main diagnosis by MongoDB ObjectId.
-
 **Response (200 OK):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "title": "cns tumors",
-    ...
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "title": "cns tumors",
+  "procs": ["507f1f77bcf86cd799439012"],
+  "diagnosis": ["507f1f77bcf86cd799439014"]
 }
 ```
 
@@ -634,24 +945,22 @@ Retrieves a main diagnosis by MongoDB ObjectId.
 ### Update Main Diagnosis
 **PUT** `/mainDiag/:id`
 
-Updates a main diagnosis by ID.
-
 **Request Body:**
 ```json
 {
   "title": "updated title",
-  ...
+  "procs": ["61783"],
+  "diagnosis": ["G93.1"]
 }
 ```
 
 **Response (200 OK):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "title": "updated title",
-    ...
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "title": "updated title",
+  "procs": ["507f1f77bcf86cd799439012"],
+  "diagnosis": ["507f1f77bcf86cd799439014"]
 }
 ```
 
@@ -660,36 +969,29 @@ Updates a main diagnosis by ID.
 ### Delete Main Diagnosis
 **DELETE** `/mainDiag/:id`
 
-Deletes a main diagnosis by ID.
-
 **Response (200 OK):**
 ```json
 {
-  "data": {
-    "message": "MainDiag deleted successfully"
-  }
+  "message": "MainDiag deleted successfully"
 }
 ```
 
 ---
 
-## Arab Procedure (`/arabProc`)
+## Arabic Procedures (`/arabProc`)
 
 ### Get All Arab Procedures
 **GET** `/arabProc/getAllArabProcs`
 
-Retrieves all Arabic procedure entries.
-
 **Response (200 OK):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "numCode": "61070",
+    "arabicName": "اسم الإجراء بالعربية"
+  }
+]
 ```
 
 ---
@@ -697,22 +999,20 @@ Retrieves all Arabic procedure entries.
 ### Create Arab Procedure
 **POST** `/arabProc/createArabProc`
 
-Creates a new Arabic procedure entry.
-
 **Request Body:**
 ```json
 {
-  ...
+  "numCode": "61070",
+  "arabicName": "اسم الإجراء بالعربية"
 }
 ```
 
 **Response (201 Created):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    ...
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "numCode": "61070",
+  "arabicName": "اسم الإجراء بالعربية"
 }
 ```
 
@@ -721,52 +1021,72 @@ Creates a new Arabic procedure entry.
 ### Create Arab Procedure from External
 **POST** `/arabProc/createArabProcFromExternal`
 
-Creates Arabic procedure entries from external data source.
-
 **Request Body:**
 ```json
 {
-  "row": 46  // optional, specific row number
+  "row": 46
 }
 ```
 
 **Response (201 Created):**
 ```json
-{
-  "data": [
-    {
-      "_id": "...",
-      ...
-    }
-  ]
-}
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "numCode": "61070",
+    "arabicName": "اسم الإجراء بالعربية"
+  }
+]
 ```
 
 ---
 
-## Hospital (`/hospital`)
+## Hospitals (`/hospital`)
 
 ### Create Hospital
 **POST** `/hospital/create`
-
-Creates a new hospital entry.
 
 **Request Body:**
 ```json
 {
   "name": "Cairo University Hospital",
-  ...
+  "address": "Cairo, Egypt"
 }
 ```
 
 **Response (201 Created):**
 ```json
 {
-  "data": {
-    "_id": "...",
-    "name": "Cairo University Hospital",
-    ...
-  }
+  "_id": "507f1f77bcf86cd799439011",
+  "name": "Cairo University Hospital",
+  "address": "Cairo, Egypt"
+}
+```
+
+---
+
+## Mailer (`/mailer`)
+
+### Send Email
+**POST** `/mailer/send`
+
+**Request Body:**
+```json
+{
+  "to": "recipient@example.com",
+  "subject": "Test Email",
+  "text": "Plain text content",
+  "html": "<p>HTML content</p>",
+  "from": "sender@example.com"
+}
+```
+
+**Note:** At least one of `text` or `html` must be provided. `from` is optional.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Email sent successfully to recipient@example.com"
 }
 ```
 
@@ -785,8 +1105,9 @@ Retrieves Arabic procedure data from external source.
 **Response (200 OK):**
 ```json
 {
+  "success": true,
   "data": {
-    ...
+    "data": [...]
   }
 }
 ```
@@ -795,15 +1116,10 @@ Retrieves Arabic procedure data from external source.
 
 ## Error Responses
 
-All endpoints may return the following error responses:
-
 ### 400 Bad Request
 Validation errors:
 ```json
 {
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
   "error": [
     {
       "msg": "Invalid email",
@@ -817,19 +1133,26 @@ Validation errors:
 ### 401 Unauthorized
 ```json
 {
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
   "error": "Unauthorized"
+}
+```
+or
+```json
+{
+  "message": "Unauthorized"
+}
+```
+
+### 403 Forbidden
+```json
+{
+  "error": "Forbidden: Insufficient permissions"
 }
 ```
 
 ### 404 Not Found
 ```json
 {
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
   "error": "Resource not found"
 }
 ```
@@ -837,31 +1160,74 @@ Validation errors:
 ### 500 Internal Server Error
 ```json
 {
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
   "error": "Error message"
 }
 ```
 
 ---
 
-## Authentication
+## Authentication Requirements Summary
 
-Most endpoints require authentication via JWT token in the Authorization header:
-```
-Authorization: Bearer <token>
-```
-
-To obtain a token, use the `/auth/loginCand` endpoint.
+| Endpoint Category | Authentication Required | Role Required |
+|-----------------|------------------------|---------------|
+| `/auth/login*` | No | - |
+| `/auth/registerCand` | No | - |
+| `/auth/resetCandPass` | No | - |
+| `/superAdmin/*` | Yes | Super Admin |
+| `/instituteAdmin/*` | Yes | Super Admin (create) / Institute Admin or Super Admin (others) |
+| `/supervisor/*` | No | - |
+| `/sub/*` | No | - |
+| `/cand/*` | No | - |
+| `/calSurg/*` | No | - |
+| `/diagnosis/*` | No | - |
+| `/procCpt/*` | No | - |
+| `/mainDiag/*` | No | - |
+| `/arabProc/*` | No | - |
+| `/hospital/*` | No | - |
+| `/mailer/*` | No | - |
+| `/external/*` | No | - |
 
 ---
 
-## Notes
+## Important Notes
 
-- All timestamps are in ISO 8601 format
-- All MongoDB ObjectIds are returned as strings
-- Password fields are never returned in responses
-- External data endpoints pull from configured Google Sheets
-- The `row` parameter in external endpoints is optional; if omitted, all rows are processed
+1. **JWT Token Structure**: All JWT tokens now include `_id` field. Use `res.locals.jwt._id` directly in your frontend after decoding the token.
 
+2. **Token Usage**: Include the JWT token in the Authorization header for protected endpoints:
+   ```
+   Authorization: Bearer <token>
+   ```
+
+3. **User Roles**: The system supports four user roles:
+   - `candidate`: Medical candidates
+   - `supervisor`: Supervisors
+   - `superAdmin`: Super administrators (highest level)
+   - `instituteAdmin`: Institute administrators
+
+4. **Admin Creation**: 
+   - Super Admins can only be created by existing Super Admins
+   - Institute Admins can only be created by Super Admins
+   - There is no public registration endpoint for admins
+
+5. **Data Formats**:
+   - All timestamps are in ISO 8601 format
+   - All MongoDB ObjectIds are returned as strings
+   - Password fields are never returned in responses
+
+6. **External Data Endpoints**: Endpoints with "FromExternal" pull data from configured Google Sheets. The `row` parameter is optional; if omitted, all rows are processed.
+
+7. **Response Format**: Most endpoints return data directly (not wrapped in a `data` object), except where specified. Error responses follow the error format shown above.
+
+---
+
+## Frontend Integration Tips
+
+1. **Token Storage**: Store the JWT token securely (e.g., localStorage, sessionStorage, or httpOnly cookies).
+
+2. **Token Decoding**: Decode the JWT token to access `_id`, `email`, and `role` without additional API calls.
+
+3. **Token Refresh**: Implement token refresh logic if tokens expire. Check the `exp` claim in the JWT.
+
+4. **Error Handling**: Always check for 401/403 errors and redirect to login if needed.
+
+5. **Role-Based UI**: Use the `role` field from the JWT to conditionally render UI elements based on user permissions.

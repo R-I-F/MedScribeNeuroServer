@@ -7,11 +7,16 @@ import { StatusCodes } from "http-status-codes";
 import { loginValidator } from "../validators/login.validator";
 import extractJWT from "../middleware/extractJWT";
 import IAuth, { IRegisterCandPayload } from "./auth.interface";
+import { setAuthCookies, clearAuthCookies } from "../utils/cookie.utils";
+import { AuthTokenService } from "./authToken.service";
 
 @injectable()
 export class AuthRouter {
   public router: Router;
-  constructor(@inject(AuthController) private authController: AuthController){
+  constructor(
+    @inject(AuthController) private authController: AuthController,
+    @inject(AuthTokenService) private authTokenService: AuthTokenService
+  ){
     this.router = express.Router();
     this.initRoutes();
   }
@@ -63,10 +68,105 @@ export class AuthRouter {
             const payload = matchedData(req, {
               locations: ["body"],
             }) as IAuth;
-            const resp = await this.authController.login(payload);
-            res.status(StatusCodes.OK).json(resp);
+            const resp = await this.authController.login({ ...payload, role: "candidate" as any });
+            
+            // Set httpOnly cookies
+            setAuthCookies(res, resp.token, resp.refreshToken);
+            
+            // Return only user and role (not tokens)
+            res.status(StatusCodes.OK).json({
+              user: resp.user,
+              role: resp.role
+            });
           } catch(err: any){
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          }
+        }
+        else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+    this.router.post(
+      "/loginSupervisor",
+      loginValidator,
+      async (req: Request, res: Response, next: NextFunction) => {
+        const result = validationResult(req);
+        if(result.isEmpty()){
+          try {
+            const payload = matchedData(req, {
+              locations: ["body"],
+            }) as IAuth;
+            const resp = await this.authController.login({ ...payload, role: "supervisor" as any });
+            
+            // Set httpOnly cookies
+            setAuthCookies(res, resp.token, resp.refreshToken);
+            
+            // Return only user and role (not tokens)
+            res.status(StatusCodes.OK).json({
+              user: resp.user,
+              role: resp.role
+            });
+          } catch(err: any){
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          }
+        }
+        else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+    this.router.post(
+      "/loginSuperAdmin",
+      loginValidator,
+      async (req: Request, res: Response, next: NextFunction) => {
+        const result = validationResult(req);
+        if(result.isEmpty()){
+          try {
+            const payload = matchedData(req, {
+              locations: ["body"],
+            }) as IAuth;
+            const resp = await this.authController.login({ ...payload, role: "superAdmin" as any });
+            
+            // Set httpOnly cookies
+            setAuthCookies(res, resp.token, resp.refreshToken);
+            
+            // Return only user and role (not tokens)
+            res.status(StatusCodes.OK).json({
+              user: resp.user,
+              role: resp.role
+            });
+          } catch(err: any){
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          }
+        }
+        else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+    this.router.post(
+      "/loginInstituteAdmin",
+      loginValidator,
+      async (req: Request, res: Response, next: NextFunction) => {
+        const result = validationResult(req);
+        if(result.isEmpty()){
+          try {
+            const payload = matchedData(req, {
+              locations: ["body"],
+            }) as IAuth;
+            const resp = await this.authController.login({ ...payload, role: "instituteAdmin" as any });
+            
+            // Set httpOnly cookies
+            setAuthCookies(res, resp.token, resp.refreshToken);
+            
+            // Return only user and role (not tokens)
+            res.status(StatusCodes.OK).json({
+              user: resp.user,
+              role: resp.role
+            });
+          } catch(err: any){
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
         else {
@@ -91,6 +191,59 @@ export class AuthRouter {
       "/get/all",
       async (req: Request, res: Response, next: NextFunction) => {
         return this.authController.getAllUsers();
+      }
+    );
+
+    // Refresh token endpoint
+    this.router.post(
+      "/refresh",
+      async (req: Request, res: Response) => {
+        try {
+          const refreshToken = req.cookies?.refresh_token;
+          
+          if (!refreshToken) {
+            return res.status(StatusCodes.UNAUTHORIZED).json({ 
+              error: "Refresh token not found" 
+            });
+          }
+
+          // Verify refresh token
+          const decoded = await this.authTokenService.verifyRefreshToken(refreshToken);
+          
+          // Generate new tokens
+          const newTokens = await this.authController.refreshToken(decoded);
+          
+          // Set new cookies
+          setAuthCookies(res, newTokens.token, newTokens.refreshToken);
+          
+          return res.status(StatusCodes.OK).json({ 
+            success: true 
+          });
+        } catch (err: any) {
+          return res.status(StatusCodes.UNAUTHORIZED).json({ 
+            error: err?.message ?? "Invalid refresh token" 
+          });
+        }
+      }
+    );
+
+    // Logout endpoint
+    this.router.post(
+      "/logout",
+      async (req: Request, res: Response) => {
+        try {
+          // Clear cookies
+          clearAuthCookies(res);
+          
+          return res.status(StatusCodes.OK).json({ 
+            success: true,
+            message: "Logged out successfully"
+          });
+        } catch (err: any) {
+          return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+            error: err?.message ?? "Failed to logout" 
+          });
+        }
       }
     );
   }

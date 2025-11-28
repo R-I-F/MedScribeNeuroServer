@@ -1,0 +1,28 @@
+### Create InstituteAdmin
+# Note: This endpoint requires authentication as SuperAdmin
+# You need to login first and include the JWT token in the Authorization header
+POST http://localhost:3001/instituteAdmin
+Content-Type: application/json
+Authorization: Bearer ...
+
+{
+  "email": "xxx@gmail.com",
+  "password": "xxx",
+  "fullName": "Institute Admin User",
+  "phoneNum": "01090650946",
+  "approved": true
+}
+
+### Create Another InstituteAdmin
+POST http://localhost:3001/instituteAdmin
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "email": "instituteadmin2@example.com",
+  "password": "InstituteAdmin456$",
+  "fullName": "Second Institute Admin",
+  "phoneNum": "01000000001",
+  "approved": true
+}
+

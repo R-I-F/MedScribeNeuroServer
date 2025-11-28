@@ -12,3 +12,13 @@ Content-Type: application/json
   "password": "MEDscrobe01$"
 }
 
+###
+# Login as SuperAdmin (after creating first one)
+POST http://localhost:3001/auth/loginSuperAdmin
+Content-Type: application/json
+
+{
+  "email": "medscribeeg@gmail.com",
+  "password": "xxx"
+}
+
