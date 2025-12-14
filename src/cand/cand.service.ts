@@ -4,6 +4,7 @@ import { ICand, ICandDoc } from "./cand.interface";
 import { Model } from "mongoose";
 import { Cand } from "./cand.schema";
 import { CandProvider } from "./cand.provider";
+import bcryptjs from "bcryptjs";
 
 injectable();
 export class CandService {
@@ -12,7 +13,17 @@ export class CandService {
 
   public async createBulkCands(candData: ICand[]) {
     try {
-      const newCandArr: ICandDoc[] = await this.candModel.insertMany(candData);
+      // Hash passwords before inserting (for bulk operations from external sources)
+      const hashedCandData = await Promise.all(
+        candData.map(async (cand) => {
+          if (cand.password) {
+            const hashedPassword = await bcryptjs.hash(cand.password, 10);
+            return { ...cand, password: hashedPassword };
+          }
+          return cand;
+        })
+      );
+      const newCandArr: ICandDoc[] = await this.candModel.insertMany(hashedCandData);
       return newCandArr;
     } catch (err: any) {
       throw new Error(err);
@@ -51,6 +62,15 @@ export class CandService {
     try {
       const result = await this.candModel.updateMany({}, { $set: { password: hashedPassword } });
       return (result as { modifiedCount?: number }).modifiedCount ?? 0;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getAllCandidates(): Promise<ICandDoc[]> | never {
+    try {
+      const allCandidates = await this.candModel.find({}).exec();
+      return allCandidates;
     } catch (err: any) {
       throw new Error(err);
     }

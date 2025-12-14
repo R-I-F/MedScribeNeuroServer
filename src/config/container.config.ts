@@ -51,6 +51,10 @@ import { MailerController } from "../mailer/mailer.controller";
 import { MailerRouter } from "../mailer/mailer.router";
 import { MailerService } from "../mailer/mailer.service";
 
+import { PasswordResetService } from "../passwordReset/passwordReset.service";
+import { PasswordResetProvider } from "../passwordReset/passwordReset.provider";
+import { PasswordResetController } from "../passwordReset/passwordReset.controller";
+
 import { AuthController } from "../auth/auth.controller";
 import { AuthRouter } from "../auth/auth.router";
 import { AuthTokenService } from "../auth/authToken.service";
@@ -65,6 +69,14 @@ import { InstituteAdminController } from "../instituteAdmin/instituteAdmin.contr
 import { InstituteAdminRouter } from "../instituteAdmin/instituteAdmin.router";
 import { InstituteAdminService } from "../instituteAdmin/instituteAdmin.service";
 import { InstituteAdminProvider } from "../instituteAdmin/instituteAdmin.provider";
+
+import { ReportsController } from "../reports/reports.controller";
+import { ReportsRouter } from "../reports/reports.router";
+import { ReportsService } from "../reports/reports.service";
+import { ReportsProvider } from "../reports/reports.provider";
+
+import { AiAgentService } from "../aiAgent/aiAgent.service";
+import { AiAgentProvider } from "../aiAgent/aiAgent.provider";
 
 export const container: Container = new Container();
 
@@ -134,3 +146,15 @@ container.bind(InstituteAdminController).toSelf().inTransientScope();
 container.bind(InstituteAdminRouter).toSelf().inTransientScope();
 container.bind(InstituteAdminService).toSelf().inTransientScope();
 container.bind(InstituteAdminProvider).toSelf().inTransientScope();
+
+container.bind(PasswordResetService).toSelf().inTransientScope();
+container.bind(PasswordResetProvider).toSelf().inTransientScope();
+container.bind(PasswordResetController).toSelf().inTransientScope();
+
+container.bind(ReportsController).toSelf().inTransientScope();
+container.bind(ReportsRouter).toSelf().inTransientScope();
+container.bind(ReportsService).toSelf().inTransientScope();
+container.bind(ReportsProvider).toSelf().inTransientScope();
+
+container.bind(AiAgentService).toSelf().inTransientScope();
+container.bind(AiAgentProvider).toSelf().inTransientScope();

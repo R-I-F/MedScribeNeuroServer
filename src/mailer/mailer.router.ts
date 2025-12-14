@@ -23,7 +23,6 @@ export class MailerRouter {
       sendMailValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
-        console.log("[MailerRouter] Validation result", result);
         if (!result.isEmpty()) {
           return res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
@@ -41,12 +40,10 @@ export class MailerRouter {
         }
 
         try {
-          console.log("[MailerRouter] Valid request body", req.body);
           const validatedPayload = matchedData(req, {
             locations: ["body"],
             includeOptionals: true,
           }) as SendMailPayload;
-          console.log("[MailerRouter] Matched data payload", validatedPayload);
           const { to } = await this.mailerController.handleSendMail(validatedPayload);
           return res
             .status(StatusCodes.OK)

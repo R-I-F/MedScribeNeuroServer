@@ -7,6 +7,8 @@ import { updateMainDiagValidator } from "../validators/updateMainDiag.validator"
 import { deleteMainDiagValidator } from "../validators/deleteMainDiag.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin } from "../middleware/authorize.middleware";
 
 @injectable()
 export class MainDiagRouter {
@@ -22,6 +24,8 @@ export class MainDiagRouter {
     // Create mainDiag
     this.router.post(
       "/",
+      extractJWT,
+      requireSuperAdmin,
       createMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

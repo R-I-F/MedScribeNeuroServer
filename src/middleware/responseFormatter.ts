@@ -18,7 +18,6 @@ export function responseFormatter(
   const originalJson = res.json.bind(res);
 
   res.json = (data: any): Response => {
-    console.log("middleware running");
     const statusCode = res.statusCode ? res.statusCode : StatusCodes.OK;
     const response: IResponse = {
       status: statusCode >= 200 && statusCode < 300 ? "success" : "error",

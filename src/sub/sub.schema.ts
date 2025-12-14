@@ -13,7 +13,7 @@ export const subSchema: Schema<ISub> = new Schema({
   },
   procDocId: {
     type: Schema.Types.ObjectId,
-    ref: "ProcCpt",
+    ref: "CalSurg",
     required: true,
   },
   supervisorDocId: {

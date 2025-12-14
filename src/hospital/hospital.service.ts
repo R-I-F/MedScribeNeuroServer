@@ -11,4 +11,13 @@ export class HospitalService {
     const newHospital = await new this.hospitalModel(hospitalData).save();
     return newHospital;
   }
+
+  public async getAllHospitals() {
+    try {
+      const allHospitals = await this.hospitalModel.find({}).exec();
+      return allHospitals;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

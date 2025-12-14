@@ -6,6 +6,8 @@ import { getCalSurgByIdValidator } from "../validators/getCalSurgById.validator"
 import { getCalSurgWithFiltersValidator } from "../validators/getCalSurgWithFilters.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin } from "../middleware/authorize.middleware";
 
 injectable()
 export class CalSurgRouter {
@@ -22,6 +24,8 @@ export class CalSurgRouter {
   private async initRoutes() {
     this.router.post(
       "/postAllFromExternal",
+      extractJWT,
+      requireSuperAdmin,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req)

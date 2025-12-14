@@ -4,6 +4,8 @@ import { CandController } from "./cand.controller";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin } from "../middleware/authorize.middleware";
 
 injectable()
 export class CandRouter{
@@ -19,6 +21,8 @@ export class CandRouter{
   ){
     this.router.post(
       "/createCandsFromExternal",
+      extractJWT,
+      requireSuperAdmin,
       createFromExternalValidator,
       async (req: Request, res: Response)=>{
         const result = validationResult(req);

@@ -4,6 +4,8 @@ import { HospitalController } from "./hospital.controller";
 import express, { Request, Response, NextFunction, Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import { createHospitalValidator } from "../validators/createHospital.validator";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin } from "../middleware/authorize.middleware";
 
 @injectable()
 export class HospitalRouter {
@@ -18,6 +20,8 @@ export class HospitalRouter {
     // post hospital route
     this.router.post(
       "/create",
+      extractJWT,
+      requireSuperAdmin,
       createHospitalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

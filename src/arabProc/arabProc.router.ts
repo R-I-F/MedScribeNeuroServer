@@ -5,6 +5,8 @@ import { StatusCodes } from "http-status-codes";
 import { createArabProcValidator } from "../validators/createArabProc.validators";
 import { validationResult } from "express-validator";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin } from "../middleware/authorize.middleware";
 
 @injectable()
 export class ArabProcRouter {
@@ -28,6 +30,8 @@ export class ArabProcRouter {
     });
     this.router.post(
       "/createArabProc",
+      extractJWT,
+      requireSuperAdmin,
       createArabProcValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -45,6 +49,8 @@ export class ArabProcRouter {
 
     this.router.post(
       "/createArabProcFromExternal",
+      extractJWT,
+      requireSuperAdmin,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

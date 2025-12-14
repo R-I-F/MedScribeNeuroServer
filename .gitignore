@@ -8,3 +8,10 @@ dist/
 
 # Environment files (secrets)
 .env
+
+# HTTP test files (may contain tokens and sensitive data)
+*.http
+**/*.http
+
+# Cursor IDE rules (project-specific configuration)
+.cursorrules

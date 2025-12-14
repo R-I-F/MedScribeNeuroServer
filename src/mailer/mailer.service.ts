@@ -12,13 +12,6 @@ export class MailerService {
     const smtpPort = this.parsePort(process.env.EMAIL_SMTP_PORT);
     const secure = smtpPort === 465;
 
-    console.log("[MailerService] Initializing transporter with:", {
-      host: process.env.EMAIL_SERVER,
-      port: smtpPort,
-      secure,
-      user: process.env.EMAIL_USER,
-    });
-
     this.transporter = nodemailer.createTransport({
       host: process.env.EMAIL_SERVER,
       port: smtpPort,
@@ -32,8 +25,6 @@ export class MailerService {
     this.transporter.verify((error) => {
       if (error) {
         console.error("[MailerService] Transporter verification failed:", error);
-      } else {
-        console.log("[MailerService] Transporter verified successfully");
       }
     });
   }
@@ -44,14 +35,6 @@ export class MailerService {
     if (!fromAddress) {
       throw new Error("Missing 'from' address for email.");
     }
-
-    console.log("[MailerService] Sending mail:", {
-      from: fromAddress,
-      to,
-      subject,
-      textLength: text?.length ?? 0,
-      htmlLength: html?.length ?? 0,
-    });
 
     return this.transporter.sendMail({
       from: fromAddress,

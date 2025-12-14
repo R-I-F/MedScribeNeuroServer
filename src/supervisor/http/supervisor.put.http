@@ -5,10 +5,7 @@ Content-Type: application/json
 {
   "email": "updated.supervisor@example.com",
   "fullName": "Updated Name",
-  "approved": true,
-  "approvedSubs": ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012", "507f1f77bcf86cd799439015"],
-  "pendingSubs": [],
-  "rejectedSubs": ["507f1f77bcf86cd799439014"]
+  "approved": true
 }
 
 ### Update supervisor (partial update)

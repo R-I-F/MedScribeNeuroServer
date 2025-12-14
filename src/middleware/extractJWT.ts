@@ -1,12 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { StatusCodes } from "http-status-codes";
 import config from "../config/server.config";
 
 const NAMESPACE = "Auth";
 
 export const extractJWT = (req: Request, res: Response, next: NextFunction) => {
-  console.log(NAMESPACE, "Validating Token");
-  
   // Try to get token from cookie first (preferred method)
   let token = req.cookies?.auth_token;
   
@@ -21,14 +20,16 @@ export const extractJWT = (req: Request, res: Response, next: NextFunction) => {
   }
 
   if (!token) {
-    res.locals.jwtError = "Unauthorized";
-    return next();
+    res.locals.jwtError = "Unauthorized: No token provided";
+    return res.status(StatusCodes.UNAUTHORIZED).json({
+      error: "Unauthorized: No token provided"
+    });
   }
 
   try {
     const decoded = jwt.verify(token, config.server.token.secret, {
       issuer: config.server.token.issuer,
-    });
+    }) as any;
 
     if (res.locals.jwtError) {
       delete res.locals.jwtError;
@@ -37,7 +38,9 @@ export const extractJWT = (req: Request, res: Response, next: NextFunction) => {
     return next();
   } catch (error: any) {
     res.locals.jwtError = error?.message ?? "Unauthorized";
-    return next();
+    return res.status(StatusCodes.UNAUTHORIZED).json({
+      error: error?.message ?? "Unauthorized: Invalid or expired token"
+    });
   }
 };
 

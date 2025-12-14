@@ -14,6 +14,7 @@ import { MailerRouter } from "../mailer/mailer.router";
 import { AuthRouter } from "../auth/auth.router";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
 import { InstituteAdminRouter } from "../instituteAdmin/instituteAdmin.router";
+import { ReportsRouter } from "../reports/reports.router";
 
 export function addRoutes(app: Application) {
   const hospitalRouter: HospitalRouter =
@@ -58,6 +59,9 @@ export function addRoutes(app: Application) {
   const instituteAdminRouter: InstituteAdminRouter =
     container.get<InstituteAdminRouter>(InstituteAdminRouter);
 
+  const reportsRouter: ReportsRouter =
+    container.get<ReportsRouter>(ReportsRouter);
+
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
@@ -72,6 +76,7 @@ export function addRoutes(app: Application) {
   app.use("/auth", authRouter.router);
   app.use("/superAdmin", superAdminRouter.router);
   app.use("/instituteAdmin", instituteAdminRouter.router);
+  app.use("/instituteAdmin/reports", reportsRouter.router);
 
   return app;
 }

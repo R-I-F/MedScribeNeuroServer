@@ -35,8 +35,6 @@ export class AuthTokenService {
   }
 
   public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; _id: string }): Promise<string> {
-    console.log(NAMESPACE, `Attempting to sign token for ${user.email} with role ${user.role} and _id ${user._id}`);
-
     try {
       return await new Promise<string>((resolve, reject) => {
         jwt.sign(
@@ -66,8 +64,6 @@ export class AuthTokenService {
    * Sign a refresh token with longer expiration
    */
   public async signRefreshToken(user: Pick<IAuth, "email"> & { role: TUserRole; _id: string }): Promise<string> {
-    console.log(NAMESPACE, `Attempting to sign refresh token for ${user.email} with role ${user.role} and _id ${user._id}`);
-
     try {
       return await new Promise<string>((resolve, reject) => {
         jwt.sign(

@@ -5,6 +5,8 @@ import { createFromExternalValidator } from "../validators/createFromExternal.va
 import { upsertProcCptValidator } from "../validators/upsertProcCpt.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin } from "../middleware/authorize.middleware";
 
 injectable()
 export class ProcCptRouter {
@@ -21,6 +23,8 @@ export class ProcCptRouter {
   private async initRoutes() {
     this.router.post(
       "/postAllFromExternal",
+      extractJWT,
+      requireSuperAdmin,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req)
@@ -39,6 +43,8 @@ export class ProcCptRouter {
 
     this.router.post(
       "/upsert",
+      extractJWT,
+      requireSuperAdmin,
       upsertProcCptValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

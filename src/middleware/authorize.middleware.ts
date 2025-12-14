@@ -20,6 +20,10 @@ export const authorize = (...allowedRoles: UserRole[]) => {
     }
 
     const userRole = jwtPayload.role as UserRole;
+    
+    // Check if user's role is in the allowed roles list
+    // For hierarchical access (where higher roles can access lower role endpoints),
+    // we use a role hierarchy to determine access
     const roleHierarchy = {
       [UserRole.SUPER_ADMIN]: 1,
       [UserRole.INSTITUTE_ADMIN]: 2,
@@ -28,11 +32,16 @@ export const authorize = (...allowedRoles: UserRole[]) => {
     };
 
     const userRoleLevel = roleHierarchy[userRole];
-    const requiredMinLevel = Math.min(
-      ...allowedRoles.map(role => roleHierarchy[role])
-    );
+    
+    // For hierarchical access: users with higher privileges (lower numbers) can access lower privilege endpoints
+    // Example: requireCandidate allows CANDIDATE(4), SUPERVISOR(3), INSTITUTE_ADMIN(2), SUPER_ADMIN(1)
+    // We check if userRoleLevel <= max(allowedRoles) to allow all roles at or above the minimum required level
+    const allowedRoleLevels = allowedRoles.map(role => roleHierarchy[role]);
+    const maxAllowedLevel = Math.max(...allowedRoleLevels);
 
-    if (userRoleLevel <= requiredMinLevel) {
+    // User's role level must be <= max allowed level (lower number = higher privilege)
+    // This allows higher privilege roles to access lower privilege endpoints
+    if (userRoleLevel <= maxAllowedLevel) {
       return next();
     }
 

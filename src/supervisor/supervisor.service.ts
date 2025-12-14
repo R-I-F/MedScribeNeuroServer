@@ -7,6 +7,7 @@ import { SupervisorProvider } from "./supervisor.provider";
 @injectable()
 export class SupervisorService {
   constructor(@inject(SupervisorProvider) private supervisorProvider: SupervisorProvider) {}
+  private supervisorModel: Model<ISupervisor> = Supervisor;
 
   public async createSupervisor(validatedReq: Partial<ISupervisor>): Promise<ISupervisorDoc> | never {
     try {
@@ -51,6 +52,25 @@ export class SupervisorService {
   public async deleteSupervisor(validatedReq: { id: string }): Promise<boolean> | never {
     try {
       return await this.supervisorProvider.deleteSupervisor(validatedReq.id);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async resetAllSupervisorPasswords(
+    hashedPassword: string
+  ): Promise<number> | never {
+    try {
+      const result = await this.supervisorModel.updateMany({}, { $set: { password: hashedPassword } });
+      return (result as { modifiedCount?: number }).modifiedCount ?? 0;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getSupervisedCandidates(supervisorId: string) {
+    try {
+      return await this.supervisorProvider.getSupervisedCandidates(supervisorId);
     } catch (err: any) {
       throw new Error(err);
     }

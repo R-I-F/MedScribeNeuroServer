@@ -7,6 +7,8 @@ import { updateSupervisorValidator } from "../validators/updateSupervisor.valida
 import { deleteSupervisorValidator } from "../validators/deleteSupervisor.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin, requireSupervisor } from "../middleware/authorize.middleware";
 
 @injectable()
 export class SupervisorRouter {
@@ -22,6 +24,8 @@ export class SupervisorRouter {
     // Create supervisor
     this.router.post(
       "/",
+      extractJWT,
+      requireSuperAdmin,
       createSupervisorValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -47,6 +51,26 @@ export class SupervisorRouter {
           res.status(StatusCodes.OK).json(resp);
         } catch (err: any) {
           res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
+    // Get supervised candidates (requires supervisor authentication)
+    // IMPORTANT: This route must come before /:id to avoid route conflicts
+    this.router.get(
+      "/candidates",
+      extractJWT,
+      requireSupervisor,
+      async (req: Request, res: Response) => {
+        try {
+          const candidates = await this.supervisorController.handleGetSupervisedCandidates(req, res);
+          res.status(StatusCodes.OK).json(candidates);
+        } catch (err: any) {
+          if (err.message.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
         }
       }
     );
@@ -116,6 +140,21 @@ export class SupervisorRouter {
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Reset all supervisor passwords
+    this.router.post(
+      "/resetPasswords",
+      extractJWT,
+      requireSuperAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          const resp = await this.supervisorController.handleResetAllSupervisorPasswords(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err?.message ?? "Failed to reset supervisor passwords" });
         }
       }
     );

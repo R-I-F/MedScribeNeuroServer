@@ -26,33 +26,50 @@ export class CandProvider {
       );
       const items: ICand[] = [];
       if (externalData.success) {
-        // console.log(externalData)
         for (let i: number = 0; i < externalData.data.data.length; i++) {
           const rawItem = externalData.data.data[i];
-          const normalizedItem: ICand = {
-            timeStamp: this.utilsService.stringToDateConverter(
-              rawItem["Timestamp"]
-            ),
-            email: rawItem["Email Address"],
-            password: `MEDscribe0${i + 1}$`,
-            fullName: this.utilsService.stringToLowerCaseTrim(
-              rawItem["Full Name (as per ID) "]
-            ),
-            regNum: this.utilsService.numToStringTrim(
-              rawItem["Registry Number (Medical Committee or College ID)"]
-            ),
-            phoneNum: rawItem["Phone Number"],
-            nationality: this.utilsService.stringToLowerCaseTrim(
-              rawItem["Nationality"]
-            ),
-            rank: this.utilsService.returnRankEnum(rawItem["Rank"]),
-            regDeg: this.utilsService.returnRegDegree(
-              rawItem["Registered Degree  (Currently Enrolled Program) "]
-            ),
-            google_uid: rawItem["Uuid"].trim(),
-            approved: this.utilsService.approvedToBoolean(rawItem["Approved"]),
-          };
-          items.push(normalizedItem);
+          
+          try {
+            const normalizedItem: ICand = {
+              timeStamp: this.utilsService.stringToDateConverter(
+                rawItem["Timestamp"]
+              ),
+              email: rawItem["Email Address"],
+              password: `MEDscribe0${i + 1}$`,
+              fullName: this.utilsService.stringToLowerCaseTrim(
+                rawItem["Full Name (as per ID)"]
+              ),
+              regNum: this.utilsService.numToStringTrim(
+                rawItem["Registry Number (Medical Committee or College ID)"]
+              ),
+              phoneNum: rawItem["Phone Number"],
+              nationality: this.utilsService.stringToLowerCaseTrim(
+                rawItem["Nationality"]
+              ),
+              rank: this.utilsService.returnRankEnum(
+                rawItem["Rank"]
+              ),
+              regDeg: this.utilsService.returnRegDegree(
+                rawItem["Registered Degree  (Currently Enrolled Program)"]
+              ),
+              google_uid: (() => {
+                const value = rawItem["Uuid"];
+                if (!value || typeof value !== "string") {
+                  throw new Error(`Uuid is not a string. Value: ${value}, Type: ${typeof value}`);
+                }
+                return value.trim();
+              })(),
+              approved: this.utilsService.approvedToBoolean(
+                rawItem["Approved"]
+              ),
+            };
+            items.push(normalizedItem);
+          } catch (fieldError: any) {
+            console.error(`\n❌ [Row ${i + 1}] ERROR processing field:`, fieldError.message);
+            console.error(`[Row ${i + 1}] Error stack:`, fieldError.stack);
+            console.error(`[Row ${i + 1}] Full raw item that caused error:`, JSON.stringify(rawItem, null, 2));
+            throw new Error(`Error processing row ${i + 1}: ${fieldError.message}`);
+          }
         }
       }
       return items;

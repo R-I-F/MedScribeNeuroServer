@@ -1,5 +1,6 @@
 export interface IExternal {
   fetchExternalData(endpoint: string): Promise<any>;
+  updateGoogleSheetReview(data: { googleUid: string; status: string }): Promise<any>;
 }
 
 export interface IExternalQuery {

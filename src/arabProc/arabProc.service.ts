@@ -21,6 +21,25 @@ export class ArabProcService {
     }
   }
 
+  public async getArabProcsWithSearch(search?: string) {
+    try {
+      if (search) {
+        const searchRegex = new RegExp(search, 'i');
+        const arabProcs = await this.arabProcModel.find({
+          $or: [
+            { title: searchRegex },
+            { numCode: searchRegex }
+          ]
+        }).exec();
+        return arabProcs;
+      } else {
+        return await this.getAllArabProcs();
+      }
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async createArabProc(arabProcData: IArabProc) {
     try {
       const newArabProc = await new this.arabProcModel(arabProcData).save();

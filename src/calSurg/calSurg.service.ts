@@ -151,5 +151,80 @@ export class CalSurgService {
     }
   }
 
+  public async getCalSurgWithFilters(filters: {
+    hospitalId?: string;
+    arabProcTitle?: string;
+    arabProcNumCode?: string;
+    month?: number;
+    year?: number;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<ICalSurgDoc[]> | never {
+    try {
+      const query: any = {};
+
+      // Hospital filtering
+      if (filters.hospitalId) {
+        query.hospital = filters.hospitalId;
+      }
+
+      // Date filtering
+      if (filters.startDate && filters.endDate) {
+        query.procDate = {
+          $gte: filters.startDate,
+          $lte: filters.endDate
+        };
+      } else if (filters.month && filters.year) {
+        const startDate = new Date(filters.year, filters.month - 1, 1);
+        const endDate = new Date(filters.year, filters.month, 0, 23, 59, 59, 999);
+        query.procDate = {
+          $gte: startDate,
+          $lte: endDate
+        };
+      } else if (filters.year) {
+        const startDate = new Date(filters.year, 0, 1);
+        const endDate = new Date(filters.year, 11, 31, 23, 59, 59, 999);
+        query.procDate = {
+          $gte: startDate,
+          $lte: endDate
+        };
+      } else if (filters.month) {
+        const now = new Date();
+        const startDate = new Date(now.getFullYear(), filters.month - 1, 1);
+        const endDate = new Date(now.getFullYear(), filters.month, 0, 23, 59, 59, 999);
+        query.procDate = {
+          $gte: startDate,
+          $lte: endDate
+        };
+      }
+
+      let calSurgs = await this.calSurgModel
+        .find(query)
+        .populate('hospital')
+        .populate('arabProc')
+        .sort({ procDate: 1 })
+        .exec();
+
+      // Filter by arabProc title or numCode after population (since these require regex on populated field)
+      if (filters.arabProcTitle || filters.arabProcNumCode) {
+        calSurgs = calSurgs.filter(cs => {
+          if (!cs.arabProc) return false;
+          const arabProc = cs.arabProc as any;
+          if (filters.arabProcTitle && !arabProc.title?.toLowerCase().includes(filters.arabProcTitle.toLowerCase())) {
+            return false;
+          }
+          if (filters.arabProcNumCode && !arabProc.numCode?.includes(filters.arabProcNumCode)) {
+            return false;
+          }
+          return true;
+        });
+      }
+
+      return calSurgs;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   // Additional database-only methods can be added here as needed
 }

@@ -77,5 +77,131 @@ export class InstituteAdminController {
       throw new Error(err);
     }
   }
+
+  // Dashboard endpoints
+  public async handleGetAllSupervisors(req: Request, res: Response) {
+    try {
+      return await this.instituteAdminService.getAllSupervisors();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetSupervisorSubmissions(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { supervisorId: string; status?: "approved" | "pending" | "rejected" };
+    try {
+      return await this.instituteAdminService.getSupervisorSubmissions(validatedReq.supervisorId, validatedReq.status);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetAllCandidates(req: Request, res: Response) {
+    try {
+      return await this.instituteAdminService.getAllCandidates();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCandidateSubmissions(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { candidateId: string };
+    try {
+      return await this.instituteAdminService.getCandidateSubmissions(validatedReq.candidateId);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCandidateSubmissionById(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { candidateId: string; submissionId: string };
+    try {
+      return await this.instituteAdminService.getCandidateSubmissionById(
+        validatedReq.candidateId,
+        validatedReq.submissionId
+      );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCalendarProcedures(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as {
+      hospitalId?: string;
+      arabProcTitle?: string;
+      arabProcNumCode?: string;
+      month?: number;
+      year?: number;
+      startDate?: string;
+      endDate?: string;
+    };
+    try {
+      const filters: any = {
+        hospitalId: validatedReq.hospitalId,
+        arabProcTitle: validatedReq.arabProcTitle,
+        arabProcNumCode: validatedReq.arabProcNumCode,
+        month: validatedReq.month,
+        year: validatedReq.year
+      };
+
+      if (validatedReq.startDate) {
+        filters.startDate = new Date(validatedReq.startDate);
+      }
+      if (validatedReq.endDate) {
+        filters.endDate = new Date(validatedReq.endDate);
+      }
+
+      return await this.instituteAdminService.getCalendarProcedures(filters);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetAllHospitals(req: Request, res: Response) {
+    try {
+      return await this.instituteAdminService.getAllHospitals();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetArabicProcedures(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { search?: string };
+    try {
+      return await this.instituteAdminService.getArabicProcedures(validatedReq.search);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetHospitalAnalysis(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as {
+      hospitalId?: string;
+      month?: number;
+      year?: number;
+      startDate?: string;
+      endDate?: string;
+      groupBy?: "title" | "alphaCode";
+    };
+    try {
+      const filters: any = {
+        hospitalId: validatedReq.hospitalId,
+        month: validatedReq.month,
+        year: validatedReq.year,
+        groupBy: validatedReq.groupBy || "title"
+      };
+
+      if (validatedReq.startDate) {
+        filters.startDate = new Date(validatedReq.startDate);
+      }
+      if (validatedReq.endDate) {
+        filters.endDate = new Date(validatedReq.endDate);
+      }
+
+      return await this.instituteAdminService.getHospitalAnalysis(filters);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }
 

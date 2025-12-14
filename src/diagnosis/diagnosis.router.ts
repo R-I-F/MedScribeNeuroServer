@@ -5,6 +5,8 @@ import { createBulkDiagnosisValidator } from "../validators/createBulkDiagnosis.
 import { createDiagnosisValidator } from "../validators/createDiagnosis.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
+import extractJWT from "../middleware/extractJWT";
+import { requireSuperAdmin } from "../middleware/authorize.middleware";
 
 injectable()
 export class DiagnosisRouter {
@@ -23,7 +25,6 @@ export class DiagnosisRouter {
       "/postBulk",
       createBulkDiagnosisValidator,
       async (req: Request, res: Response) => {
-        console.log("req.body", req.body);
         const result = validationResult(req);
         if (result.isEmpty()) {
           try {
@@ -40,9 +41,10 @@ export class DiagnosisRouter {
 
     this.router.post(
       "/post",
+      extractJWT,
+      requireSuperAdmin,
       createDiagnosisValidator,
       async (req: Request, res: Response) => {
-        console.log("req.body", req.body);
         const result = validationResult(req);
         if (result.isEmpty()) {
           try {

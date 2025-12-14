@@ -31,18 +31,6 @@ export const supervisorSchema: Schema<ISupervisor> = new Schema(
       required: [true, "user approval status is required"],
       trim: true,
     },
-    approvedSubs: [{
-      type: Schema.Types.ObjectId,
-      ref: "Component", // Reference to the component that's still under development
-    }],
-    pendingSubs: [{
-      type: Schema.Types.ObjectId,
-      ref: "Component", // Reference to the component that's still under development
-    }],
-    rejectedSubs: [{
-      type: Schema.Types.ObjectId,
-      ref: "Component", // Reference to the component that's still under development
-    }],
     role: {
       type: String,
       enum: Object.values(UserRole),

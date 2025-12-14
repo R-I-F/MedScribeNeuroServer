@@ -4,6 +4,194 @@
 
 ---
 
+## Response Format
+
+**⚠️ IMPORTANT: ALL API responses (except `/auth/validate`) automatically follow this standardized JSON structure.** The response formatter middleware wraps every response, so you must always access data from the `data` field for success responses or `error` field for error responses.
+
+### Success Responses (Status Codes 200-299)
+
+All successful responses are wrapped in the following format:
+
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": <actual_response_data>
+}
+```
+
+**Examples:**
+
+**Single Object Response:**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "user@example.com",
+    "fullName": "John Doe"
+  }
+}
+```
+
+**Array Response:**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "user1@example.com"
+    },
+    {
+      "_id": "507f1f77bcf86cd799439012",
+      "email": "user2@example.com"
+    }
+  ]
+}
+```
+
+**Response with Meta Data:**
+If the controller returns an object with `meta` property, it's extracted:
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": <actual_data>,
+  "meta": {
+    "pagination": {...},
+    "total": 100
+  }
+}
+```
+
+### Error Responses (Status Codes 300+)
+
+All error responses are wrapped in the following format:
+
+```json
+{
+  "status": "error",
+  "statusCode": <error_code>,
+  "message": "<HTTP_reason_phrase>",
+  "error": <error_data>
+}
+```
+
+**Examples:**
+
+**400 Bad Request (Validation Errors):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "msg": "Invalid email",
+      "param": "email",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**401 Unauthorized:**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "UnAuthorized: wrong password"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Resource not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+### Special Cases
+
+**Auth Validate Endpoint:**
+The `/auth/validate` endpoint returns a direct object (not wrapped by formatter):
+```json
+{
+  "authorized": true,
+  "tokenPayload": {
+    "email": "user@example.com",
+    "role": "candidate",
+    "_id": "507f1f77bcf86cd799439011"
+  }
+}
+```
+
+**401 Unauthorized (No Token):**
+When no Authorization header is provided, `/auth/validate` returns:
+```json
+{
+  "message": "Unauthorized"
+}
+```
+
+**⚠️ CRITICAL: Response Format Rules**
+
+1. **ALL endpoints** (except `/auth/validate`) automatically wrap responses in this format
+2. **Always check `json.status`** - it will be either `"success"` or `"error"`
+3. **For success responses**: Access your data from `json.data` (could be object, array, or primitive)
+4. **For error responses**: Access error details from `json.error`
+5. **The `statusCode`** matches the HTTP status code (200, 201, 400, 401, 404, 500, etc.)
+6. **The `message`** field contains the HTTP reason phrase (e.g., "OK", "Created", "Bad Request")
+
+**Example Response Parsing:**
+```typescript
+const response = await fetch('/api/endpoint');
+const json = await response.json();
+
+if (json.status === "success") {
+  // Success - data is in json.data
+  const myData = json.data; // This is your actual data
+} else {
+  // Error - details in json.error
+  console.error("Error:", json.error);
+}
+```
+
+**Note:** Even if an endpoint example below shows a simplified response structure, the actual API response will ALWAYS be wrapped in this format. The examples show what's inside the `data` field.
+
+---
+
 ## Table of Contents
 
 1. [Authentication](#authentication)
@@ -61,6 +249,7 @@ Authorization: Bearer <token>
   }
 }
 ```
+**Note:** This endpoint returns a direct object, not wrapped in the standard format.
 
 **Response (401 Unauthorized):**
 ```json
@@ -68,6 +257,7 @@ Authorization: Bearer <token>
   "message": "Unauthorized"
 }
 ```
+**Note:** This is a direct response, not wrapped in the standard format.
 
 ---
 
@@ -89,26 +279,34 @@ All login endpoints return the same response format with a JWT token and user da
 **Response (200 OK):**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "candidate@example.com",
-    "fullName": "John Doe",
-    "phoneNum": "+1234567890",
-    "regNum": "REG123456",
-    "nationality": "Egyptian",
-    "rank": "professor",
-    "regDeg": "msc",
-    "approved": false,
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "user": {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": false,
+      "role": "candidate"
+    },
     "role": "candidate"
-  },
-  "role": "candidate"
+  }
 }
 ```
+**Note:** JWT tokens are sent as httpOnly cookies, not in the response body. The response contains only user data and role.
 
 **Response (401 Unauthorized):**
 ```json
 {
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
   "error": "UnAuthorized: wrong password"
 }
 ```
@@ -129,18 +327,23 @@ All login endpoints return the same response format with a JWT token and user da
 **Response (200 OK):**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "supervisor@example.com",
-    "fullName": "Dr. Jane Smith",
-    "phoneNum": "+1234567890",
-    "approved": true,
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "user": {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "supervisor@example.com",
+      "fullName": "Dr. Jane Smith",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "supervisor"
+    },
     "role": "supervisor"
-  },
-  "role": "supervisor"
+  }
 }
 ```
+**Note:** JWT tokens are sent as httpOnly cookies, not in the response body.
 
 ---
 
@@ -158,18 +361,23 @@ All login endpoints return the same response format with a JWT token and user da
 **Response (200 OK):**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "superadmin@example.com",
-    "fullName": "Super Admin",
-    "phoneNum": "+1234567890",
-    "approved": true,
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "user": {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "superadmin@example.com",
+      "fullName": "Super Admin",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "superAdmin"
+    },
     "role": "superAdmin"
-  },
-  "role": "superAdmin"
+  }
 }
 ```
+**Note:** JWT tokens are sent as httpOnly cookies, not in the response body.
 
 ---
 
@@ -187,18 +395,23 @@ All login endpoints return the same response format with a JWT token and user da
 **Response (200 OK):**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "instituteadmin@example.com",
-    "fullName": "Institute Admin",
-    "phoneNum": "+1234567890",
-    "approved": true,
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "user": {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "instituteadmin@example.com",
+      "fullName": "Institute Admin",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "instituteAdmin"
+    },
     "role": "instituteAdmin"
-  },
-  "role": "instituteAdmin"
+  }
 }
 ```
+**Note:** JWT tokens are sent as httpOnly cookies, not in the response body.
 
 ---
 
@@ -224,16 +437,21 @@ Registers a new candidate user. No authentication required.
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "candidate@example.com",
-  "fullName": "John Doe",
-  "phoneNum": "+1234567890",
-  "regNum": "REG123456",
-  "nationality": "Egyptian",
-  "rank": "professor",
-  "regDeg": "msc",
-  "approved": false,
-  "role": "candidate"
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "candidate@example.com",
+    "fullName": "John Doe",
+    "phoneNum": "+1234567890",
+    "regNum": "REG123456",
+    "nationality": "Egyptian",
+    "rank": "professor",
+    "regDeg": "msc",
+    "approved": false,
+    "role": "candidate"
+  }
 }
 ```
 
@@ -242,13 +460,376 @@ Registers a new candidate user. No authentication required.
 ### Reset All Candidate Passwords
 **POST** `/auth/resetCandPass`
 
+---
+
+### Request Password Change Email
+**POST** `/auth/requestPasswordChangeEmail`
+
+**Authentication Required:** Yes (all user types)
+
+Sends an email with a password change link to the authenticated user. The link allows the user to change their password without providing their current password.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Request Body:** None (user information extracted from JWT token)
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Password change email sent successfully"
+  }
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No user information found in token"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to send password change email"
+}
+```
+
+**Notes:**
+- User ID, email, and role are automatically extracted from the JWT token
+- Email contains a link with format: `/dashboard/[role]/profile/manage-profile-information/change-password?token={token}`
+- Token expires in 1 hour
+- Works for all user types: candidate, supervisor, superAdmin, instituteAdmin
+
+---
+
+### Change Password
+**PATCH** `/auth/changePassword`
+
+**Authentication Required:** Yes (all user types)
+
+Allows authenticated users to change their password using either:
+1. **Current Password Flow**: Provide current password and new password
+2. **Token Flow**: Provide token from email and new password
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Request Body (Current Password Flow):**
+```json
+{
+  "currentPassword": "currentPassword123",
+  "newPassword": "newSecurePassword456$"
+}
+```
+
+**Request Body (Token Flow):**
+```json
+{
+  "token": "secure-token-from-email",
+  "newPassword": "newSecurePassword456$"
+}
+```
+
+**Note:** You must provide either `currentPassword` OR `token`, but not both.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Password changed successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "msg": "New password must be at least 8 characters",
+      "param": "newPassword",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**Error Response (400 Bad Request - Current Password Incorrect):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Current password is incorrect"
+}
+```
+
+**Error Response (400 Bad Request - Same Password):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "New password must be different from current password"
+}
+```
+
+**Error Response (400 Bad Request - Invalid Token):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Invalid or expired reset token"
+}
+```
+
+**Error Response (400 Bad Request - Token Does Not Belong to User):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Token does not belong to this user"
+}
+```
+
+**Error Response (400 Bad Request - Missing Method):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Either currentPassword or token must be provided"
+}
+```
+
+OR
+
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Cannot provide both currentPassword and token. Use one method only."
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No user ID found in token"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to change password"
+}
+```
+
+**Notes:**
+- User ID and role are automatically extracted from the JWT token
+- New password must meet the following requirements:
+  - Minimum 8 characters
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+  - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+- New password cannot be the same as current password
+- Works for all user types: candidate, supervisor, superAdmin, instituteAdmin
+
+---
+
+### Forgot Password
+**POST** `/auth/forgotPassword`
+
+**Authentication Required:** No
+
+Allows users to request a password reset link via email. The system searches for the email across all user collections (candidate, supervisor, superAdmin, instituteAdmin).
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "If an account with that email exists, a password reset link has been sent"
+  }
+}
+```
+
+**Note:** This message is always returned regardless of whether the email exists in the system (security best practice to prevent email enumeration).
+
+**Error Response (400 Bad Request - Invalid Email):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "msg": "Email must be a valid email address",
+      "param": "email",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**Notes:**
+- Email is searched across all user collections (candidate, supervisor, superAdmin, instituteAdmin)
+- If user exists, a secure reset token is generated and sent via email
+- Reset link expires in 1 hour
+- Always returns success message to prevent email enumeration attacks
+- Reset link format: `{FRONTEND_URL}/reset-password?token={token}`
+
+---
+
+### Reset Password
+**POST** `/auth/resetPassword`
+
+**Authentication Required:** No (uses token from email)
+
+Allows users to reset their password using a token received via email from the forgot password flow.
+
+**Request Body:**
+```json
+{
+  "token": "secure-random-token-from-email",
+  "newPassword": "newSecurePassword456$"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Password reset successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid Token):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Invalid or expired reset token"
+}
+```
+
+**Error Response (400 Bad Request - Token Already Used):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "This reset token has already been used"
+}
+```
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "msg": "New password must be at least 8 characters",
+      "param": "newPassword",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to reset password"
+}
+```
+
+**Notes:**
+- Token is obtained from the password reset email link
+- Token expires after 1 hour
+- Token can only be used once
+- New password must meet the same requirements as change password:
+  - Minimum 8 characters
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+  - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+- After successful reset, the token is marked as used and cannot be reused
+
+---
+
 Resets all candidate passwords to the default encrypted password (`MEDscrobe01$`). No authentication required.
 
 **Response (200 OK):**
 ```json
 {
-  "modifiedCount": 42,
-  "defaultPassword": "MEDscrobe01$"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "modifiedCount": 42,
+    "defaultPassword": "MEDscrobe01$"
+  }
 }
 ```
 
@@ -282,12 +863,17 @@ Authorization: Bearer <superAdmin_token>
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "superadmin2@example.com",
-  "fullName": "Super Admin User",
-  "phoneNum": "01000000000",
-  "approved": true,
-  "role": "superAdmin"
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "superadmin2@example.com",
+    "fullName": "Super Admin User",
+    "phoneNum": "01000000000",
+    "approved": true,
+    "role": "superAdmin"
+  }
 }
 ```
 
@@ -298,16 +884,21 @@ Authorization: Bearer <superAdmin_token>
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "superadmin@example.com",
-    "fullName": "Super Admin",
-    "phoneNum": "+1234567890",
-    "approved": true,
-    "role": "superAdmin"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "superadmin@example.com",
+      "fullName": "Super Admin",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "superAdmin"
+    }
+  ]
+}
 ```
 
 ---
@@ -318,18 +909,26 @@ Authorization: Bearer <superAdmin_token>
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "superadmin@example.com",
-  "fullName": "Super Admin",
-  "phoneNum": "+1234567890",
-  "approved": true,
-  "role": "superAdmin"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "superadmin@example.com",
+    "fullName": "Super Admin",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "superAdmin"
+  }
 }
 ```
 
 **Response (404 Not Found):**
 ```json
 {
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
   "error": "Super admin not found"
 }
 ```
@@ -350,12 +949,17 @@ Authorization: Bearer <superAdmin_token>
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "superadmin@example.com",
-  "fullName": "Updated Super Admin",
-  "phoneNum": "+9876543210",
-  "approved": true,
-  "role": "superAdmin"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "superadmin@example.com",
+    "fullName": "Updated Super Admin",
+    "phoneNum": "+9876543210",
+    "approved": true,
+    "role": "superAdmin"
+  }
 }
 ```
 
@@ -367,7 +971,12 @@ Authorization: Bearer <superAdmin_token>
 **Response (200 OK):**
 ```json
 {
-  "message": "Super admin deleted successfully"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Super admin deleted successfully"
+  }
 }
 ```
 
@@ -401,12 +1010,17 @@ Authorization: Bearer <token>
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "instituteadmin@example.com",
-  "fullName": "Institute Admin User",
-  "phoneNum": "01000000000",
-  "approved": true,
-  "role": "instituteAdmin"
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "instituteadmin@example.com",
+    "fullName": "Institute Admin User",
+    "phoneNum": "01000000000",
+    "approved": true,
+    "role": "instituteAdmin"
+  }
 }
 ```
 
@@ -419,16 +1033,21 @@ Authorization: Bearer <token>
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "instituteadmin@example.com",
-    "fullName": "Institute Admin",
-    "phoneNum": "+1234567890",
-    "approved": true,
-    "role": "instituteAdmin"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "instituteadmin@example.com",
+      "fullName": "Institute Admin",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "instituteAdmin"
+    }
+  ]
+}
 ```
 
 ---
@@ -441,12 +1060,17 @@ Authorization: Bearer <token>
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "instituteadmin@example.com",
-  "fullName": "Institute Admin",
-  "phoneNum": "+1234567890",
-  "approved": true,
-  "role": "instituteAdmin"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "instituteadmin@example.com",
+    "fullName": "Institute Admin",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "instituteAdmin"
+  }
 }
 ```
 
@@ -468,12 +1092,17 @@ Authorization: Bearer <token>
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "instituteadmin@example.com",
-  "fullName": "Updated Institute Admin",
-  "phoneNum": "+9876543210",
-  "approved": true,
-  "role": "instituteAdmin"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "instituteadmin@example.com",
+    "fullName": "Updated Institute Admin",
+    "phoneNum": "+9876543210",
+    "approved": true,
+    "role": "instituteAdmin"
+  }
 }
 ```
 
@@ -487,7 +1116,731 @@ Authorization: Bearer <token>
 **Response (200 OK):**
 ```json
 {
-  "message": "Institute admin deleted successfully"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Institute admin deleted successfully"
+  }
+}
+```
+
+---
+
+#### Get All Supervisors (Dashboard)
+**GET** `/instituteAdmin/supervisors`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns a list of all supervisors in the system for the Institute Admin dashboard.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "supervisor@example.com",
+      "fullName": "Dr. Jane Smith",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "supervisor"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+---
+
+#### Get Supervisor Submissions (Dashboard)
+**GET** `/instituteAdmin/supervisors/:supervisorId/submissions`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns all submissions supervised by a specific supervisor. This displays the supervisor's dashboard view (same data the supervisor sees).
+
+**URL Parameters:**
+- `supervisorId` (required): Supervisor MongoDB ObjectId
+
+**Query Parameters:**
+- `status` (optional): Filter by submission status. Valid values: `approved`, `pending`, `rejected`. If omitted, returns all submissions.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "candDocId": {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "candidate@example.com",
+        "fullName": "John Doe",
+        "phoneNum": "+1234567890",
+        "regNum": "REG123456",
+        "nationality": "Egyptian",
+        "rank": "professor",
+        "regDeg": "msc",
+        "approved": true,
+        "role": "candidate"
+      },
+      "procDocId": {
+        "_id": "507f1f77bcf86cd799439013",
+        "timeStamp": "2025-07-14T04:49:35.286Z",
+        "patientName": "John Patient",
+        "patientDob": "1980-01-15T00:00:00.000Z",
+        "gender": "male",
+        "hospital": {
+          "_id": "507f1f77bcf86cd799439020",
+          "engName": "Cairo University Hospital",
+          "arabName": "مستشفى جامعة القاهرة",
+          "location": {
+            "long": 31.2001,
+            "lat": 30.0444
+          }
+        },
+        "arabProc": {
+          "_id": "507f1f77bcf86cd799439021",
+          "title": "اسم الإجراء بالعربية",
+          "numCode": "61070",
+          "alphaCode": "ABC",
+          "description": "Procedure description"
+        },
+        "procDate": "2025-07-14T04:49:35.286Z",
+        "google_uid": "abc123",
+        "formLink": "https://example.com/form"
+      },
+      "supervisorDocId": {
+        "_id": "507f1f77bcf86cd799439014",
+        "email": "supervisor@example.com",
+        "fullName": "Dr. Jane Smith",
+        "phoneNum": "+1234567890",
+        "approved": true,
+        "role": "supervisor"
+      },
+      "roleInSurg": "operator",
+      "subStatus": "pending",
+      "procedureName": ["Procedure A", "Procedure B"],
+      "diagnosisName": ["Diagnosis X"],
+      "procCptDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439015",
+          "numCode": "12345",
+          "alphaCode": "ABC",
+          "title": "Procedure Title",
+          "description": "Procedure description"
+        }
+      ],
+      "icdDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439016",
+          "icdCode": "G93.1",
+          "title": "Diagnosis Title",
+          "description": "Diagnosis description"
+        }
+      ],
+      "mainDiagDocId": {
+        "_id": "507f1f77bcf86cd799439017",
+        "title": "Main Diagnosis Title"
+      }
+    }
+  ]
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Supervisor ID must be a valid MongoDB ObjectId",
+      "path": "supervisorId",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Supervisor not found"
+}
+```
+
+---
+
+#### Get All Candidates (Dashboard)
+**GET** `/instituteAdmin/candidates`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns a list of all candidates in the system for the Institute Admin dashboard.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": false,
+      "role": "candidate"
+    }
+  ]
+}
+```
+
+---
+
+#### Get Candidate Submissions (Dashboard)
+**GET** `/instituteAdmin/candidates/:candidateId/submissions`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns all submissions for a specific candidate. This displays the candidate's LogBook view (same data the candidate sees).
+
+**URL Parameters:**
+- `candidateId` (required): Candidate MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "candDocId": {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "candidate@example.com",
+        "fullName": "John Doe",
+        "phoneNum": "+1234567890",
+        "regNum": "REG123456",
+        "nationality": "Egyptian",
+        "rank": "professor",
+        "regDeg": "msc",
+        "approved": true,
+        "role": "candidate"
+      },
+      "procDocId": {
+        "_id": "507f1f77bcf86cd799439013",
+        "timeStamp": "2025-07-14T04:49:35.286Z",
+        "patientName": "John Patient",
+        "patientDob": "1980-01-15T00:00:00.000Z",
+        "gender": "male",
+        "hospital": {
+          "_id": "507f1f77bcf86cd799439020",
+          "engName": "Cairo University Hospital",
+          "arabName": "مستشفى جامعة القاهرة",
+          "location": {
+            "long": 31.2001,
+            "lat": 30.0444
+          }
+        },
+        "arabProc": {
+          "_id": "507f1f77bcf86cd799439021",
+          "title": "اسم الإجراء بالعربية",
+          "numCode": "61070",
+          "alphaCode": "ABC",
+          "description": "Procedure description"
+        },
+        "procDate": "2025-07-14T04:49:35.286Z",
+        "google_uid": "abc123",
+        "formLink": "https://example.com/form"
+      },
+      "supervisorDocId": {
+        "_id": "507f1f77bcf86cd799439014",
+        "email": "supervisor@example.com",
+        "fullName": "Dr. Jane Smith",
+        "phoneNum": "+1234567890",
+        "approved": true,
+        "role": "supervisor"
+      },
+      "mainDiagDocId": {
+        "_id": "507f1f77bcf86cd799439017",
+        "title": "cns tumors",
+        "procs": ["507f1f77bcf86cd799439018"],
+        "diagnosis": ["507f1f77bcf86cd799439019"]
+      },
+      "roleInSurg": "operator",
+      "assRoleDesc": "assisted with retraction",
+      "otherSurgRank": "professor",
+      "otherSurgName": "Dr. Smith",
+      "isItRevSurg": false,
+      "preOpClinCond": "stable",
+      "insUsed": "microscope",
+      "consUsed": "bone cement",
+      "consDetails": "Used for reconstruction",
+      "subGoogleUid": "sub123",
+      "subStatus": "approved",
+      "procCptDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439015",
+          "numCode": "12345",
+          "alphaCode": "ABC",
+          "title": "Procedure Title",
+          "description": "Procedure description"
+        }
+      ],
+      "icdDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439016",
+          "icdCode": "G93.1",
+          "title": "Diagnosis Title",
+          "description": "Diagnosis description"
+        }
+      ],
+      "diagnosisName": ["Diagnosis X"],
+      "procedureName": ["Procedure A", "Procedure B"],
+      "surgNotes": "Surgical notes here",
+      "IntEvents": "No complications",
+      "spOrCran": "cranial",
+      "pos": "supine",
+      "approach": "frontal",
+      "clinPres": "headache",
+      "region": "cervical",
+      "createdAt": "2025-07-14T04:49:35.286Z",
+      "updatedAt": "2025-07-14T04:49:35.286Z"
+    }
+  ]
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Candidate ID must be a valid MongoDB ObjectId",
+      "path": "candidateId",
+      "location": "params"
+    }
+  ]
+}
+```
+
+---
+
+#### Get Candidate Submission by ID (Dashboard)
+**GET** `/instituteAdmin/candidates/:candidateId/submissions/:submissionId`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns a specific submission belonging to a candidate. This allows institute admins to view detailed submission information for any candidate.
+
+**URL Parameters:**
+- `candidateId` (required): Candidate MongoDB ObjectId
+- `submissionId` (required): Submission MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "timeStamp": "2025-07-14T04:49:35.286Z",
+    "candDocId": {
+      "_id": "507f1f77bcf86cd799439012",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": true,
+      "role": "candidate"
+    },
+    "procDocId": {
+      "_id": "507f1f77bcf86cd799439013",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "patientName": "John Patient",
+      "patientDob": "1980-01-15T00:00:00.000Z",
+      "gender": "male",
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439020",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة",
+        "location": {
+          "long": 31.2001,
+          "lat": 30.0444
+        }
+      },
+      "arabProc": {
+        "_id": "507f1f77bcf86cd799439021",
+        "title": "اسم الإجراء بالعربية",
+        "numCode": "61070",
+        "alphaCode": "ABC",
+        "description": "Procedure description"
+      },
+      "procDate": "2025-07-14T04:49:35.286Z",
+      "google_uid": "abc123",
+      "formLink": "https://example.com/form"
+    },
+    "supervisorDocId": {
+      "_id": "507f1f77bcf86cd799439014",
+      "email": "supervisor@example.com",
+      "fullName": "Dr. Jane Smith",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "supervisor"
+    },
+    "mainDiagDocId": {
+      "_id": "507f1f77bcf86cd799439017",
+      "title": "cns tumors"
+    },
+    "roleInSurg": "operator",
+    "assRoleDesc": "assisted with retraction",
+    "otherSurgRank": "professor",
+    "otherSurgName": "Dr. Smith",
+    "isItRevSurg": false,
+    "preOpClinCond": "stable",
+    "insUsed": "microscope",
+    "consUsed": "bone cement",
+    "consDetails": "Used for reconstruction",
+    "subGoogleUid": "sub123",
+    "subStatus": "approved",
+    "procCptDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439015",
+        "numCode": "12345",
+        "alphaCode": "ABC",
+        "description": "Procedure description"
+      }
+    ],
+    "icdDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439016",
+        "code": "G93.1",
+        "description": "Diagnosis description"
+      }
+    ],
+    "diagnosisName": ["Diagnosis X"],
+    "procedureName": ["Procedure A", "Procedure B"],
+    "surgNotes": "Surgical notes here",
+    "IntEvents": "No complications",
+    "spOrCran": "cranial",
+    "pos": "supine",
+    "approach": "frontal",
+    "clinPres": "headache",
+    "region": "cervical",
+    "createdAt": "2025-07-14T04:49:35.286Z",
+    "updatedAt": "2025-07-14T04:49:35.286Z"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Candidate ID must be a valid MongoDB ObjectId",
+      "path": "candidateId",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission not found or does not belong to the specified candidate"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Notes:**
+- The endpoint verifies that the submission belongs to the specified candidate before returning it
+- All ObjectId references are populated with their full document data
+- Returns 404 if submission doesn't exist or doesn't belong to the candidate
+- Returns 400 if either ID format is invalid
+
+---
+
+#### Get Calendar Procedures with Filters (Dashboard)
+**GET** `/instituteAdmin/calendarProcedures`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns all calendar procedures (calSurg) with optional filtering capabilities. Supports filtering by hospital, arabProc (by title or numCode), and timestamp (month/year).
+
+**Query Parameters (all optional):**
+- `hospitalId` (optional): Filter by hospital MongoDB ObjectId
+- `arabProcTitle` (optional): Filter by Arabic procedure title (partial match, case-insensitive)
+- `arabProcNumCode` (optional): Filter by Arabic procedure numCode (exact or partial match)
+- `month` (optional): Filter by month (1-12). When provided, filters calSurg entries within that month
+- `year` (optional): Filter by year (e.g., 2025). When provided, filters calSurg entries within that year
+- `startDate` (optional): Filter by start date (ISO 8601 format). When provided with `endDate`, filters calSurg entries within the date range
+- `endDate` (optional): Filter by end date (ISO 8601 format). When provided with `startDate`, filters calSurg entries within the date range
+
+**Note:** Multiple filters can be combined. For example, you can filter by both `hospitalId` and `month` and `year` simultaneously.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-01-15T10:00:00.000Z",
+      "patientName": "John Patient",
+      "patientDob": "1980-01-15T00:00:00.000Z",
+      "gender": "male",
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439020",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة",
+        "location": {
+          "long": 31.2001,
+          "lat": 30.0444
+        }
+      },
+      "arabProc": {
+        "_id": "507f1f77bcf86cd799439021",
+        "title": "اسم الإجراء بالعربية",
+        "numCode": "61070",
+        "alphaCode": "ABC",
+        "description": "Procedure description"
+      },
+      "procDate": "2025-01-15T10:00:00.000Z",
+      "google_uid": "abc123",
+      "formLink": "https://example.com/form"
+    }
+  ]
+}
+```
+
+---
+
+#### Get All Hospitals (Dashboard)
+**GET** `/instituteAdmin/hospitals`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns a list of all hospitals in the system. Used for the hospital filter dropdown in the Calendar Procedures section.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "arabName": "مستشفى جامعة القاهرة",
+      "engName": "Cairo University Hospital",
+      "location": {
+        "long": 31.2001,
+        "lat": 30.0444
+      },
+      "createdAt": "2025-12-01T14:00:00.000Z",
+      "updatedAt": "2025-12-01T14:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+#### Get Arabic Procedures (Dashboard)
+**GET** `/instituteAdmin/arabicProcedures`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns a list of all Arabic procedures. Used for the autocomplete/search functionality when filtering calendar procedures by arabProc.
+
+**Query Parameters (optional):**
+- `search` (optional): Search term to filter by title or numCode (case-insensitive partial match). If provided, returns only procedures matching the search term.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "title": "مراجعة صمام اوميا",
+      "alphaCode": "VSHN",
+      "numCode": "61070",
+      "description": "Ommaya valve reservoir check and fluid sampling procedure."
+    }
+  ]
+}
+```
+
+---
+
+#### Get Hospital-Based Analysis Data (Dashboard)
+**GET** `/instituteAdmin/calendarProcedures/analysis/hospital`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Returns aggregated analysis data for calendar procedures grouped by hospital. Used to generate the hospital-based analysis chart.
+
+**Query Parameters (all optional):**
+- `hospitalId` (optional): Filter by specific hospital MongoDB ObjectId. If omitted, returns analysis for all hospitals.
+- `month` (optional): Filter by month (1-12). When provided, filters calSurg entries within that month
+- `year` (optional): Filter by year (e.g., 2025). When provided, filters calSurg entries within that year
+- `startDate` (optional): Filter by start date (ISO 8601 format). When provided with `endDate`, filters calSurg entries within the date range
+- `endDate` (optional): Filter by end date (ISO 8601 format). When provided with `startDate`, filters calSurg entries within the date range
+- `groupBy` (optional): Grouping method. Valid values: `title` (group by arabProc title) or `alphaCode` (group by arabProc alphaCode). Default: `title`
+
+**Response (200 OK) - When groupBy is "title":**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439020",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة"
+      },
+      "procedures": [
+        {
+          "title": "مراجعة صمام اوميا",
+          "frequency": 15
+        },
+        {
+          "title": "إجراء آخر",
+          "frequency": 8
+        }
+      ]
+    },
+    {
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439021",
+        "engName": "Another Hospital",
+        "arabName": "مستشفى آخر"
+      },
+      "procedures": [
+        {
+          "title": "مراجعة صمام اوميا",
+          "frequency": 5
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Response (200 OK) - When groupBy is "alphaCode":**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439020",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة"
+      },
+      "procedures": [
+        {
+          "alphaCode": "VSHN",
+          "frequency": 15
+        },
+        {
+          "alphaCode": "ABC",
+          "frequency": 8
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "msg": "groupBy must be either 'title' or 'alphaCode'",
+      "param": "groupBy",
+      "location": "query"
+    }
+  ]
 }
 ```
 
@@ -500,6 +1853,13 @@ Authorization: Bearer <token>
 
 Creates submissions from external data source (Google Sheets).
 
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
 **Request Body:**
 ```json
 {
@@ -511,21 +1871,26 @@ Creates submissions from external data source (Google Sheets).
 
 **Response (201 Created):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "timeStamp": "2025-07-14T04:49:35.286Z",
-    "candDocId": "507f1f77bcf86cd799439012",
-    "procDocId": "507f1f77bcf86cd799439013",
-    "supervisorDocId": "507f1f77bcf86cd799439014",
-    "roleInSurg": "operator",
-    "subStatus": "pending",
-    "procedureName": ["Procedure A", "Procedure B"],
-    "diagnosisName": ["Diagnosis X"],
-    "procCptDocId": ["507f1f77bcf86cd799439015"],
-    "icdDocId": ["507f1f77bcf86cd799439016"]
-  }
-]
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "candDocId": "507f1f77bcf86cd799439012",
+      "procDocId": "507f1f77bcf86cd799439013",
+      "supervisorDocId": "507f1f77bcf86cd799439014",
+      "roleInSurg": "operator",
+      "subStatus": "pending",
+      "procedureName": ["Procedure A", "Procedure B"],
+      "diagnosisName": ["Diagnosis X"],
+      "procCptDocId": ["507f1f77bcf86cd799439015"],
+      "icdDocId": ["507f1f77bcf86cd799439016"]
+    }
+  ]
+}
 ```
 
 ---
@@ -534,6 +1899,13 @@ Creates submissions from external data source (Google Sheets).
 **PATCH** `/sub/updateStatusFromExternal`
 
 Updates submission statuses from external data source.
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
 
 **Request Body:**
 ```json
@@ -544,13 +1916,1221 @@ Updates submission statuses from external data source.
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "subStatus": "approved"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "subStatus": "approved"
+    }
+  ]
+}
 ```
+
+---
+
+### Get Candidate Submission Statistics
+**GET** `/sub/candidate/stats`
+
+**Authentication Required:** Yes (Candidate role)
+
+Returns statistics about the logged-in candidate's submissions.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "totalApproved": 15,
+    "totalRejected": 3,
+    "totalPending": 7,
+    "totalApprovedAndPending": 22
+  }
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No candidate ID found in token"
+}
+```
+
+---
+
+### Get Candidate Submissions
+**GET** `/sub/candidate/submissions`
+
+**Authentication Required:** Yes (Candidate role)
+
+Returns all submissions for the logged-in candidate with all related data populated (diagnosis, procedures, supervisor, etc.). All ObjectId references are populated with their full document data.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "candDocId": {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "candidate@example.com",
+        "fullName": "John Doe",
+        "phoneNum": "+1234567890",
+        "regNum": "REG123456",
+        "nationality": "Egyptian",
+        "rank": "professor",
+        "regDeg": "msc",
+        "approved": true,
+        "role": "candidate"
+      },
+      "procDocId": {
+        "_id": "507f1f77bcf86cd799439013",
+        "timeStamp": "2025-07-14T04:49:35.286Z",
+        "patientName": "John Patient",
+        "patientDob": "1980-01-15T00:00:00.000Z",
+        "gender": "male",
+        "hospital": {
+          "_id": "507f1f77bcf86cd799439020",
+          "engName": "Cairo University Hospital",
+          "arabName": "مستشفى جامعة القاهرة",
+          "location": {
+            "long": 31.2001,
+            "lat": 30.0444
+          }
+        },
+        "arabProc": {
+          "_id": "507f1f77bcf86cd799439021",
+          "title": "اسم الإجراء بالعربية",
+          "numCode": "61070",
+          "alphaCode": "ABC",
+          "description": "Procedure description"
+        },
+        "procDate": "2025-07-14T04:49:35.286Z",
+        "google_uid": "abc123",
+        "formLink": "https://example.com/form"
+      },
+      "supervisorDocId": {
+        "_id": "507f1f77bcf86cd799439014",
+        "email": "supervisor@example.com",
+        "fullName": "Dr. Jane Smith",
+        "phoneNum": "+1234567890",
+        "approved": true,
+        "role": "supervisor"
+      },
+      "mainDiagDocId": {
+        "_id": "507f1f77bcf86cd799439017",
+        "title": "cns tumors",
+        "procs": ["507f1f77bcf86cd799439018"],
+        "diagnosis": ["507f1f77bcf86cd799439019"]
+      },
+      "roleInSurg": "operator",
+      "assRoleDesc": "assisted with retraction",
+      "otherSurgRank": "professor",
+      "otherSurgName": "Dr. Smith",
+      "isItRevSurg": false,
+      "preOpClinCond": "stable",
+      "insUsed": "microscope",
+      "consUsed": "bone cement",
+      "consDetails": "Used for reconstruction",
+      "subGoogleUid": "sub123",
+      "subStatus": "approved",
+      "procCptDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439015",
+          "numCode": "12345",
+          "alphaCode": "ABC",
+          "title": "Procedure Title",
+          "description": "Procedure description"
+        }
+      ],
+      "icdDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439016",
+          "icdCode": "G93.1",
+          "title": "Diagnosis Title",
+          "description": "Diagnosis description"
+        }
+      ],
+      "diagnosisName": ["Diagnosis X"],
+      "procedureName": ["Procedure A", "Procedure B"],
+      "surgNotes": "Surgical notes here",
+      "IntEvents": "No complications",
+      "spOrCran": "cranial",
+      "pos": "supine",
+      "approach": "frontal",
+      "clinPres": "headache",
+      "region": "cervical",
+      "createdAt": "2025-07-14T04:49:35.286Z",
+      "updatedAt": "2025-07-14T04:49:35.286Z"
+    }
+  ]
+}
+```
+
+**Note:** All ObjectId references (`candDocId`, `procDocId`, `supervisorDocId`, `mainDiagDocId`, `procCptDocId`, `icdDocId`) are populated with their full document data, not just the ObjectId.
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No candidate ID found in token"
+}
+```
+
+---
+
+### Get Single Candidate Submission by ID
+**GET** `/sub/candidate/submissions/:id`
+
+**Authentication Required:** Yes (Candidate role)
+
+Returns a single submission by ID, verifying that it belongs to the logged-in candidate.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Submission MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "timeStamp": "2025-07-14T04:49:35.286Z",
+    "candDocId": {
+      "_id": "507f1f77bcf86cd799439012",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": true,
+      "role": "candidate"
+    },
+    "procDocId": {
+      "_id": "507f1f77bcf86cd799439013",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "patientName": "John Patient",
+      "patientDob": "1980-01-15T00:00:00.000Z",
+      "gender": "male",
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439020",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة",
+        "location": {
+          "long": 31.2001,
+          "lat": 30.0444
+        }
+      },
+      "arabProc": {
+        "_id": "507f1f77bcf86cd799439021",
+        "title": "اسم الإجراء بالعربية",
+        "numCode": "61070",
+        "alphaCode": "ABC",
+        "description": "Procedure description"
+      },
+      "procDate": "2025-07-14T04:49:35.286Z",
+      "google_uid": "abc123",
+      "formLink": "https://example.com/form"
+    },
+    "supervisorDocId": {
+      "_id": "507f1f77bcf86cd799439014",
+      "email": "supervisor@example.com",
+      "fullName": "Dr. Jane Smith",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "supervisor"
+    },
+    "mainDiagDocId": {
+      "_id": "507f1f77bcf86cd799439017",
+      "title": "cns tumors",
+      "procs": ["507f1f77bcf86cd799439018"],
+      "diagnosis": ["507f1f77bcf86cd799439019"]
+    },
+    "roleInSurg": "operator",
+    "assRoleDesc": "assisted with retraction",
+    "otherSurgRank": "professor",
+    "otherSurgName": "Dr. Smith",
+    "isItRevSurg": false,
+    "preOpClinCond": "stable",
+    "insUsed": "microscope",
+    "consUsed": "bone cement",
+    "consDetails": "Used for reconstruction",
+    "subGoogleUid": "sub123",
+    "subStatus": "approved",
+    "procCptDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439015",
+        "numCode": "12345",
+        "alphaCode": "ABC",
+        "title": "Procedure Title",
+        "description": "Procedure description"
+      }
+    ],
+    "icdDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439016",
+        "icdCode": "G93.1",
+        "title": "Diagnosis Title",
+        "description": "Diagnosis description"
+      }
+    ],
+    "diagnosisName": ["Diagnosis X"],
+    "procedureName": ["Procedure A", "Procedure B"],
+    "surgNotes": "Surgical notes here",
+    "IntEvents": "No complications",
+    "spOrCran": "cranial",
+    "pos": "supine",
+    "approach": "frontal",
+    "clinPres": "headache",
+    "region": "cervical",
+    "createdAt": "2025-07-14T04:49:35.286Z",
+    "updatedAt": "2025-07-14T04:49:35.286Z"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Submission ID must be a valid MongoDB ObjectId",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No candidate ID found in token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission not found"
+}
+```
+
+OR
+
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission does not belong to this candidate"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+**Notes:**
+- User ID and role are automatically extracted from the JWT token
+- **Current Password Flow**: Requires providing the current password for verification
+- **Token Flow**: Requires providing a token received from the password change email (from `/auth/requestPasswordChangeEmail`)
+- New password must meet the following requirements:
+  - Minimum 8 characters
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+  - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+- New password cannot be the same as current password (when using current password flow)
+- Token must belong to the authenticated user (when using token flow)
+- Token expires after 1 hour
+- Token can only be used once
+- Works for all user types: candidate, supervisor, superAdmin, instituteAdmin
+
+---
+
+### Get Supervisor Submissions
+**GET** `/sub/supervisor/submissions`
+
+**Authentication Required:** Yes (Supervisor role)
+
+Returns all submissions assigned to the logged-in supervisor with all related data populated (diagnosis, procedures, candidate, etc.). Optionally filter by submission status.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Query Parameters:**
+- `status` (optional): Filter submissions by status. Valid values: `approved`, `pending`, `rejected`. If omitted, returns all submissions.
+
+**Examples:**
+- Get all submissions: `GET /sub/supervisor/submissions`
+- Get approved submissions: `GET /sub/supervisor/submissions?status=approved`
+- Get pending submissions: `GET /sub/supervisor/submissions?status=pending`
+- Get rejected submissions: `GET /sub/supervisor/submissions?status=rejected`
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "candDocId": {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "candidate@example.com",
+        "fullName": "John Doe",
+        "phoneNum": "+1234567890",
+        "regNum": "REG123456",
+        "nationality": "Egyptian",
+        "rank": "professor",
+        "regDeg": "msc",
+        "approved": true,
+        "role": "candidate"
+      },
+      "procDocId": {
+        "_id": "507f1f77bcf86cd799439013",
+        "timeStamp": "2025-07-14T04:49:35.286Z",
+        "patientName": "John Patient",
+        "patientDob": "1980-01-15T00:00:00.000Z",
+        "gender": "male",
+        "hospital": {
+          "_id": "507f1f77bcf86cd799439020",
+          "engName": "Cairo University Hospital",
+          "arabName": "مستشفى جامعة القاهرة",
+          "location": {
+            "long": 31.2001,
+            "lat": 30.0444
+          }
+        },
+        "arabProc": {
+          "_id": "507f1f77bcf86cd799439021",
+          "title": "Procedure Title",
+          "numCode": "12345",
+          "alphaCode": "ABC",
+          "description": "Procedure description"
+        }
+      },
+      "supervisorDocId": {
+        "_id": "507f1f77bcf86cd799439014",
+        "email": "supervisor@example.com",
+        "fullName": "Dr. Jane Smith",
+        "phoneNum": "+1234567890",
+        "approved": true,
+        "role": "supervisor"
+      },
+      "roleInSurg": "operator",
+      "subStatus": "pending",
+      "procedureName": ["Procedure A", "Procedure B"],
+      "diagnosisName": ["Diagnosis X"],
+      "procCptDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439015",
+          "numCode": "12345",
+          "description": "CPT Description"
+        }
+      ],
+      "icdDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439016",
+          "code": "I10",
+          "description": "ICD Description"
+        }
+      ],
+      "mainDiagDocId": {
+        "_id": "507f1f77bcf86cd799439017",
+        "title": "Main Diagnosis Title"
+      }
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No supervisor ID found in token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+**Notes:**
+- The supervisor ID is automatically extracted from the JWT token
+- All ObjectId references are populated with their full document data
+- If `status` query parameter is provided, only submissions with that status are returned
+- Valid status values are: `approved`, `pending`, `rejected`
+- If `status` is omitted, all submissions for the supervisor are returned regardless of status
+
+---
+
+### Get Single Supervisor Submission by ID
+**GET** `/sub/supervisor/submissions/:id`
+
+**Authentication Required:** Yes (Supervisor role)
+
+Returns a single submission by ID, verifying that it belongs to the logged-in supervisor.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Submission MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "timeStamp": "2025-07-14T04:49:35.286Z",
+    "candDocId": {
+      "_id": "507f1f77bcf86cd799439012",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": true,
+      "role": "candidate"
+    },
+    "procDocId": {
+      "_id": "507f1f77bcf86cd799439013",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "patientName": "John Patient",
+      "patientDob": "1980-01-15T00:00:00.000Z",
+      "gender": "male",
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439020",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة",
+        "location": {
+          "long": 31.2001,
+          "lat": 30.0444
+        }
+      },
+      "arabProc": {
+        "_id": "507f1f77bcf86cd799439021",
+        "title": "Procedure Title",
+        "numCode": "12345",
+        "alphaCode": "ABC",
+        "description": "Procedure description"
+      }
+    },
+    "supervisorDocId": {
+      "_id": "507f1f77bcf86cd799439014",
+      "email": "supervisor@example.com",
+      "fullName": "Dr. Jane Smith",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "supervisor"
+    },
+    "roleInSurg": "operator",
+    "subStatus": "pending",
+    "procedureName": ["Procedure A", "Procedure B"],
+    "diagnosisName": ["Diagnosis X"],
+    "procCptDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439015",
+        "numCode": "12345",
+        "description": "CPT Description"
+      }
+    ],
+    "icdDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439016",
+        "code": "I10",
+        "description": "ICD Description"
+      }
+    ],
+    "mainDiagDocId": {
+      "_id": "507f1f77bcf86cd799439017",
+      "title": "Main Diagnosis Title"
+    }
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Submission ID must be a valid MongoDB ObjectId",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No supervisor ID found in token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission not found"
+}
+```
+
+OR
+
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission does not belong to this supervisor"
+}
+```
+
+**Notes:**
+- The supervisor ID is automatically extracted from the JWT token
+- The submission ID parameter is validated to ensure it's a valid MongoDB ObjectId format
+- The endpoint verifies that the submission belongs to the logged-in supervisor
+- All ObjectId references are populated with their full document data
+- Returns 400 if the submission ID format is invalid
+- Returns 404 if submission doesn't exist or doesn't belong to the supervisor
+
+---
+
+### Get Candidate Submissions by Supervisor
+**GET** `/sub/supervisor/candidates/:candidateId/submissions`
+
+**Authentication Required:** Yes (Supervisor role)
+
+Returns submissions for a specific candidate. By default, returns only submissions supervised by the logged-in supervisor. With the `all=true` query parameter, returns ALL submissions for the candidate (requires supervisor-candidate relationship verification).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `candidateId` (required): Candidate MongoDB ObjectId
+
+**Query Parameters:**
+- `all` (optional): When set to `true`, returns ALL submissions for the candidate, regardless of which supervisor is assigned. The supervisor must have at least one submission relationship with the candidate to access all submissions. When omitted or `false`, returns only submissions supervised by the logged-in supervisor (default behavior).
+
+**Examples:**
+- Get supervisor's submissions only: `GET /sub/supervisor/candidates/507f1f77bcf86cd799439012/submissions`
+- Get all candidate submissions: `GET /sub/supervisor/candidates/507f1f77bcf86cd799439012/submissions?all=true`
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "candDocId": {
+        "_id": "507f1f77bcf86cd799439012",
+        "email": "candidate@example.com",
+        "fullName": "John Doe",
+        "phoneNum": "+1234567890",
+        "regNum": "REG123456",
+        "nationality": "Egyptian",
+        "rank": "professor",
+        "regDeg": "msc",
+        "approved": true,
+        "role": "candidate"
+      },
+      "procDocId": {
+        "_id": "507f1f77bcf86cd799439013",
+        "timeStamp": "2025-07-14T04:49:35.286Z",
+        "patientName": "John Patient",
+        "patientDob": "1980-01-15T00:00:00.000Z",
+        "gender": "male",
+        "hospital": {
+          "_id": "507f1f77bcf86cd799439020",
+          "engName": "Cairo University Hospital",
+          "arabName": "مستشفى جامعة القاهرة",
+          "location": {
+            "long": 31.2001,
+            "lat": 30.0444
+          }
+        },
+        "arabProc": {
+          "_id": "507f1f77bcf86cd799439021",
+          "title": "Procedure Title",
+          "numCode": "12345",
+          "alphaCode": "ABC",
+          "description": "Procedure description"
+        }
+      },
+      "supervisorDocId": {
+        "_id": "507f1f77bcf86cd799439014",
+        "email": "supervisor@example.com",
+        "fullName": "Dr. Jane Smith",
+        "phoneNum": "+1234567890",
+        "approved": true,
+        "role": "supervisor"
+      },
+      "roleInSurg": "operator",
+      "subStatus": "pending",
+      "procedureName": ["Procedure A", "Procedure B"],
+      "diagnosisName": ["Diagnosis X"],
+      "procCptDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439015",
+          "numCode": "12345",
+          "description": "CPT Description"
+        }
+      ],
+      "icdDocId": [
+        {
+          "_id": "507f1f77bcf86cd799439016",
+          "code": "I10",
+          "description": "ICD Description"
+        }
+      ],
+      "mainDiagDocId": {
+        "_id": "507f1f77bcf86cd799439017",
+        "title": "Main Diagnosis Title"
+      }
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No supervisor ID found in token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+OR (when `all=true` and supervisor has no relationship with candidate):
+
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "You do not have permission to view this candidate's submissions"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Candidate not found"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+**Notes:**
+- The supervisor ID is automatically extracted from the JWT token
+- **Default behavior (without `all=true`):** Returns only submissions that belong to both the specified candidate and the logged-in supervisor
+- **With `all=true`:** Returns ALL submissions for the candidate, regardless of assigned supervisor. The supervisor must have at least one submission relationship with the candidate to access all submissions (security verification)
+- All ObjectId references are populated with their full document data
+- Returns empty array if no submissions found for the candidate-supervisor relationship (default behavior)
+- When `all=true`, the `supervisorDocId` in returned submissions may be different from the logged-in supervisor (showing the actual assigned supervisor for each submission)
+
+---
+
+### Review Submission (Approve/Reject)
+**PATCH** `/sub/supervisor/submissions/:id/review`
+
+**Authentication Required:** Yes (Supervisor role)
+
+Allows a supervisor to review a submission by approving or rejecting it. This endpoint:
+1. Updates the submission status in MongoDB
+2. Updates the submission status in Google Sheets via Google Apps Script API
+3. Sends an email notification to the candidate with submission details and review comments
+4. Returns the updated submission document
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Submission MongoDB ObjectId
+
+**Request Body:**
+```json
+{
+  "status": "approved",
+  "review": "Excellent work on this procedure. All documentation is complete and accurate."
+}
+```
+
+**Request Body Fields:**
+- `status` (required): Submission status. Must be either `"approved"` or `"rejected"`
+- `review` (optional): Review comments from the supervisor. Maximum 2000 characters. This review is included in the email sent to the candidate but is not stored in MongoDB or Google Sheets.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "timeStamp": "2025-07-14T04:49:35.286Z",
+    "candDocId": {
+      "_id": "507f1f77bcf86cd799439012",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": true,
+      "role": "candidate"
+    },
+    "procDocId": {
+      "_id": "507f1f77bcf86cd799439013",
+      "timeStamp": "2025-07-14T04:49:35.286Z",
+      "patientName": "John Patient",
+      "patientDob": "1980-01-15T00:00:00.000Z",
+      "gender": "male",
+      "hospital": {
+        "_id": "507f1f77bcf86cd799439020",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة",
+        "location": {
+          "long": 31.2001,
+          "lat": 30.0444
+        }
+      },
+      "arabProc": {
+        "_id": "507f1f77bcf86cd799439021",
+        "title": "Procedure Title",
+        "numCode": "12345",
+        "alphaCode": "ABC",
+        "description": "Procedure description"
+      },
+      "procDate": "2025-07-14T04:49:35.286Z",
+      "google_uid": "proc-uid-123"
+    },
+    "supervisorDocId": {
+      "_id": "507f1f77bcf86cd799439014",
+      "email": "supervisor@example.com",
+      "fullName": "Dr. Jane Smith",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "supervisor"
+    },
+    "roleInSurg": "operator",
+    "subStatus": "approved",
+    "subGoogleUid": "submission-uid-123",
+    "procedureName": ["Procedure A", "Procedure B"],
+    "diagnosisName": ["Diagnosis X"],
+    "procCptDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439015",
+        "numCode": "12345",
+        "description": "CPT Description"
+      }
+    ],
+    "icdDocId": [
+      {
+        "_id": "507f1f77bcf86cd799439016",
+        "code": "I10",
+        "description": "ICD Description"
+      }
+    ],
+    "mainDiagDocId": {
+      "_id": "507f1f77bcf86cd799439017",
+      "title": "Main Diagnosis Title"
+    }
+  }
+}
+```
+
+**Error Response (400 Bad Request - Validation Errors):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Status must be either 'approved' or 'rejected'",
+      "path": "status",
+      "location": "body"
+    }
+  ]
+}
+```
+
+OR
+
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Submission ID must be a valid MongoDB ObjectId",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No supervisor ID found in token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission not found"
+}
+```
+
+OR
+
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission does not belong to this supervisor"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+**Notes:**
+- The supervisor ID is automatically extracted from the JWT token
+- The endpoint verifies that the submission belongs to the logged-in supervisor before allowing the review
+- **MongoDB Update**: The submission status is updated in the database
+- **Google Sheets Update**: The submission status is updated in Google Sheets via the Google Apps Script API. If this update fails, the operation continues (MongoDB update is not rolled back)
+- **Email Notification**: A comprehensive email is sent to the candidate containing complete submission details:
+  - **Basic Information**: Submission ID, submission date, submission status, submission Google UID, review date
+  - **Candidate Information**: Name, email, phone, registration number, rank, degree
+  - **Supervisor Information**: Name, email, phone
+  - **Procedure Information**: Procedure date, procedure Google UID, hospital (English and Arabic), patient name, patient date of birth, patient gender, Arabic procedure title, Arabic procedure numCode and alphaCode, Arabic procedure description, all procedure names
+  - **CPT Codes**: All CPT codes with their descriptions
+  - **Diagnosis Information**: Main diagnosis title, all diagnosis names
+  - **ICD Codes**: All ICD codes with their descriptions
+  - **Surgical Details**: Role in surgery, assistant role description (if applicable), other surgeon rank and name, revision surgery status, pre-operative clinical condition (if applicable), spinal or cranial (if applicable), position (if applicable), approach (if applicable), clinical presentation (if applicable), region (if applicable)
+  - **Instruments and Consumables**: Instruments used, consumables used, consumable details (if provided)
+  - **Documentation**: Surgical notes (if provided), intraoperative events (if provided)
+  - **Review Comments**: Review comments from supervisor (if provided)
+  - If email sending fails, the operation continues (MongoDB and Google Sheets updates are not rolled back)
+- **Review Comments**: The `review` field is optional and is included in the email sent to the candidate. Review comments are NOT stored in MongoDB or Google Sheets
+- Valid status values are: `"approved"` or `"rejected"`
+- The review field has a maximum length of 2000 characters
+- All ObjectId references in the response are populated with their full document data
+- Returns 400 if the submission ID format is invalid or status is invalid
+- Returns 404 if submission doesn't exist or doesn't belong to the supervisor
+
+---
+
+### Generate Surgical Notes using AI
+**POST** `/sub/submissions/:id/generateSurgicalNotes`
+
+**Authentication Required:** Yes (Institute Admin or Super Admin role)
+
+**Description:** Generates comprehensive surgical notes for a submission using AI (Google Gemini). The endpoint takes a submission ID, populates all required fields, and uses AI to generate professional surgical notes based on the submission data.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**URL Parameters:**
+- `id` (required): Submission MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "surgicalNotes": "PREOPERATIVE DIAGNOSIS:\n1. [Diagnosis from submission]\n\nPOSTOPERATIVE DIAGNOSIS:\n1. [Diagnosis from submission]\n\nPROCEDURE PERFORMED:\n[Procedure names from submission]\n\nSURGEON(S):\n[Surgeon name] (Operator)\n[Supervisor name] (Supervisor)\n\nASSISTANT(S):\n[Other surgeons if applicable]\n\nANESTHESIA:\nGeneral anesthesia\n\nPROCEDURE DESCRIPTION:\n[Detailed AI-generated procedure description based on submission data]\n\nFINDINGS:\n[AI-generated findings based on submission data]\n\nINSTRUMENTS AND MATERIALS USED:\n[Instruments and consumables from submission]\n\nINTRAOPERATIVE EVENTS:\n[Intraoperative events from submission, if any]\n\nESTIMATED BLOOD LOSS:\n[If applicable]\n\nPOSTOPERATIVE PLAN:\n[AI-generated postoperative plan]"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Submission ID must be a valid MongoDB ObjectId",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission not found"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "AI service is not configured"
+}
+```
+
+OR
+
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to generate text from AI"
+}
+```
+
+**Notes:**
+- The submission must exist and have all required populated fields:
+  - `candDocId` (candidate)
+  - `procDocId` (procedure with hospital and arabProc)
+  - `supervisorDocId` (supervisor)
+  - `mainDiagDocId` (main diagnosis)
+  - `procCptDocId` (CPT codes)
+  - `icdDocId` (ICD codes)
+- The AI uses Google Gemini API (gemini-2.5-flash model by default)
+- Requires `GEMINI_API_KEY` environment variable to be configured
+- The generated surgical notes are comprehensive and include:
+  - Preoperative and postoperative diagnoses
+  - Procedure performed
+  - Surgeon and assistant information
+  - Detailed procedure description
+  - Findings
+  - Instruments and materials used
+  - Intraoperative events
+  - Postoperative plan
+- Returns 404 if submission doesn't exist
+- Returns 500 if AI service is not configured or API call fails
+- Only Institute Admins and Super Admins can access this endpoint
 
 ---
 
@@ -561,6 +3141,13 @@ Updates submission statuses from external data source.
 
 Creates candidates from external data source (Google Sheets).
 
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
 **Request Body:**
 ```json
 {
@@ -570,30 +3157,38 @@ Creates candidates from external data source (Google Sheets).
 
 **Response (201 Created):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "candidate@example.com",
-    "fullName": "John Doe",
-    "phoneNum": "+1234567890",
-    "regNum": "REG123456",
-    "nationality": "Egyptian",
-    "rank": "professor",
-    "regDeg": "msc",
-    "approved": false,
-    "role": "candidate"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": false,
+      "role": "candidate"
+    }
+  ]
+}
 ```
 
 ---
 
-## Supervisors (`/supervisor`)
-
 ### Create Supervisor
 **POST** `/supervisor`
 
-No authentication required.
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
 
 **Request Body:**
 ```json
@@ -609,12 +3204,143 @@ No authentication required.
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "supervisor@example.com",
+    "fullName": "Dr. Jane Smith",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "supervisor"
+  }
+}
+```
+
+---
+
+## Supervisors (`/supervisor`)
+
+### Get Supervised Candidates
+**GET** `/supervisor/candidates`
+
+**Authentication Required:** Yes (Supervisor role)
+
+Returns a list of all unique candidates supervised by the logged-in supervisor, including submission statistics for each candidate.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439012",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": true,
+      "role": "candidate",
+      "submissionStats": {
+        "total": 10,
+        "approved": 7,
+        "pending": 2,
+        "rejected": 1
+      }
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No supervisor ID found in token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+**Notes:**
+- The supervisor ID is automatically extracted from the JWT token
+- Returns unique candidates extracted from all submissions assigned to the supervisor
+- Each candidate includes submission statistics (total, approved, pending, rejected)
+- Statistics are calculated from all submissions for that candidate-supervisor relationship
+- Returns empty array if supervisor has no submissions
+
+---
+
+### Create Supervisor
+**POST** `/supervisor`
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
+**Request Body:**
+```json
+{
   "email": "supervisor@example.com",
+  "password": "Supervisor123$",
   "fullName": "Dr. Jane Smith",
   "phoneNum": "+1234567890",
-  "approved": true,
-  "role": "supervisor"
+  "approved": true
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "supervisor@example.com",
+    "fullName": "Dr. Jane Smith",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "supervisor"
+  }
 }
 ```
 
@@ -627,16 +3353,21 @@ No authentication required.
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "supervisor@example.com",
-    "fullName": "Dr. Jane Smith",
-    "phoneNum": "+1234567890",
-    "approved": true,
-    "role": "supervisor"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "supervisor@example.com",
+      "fullName": "Dr. Jane Smith",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "supervisor"
+    }
+  ]
+}
 ```
 
 ---
@@ -649,12 +3380,17 @@ No authentication required.
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "supervisor@example.com",
-  "fullName": "Dr. Jane Smith",
-  "phoneNum": "+1234567890",
-  "approved": true,
-  "role": "supervisor"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "supervisor@example.com",
+    "fullName": "Dr. Jane Smith",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "supervisor"
+  }
 }
 ```
 
@@ -676,12 +3412,17 @@ No authentication required.
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "email": "supervisor@example.com",
-  "fullName": "Dr. Jane Smith Updated",
-  "phoneNum": "+9876543210",
-  "approved": true,
-  "role": "supervisor"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "supervisor@example.com",
+    "fullName": "Dr. Jane Smith Updated",
+    "phoneNum": "+9876543210",
+    "approved": true,
+    "role": "supervisor"
+  }
 }
 ```
 
@@ -695,9 +3436,80 @@ No authentication required.
 **Response (200 OK):**
 ```json
 {
-  "message": "Supervisor deleted successfully"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Supervisor deleted successfully"
+  }
 }
 ```
+
+---
+
+### Reset All Supervisor Passwords
+**POST** `/supervisor/resetPasswords`
+
+Resets all supervisor passwords to a default encrypted password.
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
+**Request Body:**
+No request body required.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "modifiedCount": 12,
+    "defaultPassword": "MEDsuper01$"
+  }
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Super Admin access required"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to reset supervisor passwords"
+}
+```
+
+**Notes:**
+- This endpoint updates all supervisor passwords in the database to the encrypted default password "MEDsuper01$"
+- The password is hashed using bcryptjs before being stored
+- Only Super Admins can execute this operation
+- Returns the number of supervisors whose passwords were updated
 
 ---
 
@@ -708,6 +3520,13 @@ No authentication required.
 
 Creates calendar surgery entries from external data source.
 
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
 **Request Body:**
 ```json
 {
@@ -717,14 +3536,19 @@ Creates calendar surgery entries from external data source.
 
 **Response (201 Created):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "google_uid": "unique-google-id",
-    "date": "2025-01-15",
-    "time": "10:00"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "google_uid": "unique-google-id",
+      "date": "2025-01-15",
+      "time": "10:00"
+    }
+  ]
+}
 ```
 
 ---
@@ -738,10 +3562,15 @@ Creates calendar surgery entries from external data source.
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "google_uid": "unique-google-id",
-  "date": "2025-01-15",
-  "time": "10:00"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "google_uid": "unique-google-id",
+    "date": "2025-01-15",
+    "time": "10:00"
+  }
 }
 ```
 
@@ -759,14 +3588,19 @@ Creates calendar surgery entries from external data source.
 
 **Response (200 OK):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "google_uid": "unique-google-id",
-    "date": "2025-01-15",
-    "time": "10:00"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "google_uid": "unique-google-id",
+      "date": "2025-01-15",
+      "time": "10:00"
+    }
+  ]
+}
 ```
 
 ---
@@ -782,48 +3616,97 @@ Creates calendar surgery entries from external data source.
   "diagnoses": [
     {
       "icdCode": "G93.1",
-      "icdName": "Anoxic brain damage"
+      "icdName": "Anoxic brain damage",
+      "neuroLogName": ["Anoxic Brain Damage"]
     },
     {
       "icdCode": "G93.2",
-      "icdName": "Benign intracranial hypertension"
+      "icdName": "Benign intracranial hypertension",
+      "neuroLogName": ["Benign Intracranial Hypertension"]
     }
   ]
 }
 ```
 
+**Field Requirements:**
+- `diagnoses` (required): Array of diagnosis objects
+  - `icdCode` (required): ICD code, string
+  - `icdName` (required): ICD name, string
+  - `neuroLogName` (optional): Array of neuro log names, string array
+
 **Response (201 Created):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "icdCode": "G93.1",
-    "icdName": "Anoxic brain damage"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "icdCode": "G93.1",
+      "icdName": "Anoxic brain damage",
+      "neuroLogName": ["anoxic brain damage"],
+      "createdAt": "2025-12-01T14:00:00.000Z",
+      "updatedAt": "2025-12-01T14:00:00.000Z"
+    },
+    {
+      "_id": "507f1f77bcf86cd799439012",
+      "icdCode": "G93.2",
+      "icdName": "Benign intracranial hypertension",
+      "neuroLogName": ["benign intracranial hypertension"],
+      "createdAt": "2025-12-01T14:00:00.000Z",
+      "updatedAt": "2025-12-01T14:00:00.000Z"
+    }
+  ]
+}
 ```
+
+**Note:** The `neuroLogName` array values are automatically converted to lowercase.
 
 ---
 
 ### Create Single Diagnosis
 **POST** `/diagnosis/post`
 
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
 **Request Body:**
 ```json
 {
   "icdCode": "G93.1",
-  "icdName": "Anoxic brain damage"
+  "icdName": "Anoxic brain damage",
+  "neuroLogName": ["Anoxic Brain Damage"]
 }
 ```
+
+**Field Requirements:**
+- `icdCode` (required): ICD code, string
+- `icdName` (required): ICD name, string
+- `neuroLogName` (optional): Array of neuro log names, string array
 
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "icdCode": "G93.1",
-  "icdName": "Anoxic brain damage"
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "icdCode": "G93.1",
+    "icdName": "Anoxic brain damage",
+    "neuroLogName": ["anoxic brain damage"],
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T14:00:00.000Z"
+  }
 }
 ```
+
+**Note:** The `neuroLogName` array values are automatically converted to lowercase.
 
 ---
 
@@ -834,6 +3717,13 @@ Creates calendar surgery entries from external data source.
 
 Creates procedure CPT codes from external data source.
 
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
 **Request Body:**
 ```json
 {
@@ -843,15 +3733,20 @@ Creates procedure CPT codes from external data source.
 
 **Response (201 Created):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "numCode": "61783",
-    "alphaCode": "A",
-    "title": "Craniotomy for tumor resection",
-    "description": "Procedure description"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "numCode": "61783",
+      "alphaCode": "A",
+      "title": "Craniotomy for tumor resection",
+      "description": "Procedure description"
+    }
+  ]
+}
 ```
 
 ---
@@ -859,7 +3754,14 @@ Creates procedure CPT codes from external data source.
 ### Upsert ProcCpt
 **POST** `/procCpt/upsert`
 
-Creates or updates a procedure CPT code.
+Creates or updates a procedure CPT code. If a procedure with the same `numCode` exists, it will be updated. Otherwise, a new procedure will be created.
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
 
 **Request Body:**
 ```json
@@ -871,14 +3773,27 @@ Creates or updates a procedure CPT code.
 }
 ```
 
+**Field Requirements:**
+- `numCode` (required): Numerical code, string, max 50 characters (used to determine if procedure exists)
+- `alphaCode` (required): Alpha code, string, max 50 characters
+- `title` (required): Procedure title, string, max 200 characters
+- `description` (required): Procedure description, string, max 500 characters
+
+**Note:** The upsert operation uses `numCode` to determine if a procedure already exists. If a procedure with the same `numCode` is found, all fields will be updated. Otherwise, a new procedure will be created.
+
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "numCode": "61783",
-  "alphaCode": "A",
-  "title": "Craniotomy for tumor resection",
-  "description": "Procedure description"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "numCode": "61783",
+    "alphaCode": "A",
+    "title": "Craniotomy for tumor resection",
+    "description": "Procedure description"
+  }
 }
 ```
 
@@ -888,6 +3803,13 @@ Creates or updates a procedure CPT code.
 
 ### Create Main Diagnosis
 **POST** `/mainDiag`
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
 
 **Request Body:**
 ```json
@@ -901,10 +3823,15 @@ Creates or updates a procedure CPT code.
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "title": "cns tumors",
-  "procs": ["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
-  "diagnosis": ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "title": "cns tumors",
+    "procs": ["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
+    "diagnosis": ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
+  }
 }
 ```
 
@@ -913,32 +3840,78 @@ Creates or updates a procedure CPT code.
 ### Get All Main Diagnoses
 **GET** `/mainDiag`
 
+No authentication required.
+
 **Response (200 OK):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "title": "cns tumors",
-    "procs": ["507f1f77bcf86cd799439012"],
-    "diagnosis": ["507f1f77bcf86cd799439014"]
-  }
-]
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "title": "cns tumors",
+      "procs": [
+        {
+          "_id": "507f1f77bcf86cd799439012",
+          "numCode": "61783",
+          "alphaCode": "A",
+          "title": "Procedure Title",
+          "description": "Procedure description"
+        }
+      ],
+      "diagnosis": [
+        {
+          "_id": "507f1f77bcf86cd799439014",
+          "icdCode": "G93.1",
+          "icdName": "Anoxic brain damage"
+        }
+      ]
+    }
+  ]
+}
 ```
+
+**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just ObjectIds.
 
 ---
 
 ### Get Main Diagnosis by ID
 **GET** `/mainDiag/:id`
 
+No authentication required.
+
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "title": "cns tumors",
-  "procs": ["507f1f77bcf86cd799439012"],
-  "diagnosis": ["507f1f77bcf86cd799439014"]
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "title": "cns tumors",
+    "procs": [
+      {
+        "_id": "507f1f77bcf86cd799439012",
+        "numCode": "61783",
+        "alphaCode": "A",
+        "title": "Procedure Title",
+        "description": "Procedure description"
+      }
+    ],
+    "diagnosis": [
+      {
+        "_id": "507f1f77bcf86cd799439014",
+        "icdCode": "G93.1",
+        "icdName": "Anoxic brain damage"
+      }
+    ]
+  }
 }
 ```
+
+**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just ObjectIds.
 
 ---
 
@@ -954,15 +3927,43 @@ Creates or updates a procedure CPT code.
 }
 ```
 
+**Field Requirements:**
+- `title` (optional): Main diagnosis title, string, max 200 characters
+- `procs` (optional): Array of procedure numCodes (strings) to append to existing procedures. Duplicates are automatically avoided.
+- `diagnosis` (optional): Array of diagnosis icdCodes (strings) to append to existing diagnoses. Duplicates are automatically avoided.
+
+**Note:** The `procs` and `diagnosis` arrays are appended to existing values, not replaced. If a procedure or diagnosis already exists, it won't be duplicated.
+
 **Response (200 OK):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "title": "updated title",
-  "procs": ["507f1f77bcf86cd799439012"],
-  "diagnosis": ["507f1f77bcf86cd799439014"]
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "title": "updated title",
+    "procs": [
+      {
+        "_id": "507f1f77bcf86cd799439012",
+        "numCode": "61783",
+        "alphaCode": "A",
+        "title": "Procedure Title",
+        "description": "Procedure description"
+      }
+    ],
+    "diagnosis": [
+      {
+        "_id": "507f1f77bcf86cd799439014",
+        "icdCode": "G93.1",
+        "icdName": "Anoxic brain damage"
+      }
+    ]
+  }
 }
 ```
+
+**Note:** The `procs` and `diagnosis` fields are populated with full document data in the response.
 
 ---
 
@@ -972,7 +3973,12 @@ Creates or updates a procedure CPT code.
 **Response (200 OK):**
 ```json
 {
-  "message": "MainDiag deleted successfully"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "MainDiag deleted successfully"
+  }
 }
 ```
 
@@ -983,15 +3989,24 @@ Creates or updates a procedure CPT code.
 ### Get All Arab Procedures
 **GET** `/arabProc/getAllArabProcs`
 
+No authentication required.
+
 **Response (200 OK):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "numCode": "61070",
-    "arabicName": "اسم الإجراء بالعربية"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "title": "مراجعة صمام اوميا",
+      "alphaCode": "VSHN",
+      "numCode": "61070",
+      "description": "Ommaya valve reservoir check and fluid sampling procedure."
+    }
+  ]
+}
 ```
 
 ---
@@ -999,20 +4014,42 @@ Creates or updates a procedure CPT code.
 ### Create Arab Procedure
 **POST** `/arabProc/createArabProc`
 
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
 **Request Body:**
 ```json
 {
+  "title": "مراجعة صمام اوميا",
+  "alphaCode": "VSHN",
   "numCode": "61070",
-  "arabicName": "اسم الإجراء بالعربية"
+  "description": "Ommaya valve reservoir check and fluid sampling procedure."
 }
 ```
+
+**Field Requirements:**
+- `title` (required): Arabic procedure title, string, max 100 characters
+- `alphaCode` (required): Alpha code, string, max 10 characters
+- `numCode` (required): Numerical code, string
+- `description` (required): Procedure description, string
 
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "numCode": "61070",
-  "arabicName": "اسم الإجراء بالعربية"
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "title": "مراجعة صمام اوميا",
+    "alphaCode": "VSHN",
+    "numCode": "61070",
+    "description": "Ommaya valve reservoir check and fluid sampling procedure."
+  }
 }
 ```
 
@@ -1020,6 +4057,13 @@ Creates or updates a procedure CPT code.
 
 ### Create Arab Procedure from External
 **POST** `/arabProc/createArabProcFromExternal`
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
 
 **Request Body:**
 ```json
@@ -1030,13 +4074,20 @@ Creates or updates a procedure CPT code.
 
 **Response (201 Created):**
 ```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "numCode": "61070",
-    "arabicName": "اسم الإجراء بالعربية"
-  }
-]
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "title": "مراجعة صمام اوميا",
+      "alphaCode": "VSHN",
+      "numCode": "61070",
+      "description": "Ommaya valve reservoir check and fluid sampling procedure."
+    }
+  ]
+}
 ```
 
 ---
@@ -1046,20 +4097,49 @@ Creates or updates a procedure CPT code.
 ### Create Hospital
 **POST** `/hospital/create`
 
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
 **Request Body:**
 ```json
 {
-  "name": "Cairo University Hospital",
-  "address": "Cairo, Egypt"
+  "arabName": "مستشفى جامعة القاهرة",
+  "engName": "Cairo University Hospital",
+  "location": {
+    "long": 31.2001,
+    "lat": 30.0444
+  }
 }
 ```
+
+**Field Requirements:**
+- `arabName` (required): Arabic hospital name, string, max 100 characters
+- `engName` (required): English hospital name, string, max 100 characters
+- `location` (optional): Object with coordinates
+  - `long` (optional): Longitude, number between -180 and 180
+  - `lat` (optional): Latitude, number between -90 and 90
 
 **Response (201 Created):**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439011",
-  "name": "Cairo University Hospital",
-  "address": "Cairo, Egypt"
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "arabName": "مستشفى جامعة القاهرة",
+    "engName": "Cairo University Hospital",
+    "location": {
+      "long": 31.2001,
+      "lat": 30.0444
+    },
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T14:00:00.000Z"
+  }
 }
 ```
 
@@ -1086,7 +4166,12 @@ Creates or updates a procedure CPT code.
 **Response (200 OK):**
 ```json
 {
-  "message": "Email sent successfully to recipient@example.com"
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Email sent successfully to recipient@example.com"
+  }
 }
 ```
 
@@ -1105,9 +4190,14 @@ Retrieves Arabic procedure data from external source.
 **Response (200 OK):**
 ```json
 {
-  "success": true,
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
   "data": {
-    "data": [...]
+    "success": true,
+    "data": {
+      "data": [...]
+    }
   }
 }
 ```
@@ -1116,10 +4206,15 @@ Retrieves Arabic procedure data from external source.
 
 ## Error Responses
 
+All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
+
 ### 400 Bad Request
 Validation errors:
 ```json
 {
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
   "error": [
     {
       "msg": "Invalid email",
@@ -1133,10 +4228,14 @@ Validation errors:
 ### 401 Unauthorized
 ```json
 {
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
   "error": "Unauthorized"
 }
 ```
-or
+
+**Special Case:** `/auth/validate` endpoint may return a direct object:
 ```json
 {
   "message": "Unauthorized"
@@ -1146,6 +4245,9 @@ or
 ### 403 Forbidden
 ```json
 {
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
   "error": "Forbidden: Insufficient permissions"
 }
 ```
@@ -1153,6 +4255,9 @@ or
 ### 404 Not Found
 ```json
 {
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
   "error": "Resource not found"
 }
 ```
@@ -1160,9 +4265,150 @@ or
 ### 500 Internal Server Error
 ```json
 {
-  "error": "Error message"
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
 }
 ```
+
+---
+
+## PDF Report Generation Endpoints
+
+All PDF report endpoints require **Institute Admin authentication** via JWT token in Authorization header or httpOnly cookie.
+
+### Response Format
+PDF endpoints return:
+- **Content-Type**: `application/pdf`
+- **Content-Disposition**: `attachment; filename="<report-name>-<timestamp>.pdf"`
+- **Status Code**: `200 OK` on success
+- **Error responses**: Follow standard API error format (JSON) when PDF generation fails
+
+All PDF reports include MedScribe branding in the header:
+- **Logo**: MedScribe logo (40x40 pixels) in top-left corner
+- **Branding Text**: "MedScribe" with "Med" in `#19203f` (dark blue) and "Scribe" in `#1991c8` (light blue)
+- **Report Title**: Centered or right-aligned
+- **Generated Date/Time**: Right-aligned in header
+
+---
+
+#### Supervisors Submission Count Report
+**GET** `/instituteAdmin/reports/supervisors/submission-count`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Generates a PDF report showing submission count analysis for all supervisors, excluding any supervisor with the name "Tester_Supervisor" (case-insensitive matching).
+
+**Query Parameters (optional):**
+- `startDate` (ISO 8601): Filter submissions by start date
+- `endDate` (ISO 8601): Filter submissions by end date
+
+**PDF Content:**
+1. **Report Header** with MedScribe branding
+2. **Bar Chart**: Vertical stacked bar chart showing approved (green), pending (yellow), and rejected (red) submissions per supervisor
+3. **Data Table**: Columns - Supervisor Name | Approved | Pending | Rejected | Total
+   - Supervisors sorted by total submission count (descending)
+   - Excludes supervisors with "Tester_Supervisor" in name or email (case-insensitive)
+
+**Color Scheme:**
+- Approved: `hsl(142, 76%, 36%)` (Green)
+- Pending: `hsl(45, 93%, 47%)` (Yellow)
+- Rejected: `hsl(0, 84%, 60%)` (Red)
+
+**Response (200 OK):**
+- PDF file with Content-Type: `application/pdf`
+- Filename format: `supervisors-submission-count-<timestamp>.pdf`
+
+**Error Responses:**
+- **401 Unauthorized**: Missing or invalid JWT token
+- **403 Forbidden**: User is not an Institute Admin
+- **500 Internal Server Error**: PDF generation failed
+
+---
+
+#### Candidates Submission Count Report
+**GET** `/instituteAdmin/reports/candidates/submission-count`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Generates a PDF report showing submission count analysis for all candidates, excluding any candidate with email or fullName containing "tester" (case-insensitive).
+
+**Query Parameters (optional):**
+- `startDate` (ISO 8601): Filter submissions by start date
+- `endDate` (ISO 8601): Filter submissions by end date
+
+**PDF Content:**
+1. **Report Header** with MedScribe branding
+2. **Bar Chart**: Vertical stacked bar chart showing approved (green), pending (yellow), and rejected (red) submissions per candidate
+3. **Data Table**: Columns - Candidate Name | Approved | Pending | Rejected | Total
+   - Candidates sorted by total submission count (descending)
+   - Excludes candidates with "tester" in email or fullName (case-insensitive)
+
+**Color Scheme:**
+- Approved: `hsl(142, 76%, 36%)` (Green)
+- Pending: `hsl(45, 93%, 47%)` (Yellow)
+- Rejected: `hsl(0, 84%, 60%)` (Red)
+
+**Response (200 OK):**
+- PDF file with Content-Type: `application/pdf`
+- Filename format: `candidates-submission-count-<timestamp>.pdf`
+
+**Error Responses:**
+- **401 Unauthorized**: Missing or invalid JWT token
+- **403 Forbidden**: User is not an Institute Admin
+- **500 Internal Server Error**: PDF generation failed
+
+---
+
+#### Calendar Procedures Hospital Analysis Report
+**GET** `/instituteAdmin/reports/calendar-procedures/hospital-analysis`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Generates a PDF report showing hospital-based procedure analysis for calendar procedures. The report algorithmically determines which hospitals have procedures and generates sections for each.
+
+**Query Parameters (optional):**
+- `hospitalId` (MongoDB ObjectId): Filter by specific hospital
+- `month` (1-12): Filter by month
+- `year` (e.g., 2025): Filter by year
+- `startDate` (ISO 8601): Filter by start date
+- `endDate` (ISO 8601): Filter by end date
+- `groupBy` (`title` | `alphaCode`): Group procedures by title or alphaCode. Default: `title`
+
+**PDF Content:**
+1. **Report Header** with MedScribe branding
+2. **Summary Section**:
+   - Total number of calendar procedures across all hospitals
+   - Total number of candidate submissions
+   - Comparison statement
+3. **Hospitals with Procedures Section**:
+   - For each hospital that has procedures (algorithmically determined):
+     - Hospital name (English and Arabic if available)
+     - Bar chart showing procedure frequency
+     - Data table: Procedure Title (or AlphaCode) | Count
+4. **Hospitals with No Procedures Section**:
+   - List of all hospitals that exist in the database but have zero calendar procedures
+
+**Algorithmic Hospital List Generation:**
+- Dynamically determines hospitals that have procedures by querying all calendar procedures
+- Extracts unique `hospital._id` values from procedures
+- Generates a report section for each hospital that has procedures
+- Lists hospitals with no procedures separately
+
+**Response (200 OK):**
+- PDF file with Content-Type: `application/pdf`
+- Filename format: `calendar-procedures-hospital-analysis-<timestamp>.pdf`
+
+**Error Responses:**
+- **401 Unauthorized**: Missing or invalid JWT token
+- **403 Forbidden**: User is not an Institute Admin
+- **500 Internal Server Error**: PDF generation failed
+
+**Notes:**
+- Hospital matching is flexible (case-insensitive, handles variations in naming)
+- If no procedures found, returns a PDF with a message indicating no data available
+- The comparison between total procedures and total submissions is clearly stated
 
 ---
 
@@ -1173,17 +4419,43 @@ or
 | `/auth/login*` | No | - |
 | `/auth/registerCand` | No | - |
 | `/auth/resetCandPass` | No | - |
+| `/auth/requestPasswordChangeEmail` | Yes | All user types (candidate, supervisor, superAdmin, instituteAdmin) |
+| `/auth/changePassword` | Yes | All user types (candidate, supervisor, superAdmin, instituteAdmin) |
+| `/auth/forgotPassword` | No | - |
+| `/auth/resetPassword` | No | - |
 | `/superAdmin/*` | Yes | Super Admin |
 | `/instituteAdmin/*` | Yes | Super Admin (create) / Institute Admin or Super Admin (others) |
-| `/supervisor/*` | No | - |
-| `/sub/*` | No | - |
-| `/cand/*` | No | - |
-| `/calSurg/*` | No | - |
-| `/diagnosis/*` | No | - |
-| `/procCpt/*` | No | - |
-| `/mainDiag/*` | No | - |
-| `/arabProc/*` | No | - |
-| `/hospital/*` | No | - |
+| `/instituteAdmin/supervisors` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/supervisors/:supervisorId/submissions` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/candidates` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/candidates/:candidateId/submissions` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/calendarProcedures` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/hospitals` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/arabicProcedures` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/calendarProcedures/analysis/hospital` | Yes | Institute Admin or Super Admin |
+| `/instituteAdmin/reports/*` | Yes | Institute Admin |
+| `/instituteAdmin/reports/supervisors/submission-count` | Yes | Institute Admin |
+| `/instituteAdmin/reports/candidates/submission-count` | Yes | Institute Admin |
+| `/instituteAdmin/reports/calendar-procedures/hospital-analysis` | Yes | Institute Admin |
+| `/instituteAdmin/candidates/:candidateId/submissions` | Yes | Institute Admin |
+| `/instituteAdmin/candidates/:candidateId/submissions/:submissionId` | Yes | Institute Admin |
+| `/supervisor/*` | Partial | Super Admin (POST, POST /resetPasswords) / Supervisor (GET /candidates) / No (GET, PUT, DELETE) |
+| `/sub/*` | Partial | Super Admin (POST /postAllFromExternal, PATCH /updateStatusFromExternal) / Candidate (GET /candidate/stats, GET /candidate/submissions, GET /candidate/submissions/:id) / Supervisor (GET /supervisor/submissions, GET /supervisor/submissions/:id, GET /supervisor/candidates/:candidateId/submissions, PATCH /supervisor/submissions/:id/review) / Institute Admin (POST /submissions/:id/generateSurgicalNotes) / No (others) |
+| `/sub/candidate/stats` | Yes | Candidate |
+| `/sub/candidate/submissions` | Yes | Candidate |
+| `/sub/supervisor/submissions` | Yes | Supervisor |
+| `/sub/supervisor/submissions/:id` | Yes | Supervisor |
+| `/sub/supervisor/submissions/:id/review` | Yes | Supervisor |
+| `/sub/supervisor/candidates/:candidateId/submissions` | Yes | Supervisor |
+| `/sub/submissions/:id/generateSurgicalNotes` | Yes | Institute Admin or Super Admin |
+| `/supervisor/candidates` | Yes | Supervisor |
+| `/cand/*` | Partial | Super Admin (POST /createCandsFromExternal) / No (others) |
+| `/calSurg/*` | Partial | Super Admin (POST /postAllFromExternal) / No (GET) |
+| `/diagnosis/*` | Partial | Super Admin (POST /post) / No (POST /postBulk, GET) |
+| `/procCpt/*` | Partial | Super Admin (POST /postAllFromExternal, POST /upsert) / No (GET) |
+| `/mainDiag/*` | Partial | Super Admin (POST) / No (GET, PUT, DELETE) |
+| `/arabProc/*` | Partial | Super Admin (POST /createArabProc, POST /createArabProcFromExternal) / No (GET) |
+| `/hospital/*` | Partial | Super Admin (POST /create) / No (GET, PUT, DELETE) |
 | `/mailer/*` | No | - |
 | `/external/*` | No | - |
 
@@ -1216,18 +4488,111 @@ or
 
 6. **External Data Endpoints**: Endpoints with "FromExternal" pull data from configured Google Sheets. The `row` parameter is optional; if omitted, all rows are processed.
 
-7. **Response Format**: Most endpoints return data directly (not wrapped in a `data` object), except where specified. Error responses follow the error format shown above.
+7. **Response Format**: **ALL endpoints automatically wrap responses** in the standardized format with `status`, `statusCode`, `message`, and either `data` (success) or `error` (error) fields. See the [Response Format](#response-format) section for details.
 
 ---
 
 ## Frontend Integration Tips
 
-1. **Token Storage**: Store the JWT token securely (e.g., localStorage, sessionStorage, or httpOnly cookies).
+### Response Parsing
 
-2. **Token Decoding**: Decode the JWT token to access `_id`, `email`, and `role` without additional API calls.
+**Always parse responses using the standardized format:**
+
+```typescript
+// Example: TypeScript/JavaScript response handling
+const response = await fetch('/api/endpoint', options);
+const json = await response.json();
+
+// Check status field
+if (json.status === "success") {
+  // Access actual data from data field
+  const actualData = json.data;
+  // Use actualData (could be object, array, or primitive)
+} else {
+  // Handle error
+  const errorDetails = json.error;
+  console.error("Error:", json.statusCode, errorDetails);
+}
+```
+
+**Key Points:**
+- Always check `json.status === "success"` before accessing `json.data`
+- The `data` field contains the actual response (object, array, or primitive)
+- The `error` field contains error details when `status === "error"`
+- The `statusCode` matches the HTTP status code
+- The `message` field contains the HTTP reason phrase
+
+### Token Management
+
+1. **Token Storage**: JWT tokens are sent as httpOnly cookies automatically. No manual storage needed.
+
+2. **Token Access**: Decode the JWT token from cookies to access `_id`, `email`, and `role` without additional API calls.
 
 3. **Token Refresh**: Implement token refresh logic if tokens expire. Check the `exp` claim in the JWT.
 
-4. **Error Handling**: Always check for 401/403 errors and redirect to login if needed.
+4. **Cookie Handling**: Ensure `credentials: "include"` is set in fetch requests to send cookies:
+   ```typescript
+   fetch('/api/endpoint', {
+     credentials: 'include',
+     headers: {
+       'Content-Type': 'application/json'
+     }
+   })
+   ```
 
-5. **Role-Based UI**: Use the `role` field from the JWT to conditionally render UI elements based on user permissions.
+### Error Handling
+
+1. **Always check `status` field**: Use `json.status === "success"` to determine success
+2. **HTTP Status Codes**: Check `json.statusCode` for specific error types:
+   - `401`: Unauthorized - redirect to login
+   - `403`: Forbidden - insufficient permissions
+   - `404`: Not Found - resource doesn't exist
+   - `400`: Bad Request - validation errors (check `error` array)
+   - `500`: Internal Server Error - server issue
+
+3. **Validation Errors**: When `statusCode === 400`, the `error` field contains an array of validation errors:
+   ```typescript
+   if (json.statusCode === 400) {
+     json.error.forEach(err => {
+       console.error(`${err.param}: ${err.msg}`);
+     });
+   }
+   ```
+
+### Role-Based UI
+
+Use the `role` field from the decoded JWT token to conditionally render UI elements based on user permissions:
+- `candidate`: Medical candidates
+- `supervisor`: Supervisors  
+- `superAdmin`: Super administrators (highest level)
+- `instituteAdmin`: Institute administrators
+
+### Example: Complete API Call
+
+```typescript
+async function fetchUserData() {
+  try {
+    const response = await fetch('http://localhost:3001/superAdmin', {
+      method: 'GET',
+      credentials: 'include', // Important for cookies
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const json = await response.json();
+    
+    if (json.status === "success") {
+      // Access data from json.data
+      const superAdmins = json.data; // This is the array
+      return superAdmins;
+    } else {
+      // Handle error
+      throw new Error(json.error || json.message);
+    }
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+}
+```

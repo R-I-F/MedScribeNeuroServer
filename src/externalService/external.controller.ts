@@ -15,7 +15,6 @@ export class ExternalController {
     const validatedData: IExternalQuery = matchedData(req);
     let apiString: string;
     if (validatedData.row) {
-      console.log(true);
       apiString = `${
         process.env.GETTER_API_ENDPOINT
       }?spreadsheetName=${encodeURIComponent(
@@ -32,7 +31,6 @@ export class ExternalController {
     }
     try {
       const data = await this.externalService.fetchExternalData(apiString);
-      //   console.log(`external controller return data: ${data}`)
       return data;
     } catch (err: any) {
       throw new Error(err);

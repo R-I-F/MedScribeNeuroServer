@@ -9,7 +9,6 @@ export class MailerController {
   ) {}
 
   public async handleSendMail(payload: SendMailPayload): Promise<{ to: string }> {
-    console.log("[MailerController] handleSendMail payload:", payload);
     const { to, subject, text, html, from } = payload;
 
     await this.mailerService.sendMail({
@@ -20,7 +19,6 @@ export class MailerController {
       html: typeof html === "string" && html.trim().length > 0 ? html.trim() : undefined,
     });
 
-    console.log("[MailerController] Mail successfully handed to service for", to);
     return { to: to.trim() };
   }
 }

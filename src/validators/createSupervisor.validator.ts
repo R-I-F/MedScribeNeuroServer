@@ -54,25 +54,4 @@ export const createSupervisorValidator = checkSchema({
       errorMessage: "supervisor approval status must be a boolean value",
     },
   },
-  approvedSubs: {
-    in: ["body"],
-    optional: true,
-    isArray: {
-      errorMessage: "approvedSubs must be an array",
-    },
-  },
-  pendingSubs: {
-    in: ["body"],
-    optional: true,
-    isArray: {
-      errorMessage: "pendingSubs must be an array",
-    },
-  },
-  rejectedSubs: {
-    in: ["body"],
-    optional: true,
-    isArray: {
-      errorMessage: "rejectedSubs must be an array",
-    },
-  },
 });

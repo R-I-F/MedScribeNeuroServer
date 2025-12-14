@@ -4,28 +4,23 @@ Content-Type: application/json
 
 {
   "email": "elashry10@yahoo.com",
-  "password": "MEDSuper01#",
+  "password": "xxx01#",
   "fullName": "Ahmed El Ashry",
   "phoneNum": "01000000000",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Tester
 POST http://localhost:3001/supervisor
 Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6Im1lZHNjcmliZWVnQGdtYWlsLmNvbSIsInJvbGUiOiJzdXBlckFkbWluIiwiX2lkIjoiNjkyNzI3YWMxMjAyNWQ0MzIyMzVmNjIwIiwiaWF0IjoxNzY0NjgwMzg2LCJleHAiOjM1Mjk3MjA1ODYsImlzcyI6Im1lZHNjcmliZS5uZXVyby5xYXNyZWxhaW55In0.Yxd1huVxADZ1_oNUFUw2-y8zxGblTWB4gHY3uqPdJek
 
 {
-  "email": "medixlogi@gmail.com",
-  "password": "MEDSuper00#",
+  "email": "arch.ibrahimrefaeei@gmail.com",
+  "password": "MEDsuper01$#",
   "fullName": "Tester",
   "phoneNum": "01090650946",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Mohamed Salama
@@ -34,13 +29,10 @@ Content-Type: application/json
 
 {
   "email": "mohamedsalama@kasralainy.edu.eg",
-  "password": "MEDSuper02#",
+  "password": "xxx02#",
   "fullName": "Mohamed Salama",
   "phoneNum": "01001003854",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Hisham EL Shitany
@@ -49,13 +41,10 @@ Content-Type: application/json
 
 {
   "email": "helshitany@gmail.com",
-  "password": "MEDSuper03#",
+  "password": "xxx03#",
   "fullName": "Hisham EL Shitany",
   "phoneNum": "01000000000",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Ehab El Refaee
@@ -64,13 +53,10 @@ Content-Type: application/json
 
 {
   "email": "Ehab_refaee@kasralainy.edu.eg",
-  "password": "MEDSuper04#",
+  "password": "xxx04#",
   "fullName": "Ehab El Refaee",
   "phoneNum": "01001792965",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Mohammad ElBaroody
@@ -79,13 +65,10 @@ Content-Type: application/json
 
 {
   "email": "mohammad.elbaroody@kasralainy.edu.eg",
-  "password": "MEDSuper05#",
+  "password": "xxx05#",
   "fullName": "Mohammad ElBaroody",
   "phoneNum": "01000000000",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Mohamed Abdelsalam Eltoukhy
@@ -94,13 +77,10 @@ Content-Type: application/json
 
 {
   "email": "makt2000@gmail.com",
-  "password": "MEDSuper06#",
+  "password": "xxx06#",
   "fullName": "Mohamed Abdelsalam Eltoukhy",
   "phoneNum": "01000000000",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Mohamed Fathalla
@@ -109,13 +89,10 @@ Content-Type: application/json
 
 {
   "email": "Mohamed.elsawy@kasralainy.edu.eg",
-  "password": "MEDSuper07#",
+  "password": "xxx07#",
   "fullName": "Mohamed Fathalla",
   "phoneNum": "01143262927",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Hossam ElDin Mostafa
@@ -124,13 +101,10 @@ Content-Type: application/json
 
 {
   "email": "hosameldin6@gmail.com",
-  "password": "MEDSuper08#",
+  "password": "xxx08#",
   "fullName": "Hossam ElDin Mostafa",
   "phoneNum": "01000000000",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Mohamed Fathy
@@ -139,13 +113,10 @@ Content-Type: application/json
 
 {
   "email": "dr.mohamedfathy2006@gmail.com",
-  "password": "MEDSuper09#",
+  "password": "xxx09#",
   "fullName": "Mohamed Fathy",
   "phoneNum": "01003736075",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Abd El Rahman Enayet
@@ -154,13 +125,10 @@ Content-Type: application/json
 
 {
   "email": "Abdoenayet@gmail.com",
-  "password": "MEDSuper10#",
+  "password": "xxx10#",
   "fullName": "Abd El Rahman Enayet",
   "phoneNum": "01009294871",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Mohamed Amr Gouda
@@ -169,13 +137,10 @@ Content-Type: application/json
 
 {
   "email": "Magouda2015@kasralainy.edu.eg",
-  "password": "MEDSuper11#",
+  "password": "xxx11#",
   "fullName": "Mohamed Amr Gouda",
   "phoneNum": "01000000000",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
 
 ### Create Amr Helmy
@@ -184,11 +149,13 @@ Content-Type: application/json
 
 {
   "email": "amr.helmy92@gmail.com",
-  "password": "MEDSuper12#",
+  "password": "xxx12#",
   "fullName": "Amr Helmy",
   "phoneNum": "01005414500",
-  "approved": true,
-  "approvedSubs": [],
-  "pendingSubs": [],
-  "rejectedSubs": []
+  "approved": true
 }
+
+### Reset all supervisor passwords to "xxx"
+POST http://localhost:3001/supervisor/resetPasswords
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6Im1lZHNjcmliZWVnQGdtYWlsLmNvbSIsInJvbGUiOiJzdXBlckFkbWluIiwiX2lkIjoiNjkyNzI3YWMxMjAyNWQ0MzIyMzVmNjIwIiwiaWF0IjoxNzY0NjgwMzg2LCJleHAiOjM1Mjk3MjA1ODYsImlzcyI6Im1lZHNjcmliZS5uZXVyby5xYXNyZWxhaW55In0.Yxd1huVxADZ1_oNUFUw2-y8zxGblTWB4gHY3uqPdJek

@@ -139,7 +139,6 @@ export class AuthController {
         _id: userId
       });
 
-      console.log("[AuthController] Generated tokens for", user.email, "with role", userRole, "and _id", userId);
       return {
         token: accessToken,
         refreshToken: refreshToken,

@@ -7,3 +7,11 @@ Authorization: Bearer YOUR_JWT_TOKEN_HERE
 GET http://localhost:3001/instituteAdmin/INSTITUTE_ADMIN_ID_HERE
 Authorization: Bearer YOUR_JWT_TOKEN_HERE
 
+### Get candidate submissions
+GET http://localhost:3001/instituteAdmin/candidates/507f1f77bcf86cd799439012/submissions
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### Get candidate submission by ID
+GET http://localhost:3001/instituteAdmin/candidates/507f1f77bcf86cd799439012/submissions/507f1f77bcf86cd799439011
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
