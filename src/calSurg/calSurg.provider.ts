@@ -82,8 +82,14 @@ export class CalSurgProvider {
       // Business logic: Process external data and create calSurg records
       const processedItems = await this.processExternalData(externalData);
       
-      // Business logic: Create bulk calSurgs
-      const newCalSurgs = await this.createBulkCalSurg(processedItems);
+      // Business logic: Filter out duplicates before bulk creation
+      const uniqueCalSurgs = await this.filterDuplicateCalSurgs(processedItems);
+      
+      // Business logic: Create bulk calSurgs (only new ones)
+      if (uniqueCalSurgs.length === 0) {
+        return [];
+      }
+      const newCalSurgs = await this.createBulkCalSurg(uniqueCalSurgs);
       
       return newCalSurgs;
     } catch (error: any) {
@@ -282,6 +288,47 @@ export class CalSurgProvider {
     // Business logic: Basic ObjectId validation
     if (!id || typeof id !== 'string' || id.length !== 24) {
       throw new Error("Invalid ObjectId format");
+    }
+  }
+
+  /**
+   * Filters out calSurgs that already exist in the database (by google_uid)
+   * @param calSurgs - Array of calSurgs to check
+   * @returns Array of unique calSurgs that don't exist yet
+   */
+  private async filterDuplicateCalSurgs(calSurgs: ICalSurg[]): Promise<ICalSurg[]> {
+    try {
+      // Extract all google_uids from the calSurgs array
+      const googleUids = calSurgs
+        .map(cs => cs.google_uid)
+        .filter((uid): uid is string => Boolean(uid && uid.trim() !== ""));
+
+      if (googleUids.length === 0) {
+        // If no google_uids, return all (they might be new entries without uids)
+        return calSurgs;
+      }
+
+      // Find all existing calSurgs with these google_uids in one query
+      const existingCalSurgs = await this.calSurgService.findCalSurgsByGoogleUids(googleUids);
+      const existingUidsSet = new Set(
+        existingCalSurgs
+          .map(cs => cs.google_uid)
+          .filter((uid): uid is string => Boolean(uid))
+      );
+
+      // Filter out calSurgs that already exist
+      const uniqueCalSurgs = calSurgs.filter(cs => {
+        if (!cs.google_uid || cs.google_uid.trim() === "") {
+          // If no google_uid, include it (might be a new entry)
+          return true;
+        }
+        // Only include if it doesn't exist in the database
+        return !existingUidsSet.has(cs.google_uid.trim());
+      });
+
+      return uniqueCalSurgs;
+    } catch (err: any) {
+      throw new Error(`Failed to filter duplicate calSurgs: ${err.message}`);
     }
   }
 

@@ -20,4 +20,24 @@ export class CandController{
       throw new Error(err);
     }
   }
+
+  public async handleResetCandidatePassword(
+    req: Request,
+    res: Response
+  ) {
+    const validatedReq = matchedData(req) as { id: string };
+    try {
+      const candidate = await this.candService.getCandById(validatedReq.id);
+      if (!candidate) {
+        throw new Error("Candidate not found");
+      }
+      const updatedCandidate = await this.candService.resetCandidatePassword(validatedReq.id);
+      if (!updatedCandidate) {
+        throw new Error("Failed to reset candidate password");
+      }
+      return { message: "Candidate password reset successfully" };
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

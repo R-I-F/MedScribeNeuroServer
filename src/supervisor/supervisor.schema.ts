@@ -1,6 +1,7 @@
 import { Model, Schema, model } from "mongoose";
 import { ISupervisor } from "./supervisor.interface";
 import { UserRole } from "../types/role.types";
+import { SupervisorPosition } from "../types/supervisorPosition.types";
 
 export const supervisorSchema: Schema<ISupervisor> = new Schema(
   {
@@ -8,6 +9,7 @@ export const supervisorSchema: Schema<ISupervisor> = new Schema(
       type: String,
       required: [true, "user email is required"],
       trim: true,
+      unique: true,
     },
     password: {
       type: String,
@@ -36,6 +38,21 @@ export const supervisorSchema: Schema<ISupervisor> = new Schema(
       enum: Object.values(UserRole),
       default: UserRole.SUPERVISOR,
       required: true,
+    },
+    canValidate: {
+      type: Boolean,
+      default: true, // Default to true for backward compatibility (existing supervisors are validators)
+      required: false,
+    },
+    position: {
+      type: String,
+      enum: {
+        values: Object.values(SupervisorPosition),
+        message: "position must be one of: Professor, Assistant Professor, Lecturer, Assistant Lecturer, Guest Doctor, unknown",
+      },
+      default: SupervisorPosition.UNKNOWN, // Default to "unknown" for backward compatibility
+      required: false,
+      trim: true,
     },
   },
   { timestamps: true }

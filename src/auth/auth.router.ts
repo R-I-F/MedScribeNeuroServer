@@ -1,5 +1,6 @@
 import express, { Request, Response, Router, NextFunction } from "express";
 import { inject, injectable } from "inversify";
+import jwt from "jsonwebtoken";
 import { AuthController } from "./auth.controller";
 import { createCandValidator } from "../validators/createCand.validator";
 import { matchedData, validationResult } from "express-validator";
@@ -75,6 +76,9 @@ export class AuthRouter {
             }) as IAuth;
             const resp = await this.authController.login({ ...payload, role: "candidate" as any });
             
+            // Log successful login with request details
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: candidate, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
@@ -84,6 +88,9 @@ export class AuthRouter {
               role: resp.role
             });
           } catch(err: any){
+            // Log failed login attempt with request details
+            const email = (req.body as IAuth)?.email || "unknown";
+            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: candidate, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -104,6 +111,9 @@ export class AuthRouter {
             }) as IAuth;
             const resp = await this.authController.login({ ...payload, role: "supervisor" as any });
             
+            // Log successful login with request details
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: supervisor, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
@@ -113,6 +123,9 @@ export class AuthRouter {
               role: resp.role
             });
           } catch(err: any){
+            // Log failed login attempt with request details
+            const email = (req.body as IAuth)?.email || "unknown";
+            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: supervisor, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -133,6 +146,9 @@ export class AuthRouter {
             }) as IAuth;
             const resp = await this.authController.login({ ...payload, role: "superAdmin" as any });
             
+            // Log successful login with request details
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: superAdmin, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
@@ -142,6 +158,9 @@ export class AuthRouter {
               role: resp.role
             });
           } catch(err: any){
+            // Log failed login attempt with request details
+            const email = (req.body as IAuth)?.email || "unknown";
+            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: superAdmin, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -162,6 +181,9 @@ export class AuthRouter {
             }) as IAuth;
             const resp = await this.authController.login({ ...payload, role: "instituteAdmin" as any });
             
+            // Log successful login with request details
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: instituteAdmin, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
@@ -171,6 +193,9 @@ export class AuthRouter {
               role: resp.role
             });
           } catch(err: any){
+            // Log failed login attempt with request details
+            const email = (req.body as IAuth)?.email || "unknown";
+            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: instituteAdmin, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -203,9 +228,9 @@ export class AuthRouter {
     this.router.post(
       "/refresh",
       async (req: Request, res: Response) => {
+        const refreshToken = req.cookies?.refresh_token;
+        
         try {
-          const refreshToken = req.cookies?.refresh_token;
-          
           if (!refreshToken) {
             return res.status(StatusCodes.UNAUTHORIZED).json({ 
               error: "Refresh token not found" 
@@ -221,10 +246,39 @@ export class AuthRouter {
           // Set new cookies
           setAuthCookies(res, newTokens.token, newTokens.refreshToken);
           
+          // Log successful token refresh
+          console.log(`[AuthRouter] Token refresh successful - Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded._id || "unknown"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+          
           return res.status(StatusCodes.OK).json({ 
             success: true 
           });
         } catch (err: any) {
+          // If refresh token is expired, clear cookies
+          if (err?.message?.includes("expired") || err?.message?.includes("jwt expired")) {
+            clearAuthCookies(res);
+            
+            // Try to extract user info from expired refresh token for logging
+            let userInfo = "unknown";
+            if (refreshToken) {
+              try {
+                const decoded = jwt.decode(refreshToken) as any;
+                if (decoded) {
+                  userInfo = `Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded._id || "unknown"}`;
+                }
+              } catch (decodeError) {
+                userInfo = "Token decode failed";
+              }
+            }
+            
+            // Log refresh token expiration
+            console.log(`[AuthRouter] Refresh token expired - ${userInfo}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            
+            return res.status(StatusCodes.UNAUTHORIZED).json({ 
+              error: "Refresh token expired",
+              code: "REFRESH_TOKEN_EXPIRED"
+            });
+          }
+          
           return res.status(StatusCodes.UNAUTHORIZED).json({ 
             error: err?.message ?? "Invalid refresh token" 
           });

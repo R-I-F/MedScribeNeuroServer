@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
 import { UserRole } from "../types/role.types";
+import { Supervisor } from "../supervisor/supervisor.schema";
 
 export interface JwtPayload {
   email: string;
@@ -56,4 +57,58 @@ export const requireSuperAdmin = authorize(UserRole.SUPER_ADMIN);
 export const requireInstituteAdmin = authorize(UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 export const requireSupervisor = authorize(UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 export const requireCandidate = authorize(UserRole.CANDIDATE, UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
+
+// Middleware to require supervisor with validation permissions (canValidate = true)
+// This is used for submission review endpoints
+// Both validator and academic supervisors can access events, but only validators can review submissions
+export const requireValidatorSupervisor = async (req: Request, res: Response, next: NextFunction) => {
+  // First check if user is a supervisor (or higher role)
+  const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+  
+  if (!jwtPayload || !jwtPayload.role) {
+    return res.status(StatusCodes.UNAUTHORIZED).json({ 
+      error: "Unauthorized: No role found in token" 
+    });
+  }
+
+  const userRole = jwtPayload.role as UserRole;
+  
+  // Allow Super Admin and Institute Admin to bypass this check (they can always validate)
+  if (userRole === UserRole.SUPER_ADMIN || userRole === UserRole.INSTITUTE_ADMIN) {
+    return next();
+  }
+
+  // For supervisors, check if they have canValidate permission
+  if (userRole === UserRole.SUPERVISOR) {
+    try {
+      const supervisor = await Supervisor.findById(jwtPayload._id).exec();
+      
+      if (!supervisor) {
+        return res.status(StatusCodes.NOT_FOUND).json({
+          error: "Supervisor not found"
+        });
+      }
+
+      // Check canValidate field (defaults to true if not set for backward compatibility)
+      const canValidate = supervisor.canValidate !== undefined ? supervisor.canValidate : true;
+      
+      if (!canValidate) {
+        return res.status(StatusCodes.FORBIDDEN).json({
+          error: "Forbidden: This supervisor does not have validation permissions. Only validator supervisors can review submissions."
+        });
+      }
+
+      return next();
+    } catch (err: any) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        error: "Error checking supervisor validation permissions"
+      });
+    }
+  }
+
+  // If not supervisor, admin, or super admin, deny access
+  return res.status(StatusCodes.FORBIDDEN).json({
+    error: "Forbidden: Insufficient permissions"
+  });
+};
 

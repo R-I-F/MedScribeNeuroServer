@@ -226,5 +226,28 @@ export class CalSurgService {
     }
   }
 
+  public async findCalSurgByGoogleUid(google_uid: string): Promise<ICalSurgDoc | null> | never {
+    try {
+      if (!google_uid || google_uid.trim() === "") {
+        return null;
+      }
+      return await this.calSurgModel.findOne({ google_uid: google_uid.trim() }).exec();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async findCalSurgsByGoogleUids(google_uids: string[]): Promise<ICalSurgDoc[]> | never {
+    try {
+      const uniqueUids = [...new Set(google_uids.filter(uid => uid && uid.trim() !== ""))];
+      if (uniqueUids.length === 0) {
+        return [];
+      }
+      return await this.calSurgModel.find({ google_uid: { $in: uniqueUids } }).exec();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   // Additional database-only methods can be added here as needed
 }

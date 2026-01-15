@@ -8,7 +8,9 @@ import { ICandDoc } from "../cand/cand.interface";
 
 @injectable()
 export class SupervisorProvider {
-  constructor(@inject(SubService) private subService: SubService) {}
+  constructor(
+    @inject(SubService) private subService: SubService
+  ) {}
   public async createSupervisor(validatedReq: Partial<ISupervisor>): Promise<ISupervisorDoc> | never {
     try {
       const supervisor = new Supervisor(validatedReq);
@@ -119,4 +121,5 @@ export class SupervisorProvider {
       throw new Error(err);
     }
   }
+
 }

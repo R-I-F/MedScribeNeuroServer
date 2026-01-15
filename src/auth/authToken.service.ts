@@ -12,15 +12,14 @@ export class AuthTokenService {
   private readonly refreshSignOptions: SignOptions;
 
   constructor() {
-    const timeSinceEpoch = Date.now();
-    const expirationTime =
-      timeSinceEpoch + Number(config.server.token.expireTime) * 100000;
-    const expirationTimeInSeconds = Math.floor(expirationTime / 1000);
+    // Access token options
+    // Convert expireTime to number (it's in seconds)
+    const expireTimeInSeconds = Number(config.server.token.expireTime);
 
     this.signOptions = {
       issuer: config.server.token.issuer,
       algorithm: "HS256",
-      expiresIn: expirationTimeInSeconds,
+      expiresIn: expireTimeInSeconds,
     };
 
     // Refresh token options - longer expiration
@@ -32,6 +31,11 @@ export class AuthTokenService {
       algorithm: "HS256",
       expiresIn: refreshExpireTimeInSeconds,
     };
+
+    // Log token expiration times when AuthTokenService is initialized
+    console.log(`[${NAMESPACE}] Token expiration configured:`);
+    console.log(`  Access Token: ${expireTimeInSeconds} seconds`);
+    console.log(`  Refresh Token: ${refreshExpireTimeInSeconds} seconds`);
   }
 
   public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; _id: string }): Promise<string> {

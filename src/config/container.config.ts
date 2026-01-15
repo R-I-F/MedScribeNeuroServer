@@ -78,6 +78,26 @@ import { ReportsProvider } from "../reports/reports.provider";
 import { AiAgentService } from "../aiAgent/aiAgent.service";
 import { AiAgentProvider } from "../aiAgent/aiAgent.provider";
 
+import { LectureController } from "../lecture/lecture.controller";
+import { LectureRouter } from "../lecture/lecture.router";
+import { LectureService } from "../lecture/lecture.service";
+import { LectureProvider } from "../lecture/lecture.provider";
+
+import { JournalController } from "../journal/journal.controller";
+import { JournalRouter } from "../journal/journal.router";
+import { JournalService } from "../journal/journal.service";
+import { JournalProvider } from "../journal/journal.provider";
+
+import { ConfController } from "../conf/conf.controller";
+import { ConfRouter } from "../conf/conf.router";
+import { ConfService } from "../conf/conf.service";
+import { ConfProvider } from "../conf/conf.provider";
+
+import { EventController } from "../event/event.controller";
+import { EventRouter } from "../event/event.router";
+import { EventService } from "../event/event.service";
+import { EventProvider } from "../event/event.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -158,3 +178,23 @@ container.bind(ReportsProvider).toSelf().inTransientScope();
 
 container.bind(AiAgentService).toSelf().inTransientScope();
 container.bind(AiAgentProvider).toSelf().inTransientScope();
+
+container.bind(JournalController).toSelf().inTransientScope();
+container.bind(JournalRouter).toSelf().inTransientScope();
+container.bind(JournalService).toSelf().inTransientScope();
+container.bind(JournalProvider).toSelf().inTransientScope();
+
+container.bind(ConfController).toSelf().inTransientScope();
+container.bind(ConfRouter).toSelf().inTransientScope();
+container.bind(ConfService).toSelf().inTransientScope();
+container.bind(ConfProvider).toSelf().inTransientScope();
+
+container.bind(EventController).toSelf().inTransientScope();
+container.bind(EventRouter).toSelf().inTransientScope();
+container.bind(EventService).toSelf().inTransientScope();
+container.bind(EventProvider).toSelf().inTransientScope();
+
+container.bind(LectureController).toSelf().inTransientScope();
+container.bind(LectureRouter).toSelf().inTransientScope();
+container.bind(LectureService).toSelf().inTransientScope();
+container.bind(LectureProvider).toSelf().inTransientScope();

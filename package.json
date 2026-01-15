@@ -29,9 +29,11 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.18.0",
     "mongoose": "^8.18.0",
+    "mysql2": "^3.16.0",
     "nodemailer": "^7.0.10",
     "pdfkit": "^0.17.2",
     "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.28",
     "typescript": "^5.9.2"
   },
   "devDependencies": {

@@ -54,4 +54,20 @@ export const createSupervisorValidator = checkSchema({
       errorMessage: "supervisor approval status must be a boolean value",
     },
   },
+  canValidate: {
+    in: ["body"],
+    optional: true,
+    isBoolean: {
+      errorMessage: "canValidate must be a boolean value",
+    },
+  },
+  position: {
+    in: ["body"],
+    optional: true,
+    isIn: {
+      options: [["Professor", "Assistant Professor", "Lecturer", "Assistant Lecturer", "Guest Doctor", "unknown"]],
+      errorMessage: "position must be one of: Professor, Assistant Professor, Lecturer, Assistant Lecturer, Guest Doctor, unknown",
+    },
+    trim: true,
+  },
 });

@@ -56,6 +56,18 @@ export class CandService {
     }
   }
 
+  public async findCandidatesByEmails(emails: string[]): Promise<ICandDoc[]> | never {
+    try {
+      const uniqueEmails = [...new Set(emails.filter(email => email && email.trim() !== ""))];
+      if (uniqueEmails.length === 0) {
+        return [];
+      }
+      return await this.candModel.find({ email: { $in: uniqueEmails } }).exec();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async resetAllCandidatePasswords(
     hashedPassword: string
   ): Promise<number> {
@@ -71,6 +83,29 @@ export class CandService {
     try {
       const allCandidates = await this.candModel.find({}).exec();
       return allCandidates;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getCandById(id: string): Promise<ICandDoc | null> | never {
+    try {
+      return await this.candModel.findById(id).exec();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async resetCandidatePassword(id: string): Promise<ICandDoc | null> | never {
+    try {
+      const defaultPassword = "MEDscrobe01$";
+      const hashedPassword = await bcryptjs.hash(defaultPassword, 10);
+      const updatedCandidate = await this.candModel.findByIdAndUpdate(
+        id,
+        { $set: { password: hashedPassword } },
+        { new: true }
+      ).exec();
+      return updatedCandidate;
     } catch (err: any) {
       throw new Error(err);
     }

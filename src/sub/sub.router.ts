@@ -7,7 +7,7 @@ import { reviewSubmissionValidator } from "../validators/reviewSubmission.valida
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireCandidate, requireSuperAdmin, requireSupervisor, requireInstituteAdmin } from "../middleware/authorize.middleware";
+import { requireCandidate, requireSuperAdmin, requireSupervisor, requireInstituteAdmin, requireValidatorSupervisor } from "../middleware/authorize.middleware";
 @injectable()
 export class SubRouter {
 
@@ -192,11 +192,14 @@ export class SubRouter {
       }
     )
 
-    // Review submission (approve/reject) - requires supervisor authentication
+    // Review submission (approve/reject) - requires validator supervisor authentication
+    // Only supervisors with canValidate=true can review submissions
+    // Academic supervisors (canValidate=false) can only participate in events
     this.router.patch(
       "/supervisor/submissions/:id/review",
       extractJWT,
-      requireSupervisor,
+      requireSupervisor, // First check if user is supervisor
+      requireValidatorSupervisor, // Then check if supervisor can validate
       reviewSubmissionValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

@@ -259,4 +259,27 @@ export class SubService {
       throw new Error(error.message);
     }
   }
+
+  public async findSubBySubGoogleUid(subGoogleUid: string): Promise<ISubDoc | null> | never {
+    try {
+      if (!subGoogleUid || subGoogleUid.trim() === "") {
+        return null;
+      }
+      return await this.subModel.findOne({ subGoogleUid: subGoogleUid.trim() }).exec();
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  public async findSubsBySubGoogleUids(subGoogleUids: string[]): Promise<ISubDoc[]> | never {
+    try {
+      const uniqueUids = [...new Set(subGoogleUids.filter(uid => uid && uid.trim() !== ""))];
+      if (uniqueUids.length === 0) {
+        return [];
+      }
+      return await this.subModel.find({ subGoogleUid: { $in: uniqueUids } }).exec();
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
 }

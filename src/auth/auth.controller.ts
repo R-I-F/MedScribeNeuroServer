@@ -139,6 +139,8 @@ export class AuthController {
         _id: userId
       });
 
+      // Log successful login (logging happens in router to access request info)
+
       return {
         token: accessToken,
         refreshToken: refreshToken,
@@ -147,7 +149,9 @@ export class AuthController {
       };
     }
     catch (err: any) {
-      throw new Error(err?.message ?? "Failed to login");
+      // Log failed login attempt (detailed logging happens in router)
+      const errorMessage = err?.message ?? "Failed to login";
+      throw new Error(errorMessage);
     }
   };
   

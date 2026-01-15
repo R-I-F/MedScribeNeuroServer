@@ -28,6 +28,7 @@ export interface ICand extends User {
   regDeg: RegDegree;  
   google_uid?: string;
   role?: TUserRole;
+  termsAcceptedAt?: Date;
 }
 
 export interface ICandDoc extends ICand {

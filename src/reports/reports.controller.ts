@@ -2,6 +2,7 @@ import { injectable, inject } from "inversify";
 import { Request, Response } from "express";
 import { ReportsProvider } from "./reports.provider";
 import { IReportFilters } from "./reports.interface";
+import { matchedData } from "express-validator";
 
 @injectable()
 export class ReportsController {
@@ -56,6 +57,25 @@ export class ReportsController {
       };
 
       const pdfBuffer = await this.reportsProvider.generateHospitalAnalysisReport(filters);
+      return pdfBuffer;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCanceledEventsReport(
+    req: Request,
+    res: Response
+  ): Promise<Buffer> | never {
+    try {
+      const validated = matchedData(req) as { startDate?: string; endDate?: string };
+
+      const filters: Pick<IReportFilters, "startDate" | "endDate"> = {
+        startDate: validated.startDate ? new Date(validated.startDate) : undefined,
+        endDate: validated.endDate ? new Date(validated.endDate) : undefined,
+      };
+
+      const pdfBuffer = await this.reportsProvider.generateCanceledEventsReport(filters);
       return pdfBuffer;
     } catch (err: any) {
       throw new Error(err);

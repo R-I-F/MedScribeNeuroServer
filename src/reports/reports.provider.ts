@@ -6,6 +6,7 @@ import {
   ICandidateSubmissionStats,
   IHospitalProcedureStats,
   IReportFilters,
+  ICanceledEventReportItem,
 } from "./reports.interface";
 import { ISubDoc } from "../sub/interfaces/sub.interface";
 import { ISupervisorDoc } from "../supervisor/supervisor.interface";
@@ -639,6 +640,83 @@ export class ReportsProvider {
       });
     } catch (err: any) {
       console.error("Error in generateHospitalAnalysisReport:", err);
+      throw new Error(err?.message || err || "Unknown error occurred");
+    }
+  }
+
+  public async generateCanceledEventsReport(
+    filters: Pick<IReportFilters, "startDate" | "endDate">
+  ): Promise<Buffer> | never {
+    try {
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+
+      return new Promise((resolve, reject) => {
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", (err) => reject(new Error(err.message)));
+
+        // Header + footer
+        this.addHeader(doc, "Canceled Events Report", "All canceled events and details");
+        this.addFooter(doc);
+
+        this.reportsService
+          .getCanceledEventsReportData(filters.startDate, filters.endDate)
+          .then((items: ICanceledEventReportItem[]) => {
+            if (!items.length) {
+              doc.moveDown(2)
+                .fontSize(14)
+                .font("Helvetica")
+                .fillColor("#000000")
+                .text("No canceled events found for the selected filters.", { align: "center" });
+              doc.end();
+              return;
+            }
+
+            // Detailed-only pages (no summary/table)
+            this.reportsService
+              .getEventCountsForPeriod(filters.startDate, filters.endDate)
+              .then((counts) => {
+                doc
+                  .moveDown(1)
+                  .fontSize(12)
+                  .font("Helvetica-Bold")
+                  .text(`Canceled events: ${counts.canceled} / Total events: ${counts.total}`);
+
+                doc
+                  .moveDown(0.5)
+                  .fontSize(10)
+                  .font("Helvetica")
+                  .fillColor("#000000");
+
+                for (const item of items) {
+                  if (doc.y > doc.page.height - 120) {
+                    this.addPageWithFooter(doc);
+                    this.addHeader(doc, "Canceled Events Report", "Detailed canceled events");
+                    doc.moveDown(0.5).fontSize(10).font("Helvetica").fillColor("#000000");
+                  }
+
+                  const e: any = item.event;
+                  doc
+                    .font("Helvetica-Bold")
+                    .text(`${new Date(e.dateTime).toLocaleString()} • ${e.type} • ${item.resource?.title || "N/A"}`);
+                  doc.font("Helvetica");
+                  doc.text(`Status: ${e.status}`);
+                  doc.text(`Location: ${e.location}`);
+                  doc.text(`Resource UID: ${item.resource?.google_uid || "N/A"}`);
+                  doc.text(`Presenter: ${item.presenter?.fullName || "N/A"} (${item.presenter?.email || "N/A"})`);
+                  doc.text(`Attendance count: ${Array.isArray(e.attendance) ? e.attendance.length : 0}`);
+                  doc.moveDown(0.8);
+                }
+
+                doc.end();
+              })
+              .catch((err) => reject(new Error(err?.message || err || "Unknown error occurred")));
+          })
+          .catch((err) => reject(new Error(err?.message || err || "Unknown error occurred")));
+      });
+    } catch (err: any) {
       throw new Error(err?.message || err || "Unknown error occurred");
     }
   }

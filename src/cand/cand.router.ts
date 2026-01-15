@@ -2,6 +2,7 @@ import { inject, injectable } from "inversify";
 import express, { Request, Response, Router } from "express";
 import { CandController } from "./cand.controller";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
+import { resetCandidatePasswordValidator } from "../validators/resetCandidatePassword.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
@@ -37,6 +38,26 @@ export class CandRouter{
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }
-    )
+    );
+
+    this.router.patch(
+      "/:id/resetPassword",
+      extractJWT,
+      requireSuperAdmin,
+      resetCandidatePasswordValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.candController.handleResetCandidatePassword(req, res);
+            res.status(StatusCodes.OK).json(resp);
+          } catch (err: any) {
+            res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
   }
 }

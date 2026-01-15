@@ -2,6 +2,7 @@ import { ISupervisorDoc } from "../supervisor/supervisor.interface";
 import { ICandDoc } from "../cand/cand.interface";
 import { ICalSurgDoc } from "../calSurg/calSurg.interface";
 import { IHospitalDoc } from "../hospital/hospital.interface";
+import { IEventDoc } from "../event/event.interface";
 
 export interface ISupervisorSubmissionStats {
   supervisor: ISupervisorDoc;
@@ -35,5 +36,20 @@ export interface IReportFilters {
   month?: number;
   year?: number;
   groupBy?: "title" | "alphaCode";
+}
+
+export interface ICanceledEventReportItem {
+  event: IEventDoc;
+  presenter?: {
+    _id: any;
+    fullName?: string;
+    email?: string;
+    role?: string;
+  } | null;
+  resource?: {
+    type: "lecture" | "journal" | "conf";
+    title?: string;
+    google_uid?: string;
+  } | null;
 }
 

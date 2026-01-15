@@ -7,6 +7,7 @@ import cookieParser from "cookie-parser";
 
 import { addRoutes } from "./config/routes.config";
 import { responseFormatter } from "./middleware/responseFormatter";
+import { initializeDatabase, validateDatabaseConfig } from "./config/database.config";
 
 const app: Express = express();
 dotenv.config();
@@ -35,13 +36,20 @@ async function bootstrap() {
   }
 
   try {
+    // Initialize MariaDB connection
+    validateDatabaseConfig();
+    await initializeDatabase();
+
+    // Initialize MongoDB connection (keep for now during migration)
     await mongoose.connect(process.env.MONGODB_URL, {
       dbName: process.env.DB_NAME,
     });
+    
     app.listen(port, () => {
       // Server started successfully
     });
   } catch (err) {
+    console.error("Bootstrap error:", err);
     process.exit(1);
   }
 }

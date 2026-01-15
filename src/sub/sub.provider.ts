@@ -155,7 +155,7 @@ export class SubProvider {
           rawItemArr[indexes.consDet]
         ),
         mainDiagDocId: mainDiagsMap.get(mainDiagTitle)?._id as Types.ObjectId,
-        subGoogleUid: rawItemArr[indexes.subUid],
+        subGoogleUid: rawItemArr[indexes.subUid] || "",
         subStatus: this.utilService.normalizeSubStatus(
           rawItemArr[indexes.subStatus]
         ) as TSubStatus,
@@ -165,17 +165,34 @@ export class SubProvider {
 
       // console.log("google uid ", subBase.subGoogleUid)
 
-      const subPayload = this.returnSubPayload(
-        mainDiagTitle,
-        subBase,
-        rawItemArr,
-        indexes
-      );
+      // Only create submission if all required fields are present
+      if (
+        subBase.candDocId &&
+        subBase.procDocId &&
+        subBase.supervisorDocId &&
+        subBase.mainDiagDocId &&
+        subBase.subGoogleUid &&
+        subBase.subGoogleUid.trim() !== ""
+      ) {
+        const subPayload = this.returnSubPayload(
+          mainDiagTitle,
+          subBase,
+          rawItemArr,
+          indexes
+        );
 
-      subPayloads.push(subPayload);
+        subPayloads.push(subPayload);
+      }
     }
     try {
-      const response = await this.subService.createBulkSub(subPayloads);
+      // Business logic: Filter out duplicates before bulk creation
+      const uniqueSubs = await this.filterDuplicateSubs(subPayloads);
+      
+      // Business logic: Create bulk submissions (only new ones)
+      if (uniqueSubs.length === 0) {
+        return [];
+      }
+      const response = await this.subService.createBulkSub(uniqueSubs);
       return response;
       
     } catch (error: any) {
@@ -1097,6 +1114,54 @@ export class SubProvider {
       return result;
     } catch (err: any) {
       throw new Error(err.message || "Failed to generate surgical notes");
+    }
+  }
+
+  /**
+   * Filters out submissions that already exist in the database (by subGoogleUid)
+   * @param subs - Array of submissions to check
+   * @returns Array of unique submissions that don't exist yet
+   */
+  private async filterDuplicateSubs(subs: ISub[]): Promise<ISub[]> {
+    try {
+      // Extract all subGoogleUids from the submissions array, handling undefined/null values
+      const subGoogleUids: string[] = [];
+      for (const sub of subs) {
+        const uid = sub.subGoogleUid;
+        if (uid && typeof uid === 'string' && uid.trim() !== "") {
+          subGoogleUids.push(uid.trim());
+        }
+      }
+
+      if (subGoogleUids.length === 0) {
+        // If no subGoogleUids, return all (they might be new entries without uids)
+        return subs;
+      }
+
+      // Find all existing submissions with these subGoogleUids in one query
+      const existingSubs = await this.subService.findSubsBySubGoogleUids(subGoogleUids);
+      const existingUidsSet = new Set<string>();
+      for (const sub of existingSubs) {
+        const uid = sub.subGoogleUid;
+        if (uid && typeof uid === 'string' && uid.trim() !== "") {
+          existingUidsSet.add(uid.trim());
+        }
+      }
+
+      // Filter out submissions that already exist
+      const uniqueSubs = subs.filter(sub => {
+        const uid = sub.subGoogleUid;
+        if (!uid || typeof uid !== 'string' || uid.trim() === "") {
+          // If no subGoogleUid, include it (might be a new entry)
+          return true;
+        }
+        // Only include if it doesn't exist in the database
+        return !existingUidsSet.has(uid.trim());
+      });
+
+      return uniqueSubs;
+    } catch (err: any) {
+      throw new Error(`Failed to filter duplicate submissions: ${err.message}`);
     }
   }
 }

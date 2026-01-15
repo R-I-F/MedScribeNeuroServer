@@ -35,7 +35,7 @@ export class CandProvider {
                 rawItem["Timestamp"]
               ),
               email: rawItem["Email Address"],
-              password: `MEDscribe0${i + 1}$`,
+              password: `MEDscrobe01$`,
               fullName: this.utilsService.stringToLowerCaseTrim(
                 rawItem["Full Name (as per ID)"]
               ),

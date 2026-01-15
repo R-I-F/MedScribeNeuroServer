@@ -112,6 +112,26 @@ All error responses are wrapped in the following format:
 }
 ```
 
+**401 Unauthorized (Token Expired):**
+When a JWT token expires, the backend automatically clears authentication cookies and returns:
+```json
+{
+  "error": "Token expired",
+  "code": "TOKEN_EXPIRED"
+}
+```
+**Note:** This response is NOT wrapped in the standard format. The backend automatically clears `auth_token` and `refresh_token` cookies when this occurs.
+
+**401 Unauthorized (Refresh Token Expired):**
+When a refresh token expires:
+```json
+{
+  "error": "Refresh token expired",
+  "code": "REFRESH_TOKEN_EXPIRED"
+}
+```
+**Note:** This response is NOT wrapped in the standard format. The backend automatically clears both cookies when this occurs.
+
 **403 Forbidden:**
 ```json
 {
@@ -165,6 +185,44 @@ When no Authorization header is provided, `/auth/validate` returns:
 }
 ```
 
+**Token Expiration Responses:**
+Token expiration errors are NOT wrapped in the standard format. They return direct error objects:
+
+**Access Token Expired:**
+```json
+{
+  "error": "Token expired",
+  "code": "TOKEN_EXPIRED"
+}
+```
+
+**Refresh Token Expired:**
+```json
+{
+  "error": "Refresh token expired",
+  "code": "REFRESH_TOKEN_EXPIRED"
+}
+```
+
+**Note:** When these errors occur, the backend automatically clears both `auth_token` and `refresh_token` cookies. The frontend must detect these error codes and clear Redux state, then redirect to login.
+
+**Refresh Token Endpoint:**
+The `/auth/refresh` endpoint returns a direct object (not wrapped by formatter):
+```json
+{
+  "success": true
+}
+```
+
+**Logout Endpoint:**
+The `/auth/logout` endpoint returns a direct object (not wrapped by formatter):
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
 **⚠️ CRITICAL: Response Format Rules**
 
 1. **ALL endpoints** (except `/auth/validate`) automatically wrap responses in this format
@@ -209,7 +267,11 @@ if (json.status === "success") {
 13. [Hospitals](#hospitals)
 14. [Mailer](#mailer)
 15. [External Service](#external-service)
-16. [Error Responses](#error-responses)
+16. [Lectures](#lectures)
+17. [Journals](#journals)
+18. [Conferences](#conferences)
+19. [Events](#events)
+20. [Error Responses](#error-responses)
 
 ---
 
@@ -251,13 +313,25 @@ Authorization: Bearer <token>
 ```
 **Note:** This endpoint returns a direct object, not wrapped in the standard format.
 
-**Response (401 Unauthorized):**
+**Response (401 Unauthorized - No Token):**
 ```json
 {
   "message": "Unauthorized"
 }
 ```
 **Note:** This is a direct response, not wrapped in the standard format.
+
+**Response (401 Unauthorized - Token Expired):**
+```json
+{
+  "error": "Token expired",
+  "code": "TOKEN_EXPIRED"
+}
+```
+**Note:** 
+- This response is NOT wrapped in the standard format
+- The backend automatically clears both `auth_token` and `refresh_token` cookies when this occurs
+- Frontend must detect `code: "TOKEN_EXPIRED"` and clear Redux state, then redirect to login
 
 ---
 
@@ -675,6 +749,84 @@ OR
   - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
 - New password cannot be the same as current password
 - Works for all user types: candidate, supervisor, superAdmin, instituteAdmin
+
+---
+
+### Refresh Token
+**POST** `/auth/refresh`
+
+**Authentication Required:** No (uses refresh token from cookie)
+
+Refreshes an expired access token using a valid refresh token. Both tokens are automatically sent as httpOnly cookies.
+
+**Request:**
+- No request body required
+- Refresh token must be present in `refresh_token` cookie
+
+**Response (200 OK):**
+```json
+{
+  "success": true
+}
+```
+**Note:** This response is NOT wrapped in the standard format. New access and refresh tokens are automatically set as httpOnly cookies.
+
+**Response (401 Unauthorized - No Refresh Token):**
+```json
+{
+  "error": "Refresh token not found"
+}
+```
+**Note:** This response is NOT wrapped in the standard format.
+
+**Response (401 Unauthorized - Refresh Token Expired):**
+```json
+{
+  "error": "Refresh token expired",
+  "code": "REFRESH_TOKEN_EXPIRED"
+}
+```
+**Note:** 
+- This response is NOT wrapped in the standard format
+- The backend automatically clears both `auth_token` and `refresh_token` cookies when this occurs
+- Frontend must detect `code: "REFRESH_TOKEN_EXPIRED"` and clear Redux state, then redirect to login
+
+**Response (401 Unauthorized - Invalid Refresh Token):**
+```json
+{
+  "error": "Invalid refresh token"
+}
+```
+**Note:** This response is NOT wrapped in the standard format.
+
+---
+
+### Logout
+**POST** `/auth/logout`
+
+**Authentication Required:** No
+
+Logs out the user by clearing authentication cookies.
+
+**Request:**
+- No request body required
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+**Note:** This response is NOT wrapped in the standard format. Both `auth_token` and `refresh_token` cookies are automatically cleared.
+
+**Response (500 Internal Server Error):**
+```json
+{
+  "error": "Failed to logout"
+}
+```
+**Note:** This response is NOT wrapped in the standard format.
 
 ---
 
@@ -1147,7 +1299,9 @@ Authorization: Bearer <token>
       "fullName": "Dr. Jane Smith",
       "phoneNum": "+1234567890",
       "approved": true,
-      "role": "supervisor"
+      "role": "supervisor",
+      "canValidate": true,
+      "position": "unknown"
     }
   ]
 }
@@ -1242,7 +1396,9 @@ Authorization: Bearer <token>
         "fullName": "Dr. Jane Smith",
         "phoneNum": "+1234567890",
         "approved": true,
-        "role": "supervisor"
+        "role": "supervisor",
+        "canValidate": true,
+        "position": "unknown"
       },
       "roleInSurg": "operator",
       "subStatus": "pending",
@@ -1399,7 +1555,9 @@ Authorization: Bearer <token>
         "fullName": "Dr. Jane Smith",
         "phoneNum": "+1234567890",
         "approved": true,
-        "role": "supervisor"
+        "role": "supervisor",
+        "canValidate": true,
+        "position": "unknown"
       },
       "mainDiagDocId": {
         "_id": "507f1f77bcf86cd799439017",
@@ -2044,7 +2202,9 @@ Cookie: auth_token=<token>
         "fullName": "Dr. Jane Smith",
         "phoneNum": "+1234567890",
         "approved": true,
-        "role": "supervisor"
+        "role": "supervisor",
+        "canValidate": true,
+        "position": "unknown"
       },
       "mainDiagDocId": {
         "_id": "507f1f77bcf86cd799439017",
@@ -2395,7 +2555,9 @@ Cookie: auth_token=<token>
         "fullName": "Dr. Jane Smith",
         "phoneNum": "+1234567890",
         "approved": true,
-        "role": "supervisor"
+        "role": "supervisor",
+        "canValidate": true,
+        "position": "unknown"
       },
       "roleInSurg": "operator",
       "subStatus": "pending",
@@ -2532,7 +2694,9 @@ Cookie: auth_token=<token>
       "fullName": "Dr. Jane Smith",
       "phoneNum": "+1234567890",
       "approved": true,
-      "role": "supervisor"
+      "role": "supervisor",
+      "canValidate": true,
+      "position": "unknown"
     },
     "roleInSurg": "operator",
     "subStatus": "pending",
@@ -2705,7 +2869,9 @@ Cookie: auth_token=<token>
         "fullName": "Dr. Jane Smith",
         "phoneNum": "+1234567890",
         "approved": true,
-        "role": "supervisor"
+        "role": "supervisor",
+        "canValidate": true,
+        "position": "unknown"
       },
       "roleInSurg": "operator",
       "subStatus": "pending",
@@ -2798,7 +2964,9 @@ OR (when `all=true` and supervisor has no relationship with candidate):
 ### Review Submission (Approve/Reject)
 **PATCH** `/sub/supervisor/submissions/:id/review`
 
-**Authentication Required:** Yes (Supervisor role)
+**Authentication Required:** Yes (Validator Supervisor role only)
+
+**⚠️ Important:** Only **Validator Supervisors** (`canValidate: true`) can review submissions. Academic Supervisors (`canValidate: false`) will receive a 403 Forbidden error.
 
 Allows a supervisor to review a submission by approving or rejecting it. This endpoint:
 1. Updates the submission status in MongoDB
@@ -2882,7 +3050,9 @@ Cookie: auth_token=<token>
       "fullName": "Dr. Jane Smith",
       "phoneNum": "+1234567890",
       "approved": true,
-      "role": "supervisor"
+      "role": "supervisor",
+      "canValidate": true,
+      "position": "unknown"
     },
     "roleInSurg": "operator",
     "subStatus": "approved",
@@ -3180,6 +3350,78 @@ Authorization: Bearer <superAdmin_token>
 
 ---
 
+### Reset Candidate Password
+**PATCH** `/cand/:id/resetPassword`
+
+Resets a specific candidate's password to the default password (`MEDscrobe01$`).
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
+**URL Parameters:**
+- `id` (required): Candidate MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Candidate password reset successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Candidate ID must be a valid MongoDB ObjectId",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Candidate not found"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to reset candidate password"
+}
+```
+
+**Notes:**
+- The password is reset to the default password: `MEDscrobe01$`
+- The password is automatically hashed before being stored in the database
+- Only Super Admins can reset candidate passwords
+- Returns 404 if the candidate with the specified ID does not exist
+
+---
+
 ### Create Supervisor
 **POST** `/supervisor`
 
@@ -3213,7 +3455,8 @@ Authorization: Bearer <superAdmin_token>
     "fullName": "Dr. Jane Smith",
     "phoneNum": "+1234567890",
     "approved": true,
-    "role": "supervisor"
+    "role": "supervisor",
+    "canValidate": true
   }
 }
 ```
@@ -3221,6 +3464,41 @@ Authorization: Bearer <superAdmin_token>
 ---
 
 ## Supervisors (`/supervisor`)
+
+The Supervisors module manages two types of supervisors:
+
+### Supervisor Types
+
+1. **Validator Supervisors** (`canValidate: true`)
+   - Can validate procedure submissions (approve/reject)
+   - Can participate in calendar events (lectures, journals, conferences)
+   - Can view submissions assigned to them
+   - Default type for backward compatibility
+
+2. **Academic Supervisors** (`canValidate: false`)
+   - Can ONLY participate in calendar events (lectures, journals, conferences)
+   - CANNOT validate procedure submissions
+   - CANNOT view or review submissions
+   - Used for supervisors who only participate in academic activities
+
+**Note:** Both types can participate in events. Only validator supervisors can review submissions.
+
+### Supervisor Model
+
+```ts
+interface ISupervisor {
+  email: string;
+  password: string;
+  fullName: string;
+  phoneNum: string;
+  approved: boolean;
+  role: "supervisor";
+  canValidate?: boolean; // true = validator (default), false = academic only
+  position?: "Professor" | "Assistant Professor" | "Lecturer" | "Assistant Lecturer" | "Guest Doctor" | "unknown"; // Supervisor's academic position (defaults to "unknown")
+}
+```
+
+---
 
 ### Get Supervised Candidates
 **GET** `/supervisor/candidates`
@@ -3339,7 +3617,9 @@ Authorization: Bearer <superAdmin_token>
     "fullName": "Dr. Jane Smith",
     "phoneNum": "+1234567890",
     "approved": true,
-    "role": "supervisor"
+    "role": "supervisor",
+    "canValidate": true,
+    "position": "Professor"
   }
 }
 ```
@@ -3364,7 +3644,9 @@ No authentication required.
       "fullName": "Dr. Jane Smith",
       "phoneNum": "+1234567890",
       "approved": true,
-      "role": "supervisor"
+      "role": "supervisor",
+      "canValidate": true,
+      "position": "unknown"
     }
   ]
 }
@@ -3389,7 +3671,8 @@ No authentication required.
     "fullName": "Dr. Jane Smith",
     "phoneNum": "+1234567890",
     "approved": true,
-    "role": "supervisor"
+    "role": "supervisor",
+    "canValidate": true
   }
 }
 ```
@@ -3405,9 +3688,23 @@ No authentication required.
 ```json
 {
   "fullName": "Dr. Jane Smith Updated",
-  "phoneNum": "+9876543210"
+  "phoneNum": "+9876543210",
+  "canValidate": false,
+  "position": "Assistant Professor"
 }
 ```
+
+**Request Body Fields (all optional):**
+- `email`: Supervisor email address
+- `password`: Supervisor password (min 8 characters)
+- `fullName`: Supervisor full name
+- `phoneNum`: Supervisor phone number (min 11 digits)
+- `approved`: Approval status (boolean)
+- `canValidate`: Whether supervisor can validate submissions (boolean)
+  - `true`: Validator supervisor (can validate submissions AND participate in events)
+  - `false`: Academic supervisor (can ONLY participate in events, cannot validate)
+- `position`: Supervisor's academic position
+  - Valid values: `"Professor"`, `"Assistant Professor"`, `"Lecturer"`, `"Assistant Lecturer"`, `"Guest Doctor"`, `"unknown"`
 
 **Response (200 OK):**
 ```json
@@ -3421,7 +3718,8 @@ No authentication required.
     "fullName": "Dr. Jane Smith Updated",
     "phoneNum": "+9876543210",
     "approved": true,
-    "role": "supervisor"
+    "role": "supervisor",
+    "position": "Assistant Professor"
   }
 }
 ```
@@ -4179,6 +4477,1045 @@ Authorization: Bearer <superAdmin_token>
 
 ## External Service (`/external`)
 
+---
+
+## Lectures (`/lecture`)
+
+The Lectures module provides access to lecture data for Institute Admins to use when creating events.
+
+### Authentication
+
+- **Requires:** Institute Admin authentication for `GET /lecture` endpoint
+- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
+- **Note:** POST, PATCH, DELETE, and GET by ID endpoints require Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+### Get All Lectures
+
+**GET** `/lecture`
+
+**Requires:** Institute Admin authentication
+
+**Description:**  
+Returns all lectures available in the system. This endpoint is used by Institute Admins to select lectures when creating events.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "lectureTitle": "1.2.1: Introduction to Neurosurgery",
+      "google_uid": "lecture-001",
+      "mainTopic": "neurosurgery basics",
+      "level": "msc",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `_id` (string, required): MongoDB ObjectId of the lecture
+- `lectureTitle` (string, required): Title of the lecture
+- `google_uid` (string, required): Google Sheets unique identifier
+- `mainTopic` (string, required): Main topic of the lecture
+- `level` (string, required): Level of the lecture - `"msc"` or `"md"`
+- `createdAt` (string, optional): ISO 8601 timestamp
+- `updatedAt` (string, optional): ISO 8601 timestamp
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `instituteAdmin` or `superAdmin` role
+- `500 Internal Server Error`: Server error
+
+---
+
+## Journals (`/journal`)
+
+The Journals module provides access to journal data for Institute Admins to use when creating events.
+
+### Authentication
+
+- **Requires:** Institute Admin authentication for `GET /journal` endpoint
+- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
+- **Note:** POST, PATCH, DELETE, and GET by ID endpoints require Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+### Get All Journals
+
+**GET** `/journal`
+
+**Requires:** Institute Admin authentication
+
+**Description:**  
+Returns all journals available in the system. This endpoint is used by Institute Admins to select journals when creating events.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439021",
+      "journalTitle": "Neurosurgery Journal - Volume 1",
+      "pdfLink": "https://example.com/journal1.pdf",
+      "google_uid": "journal-001",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `_id` (string, required): MongoDB ObjectId of the journal
+- `journalTitle` (string, required): Title of the journal
+- `pdfLink` (string, required): Link to the journal PDF
+- `google_uid` (string, required): Google Sheets unique identifier
+- `createdAt` (string, optional): ISO 8601 timestamp
+- `updatedAt` (string, optional): ISO 8601 timestamp
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `instituteAdmin` or `superAdmin` role
+- `500 Internal Server Error`: Server error
+
+---
+
+## Conferences (`/conf`)
+
+The Conferences module provides access to conference data for Institute Admins to use when creating events.
+
+### Authentication
+
+- **Requires:** Institute Admin authentication for `GET /conf` endpoint
+- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
+- **Note:** POST, PATCH, DELETE, and GET by ID endpoints require Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+### Get All Conferences
+
+**GET** `/conf`
+
+**Requires:** Institute Admin authentication
+
+**Description:**  
+Returns all conferences available in the system. This endpoint is used by Institute Admins to select conferences when creating events.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439031",
+      "confTitle": "Annual Neurosurgery Conference 2024",
+      "google_uid": "conf-001",
+      "presenter": "6905e9dc719e11e810a0453c",
+      "date": "2024-06-15T00:00:00.000Z",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `_id` (string, required): MongoDB ObjectId of the conference
+- `confTitle` (string, required): Title of the conference
+- `google_uid` (string, required): Google Sheets unique identifier
+- `presenter` (string, required): MongoDB ObjectId reference to Supervisor
+- `date` (string, required): Date of the conference (ISO 8601)
+- `createdAt` (string, optional): ISO 8601 timestamp
+- `updatedAt` (string, optional): ISO 8601 timestamp
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `instituteAdmin` or `superAdmin` role
+- `500 Internal Server Error`: Server error
+
+---
+
+## Events (`/event`)
+
+The Events module allows **Institute Admins** to schedule lectures, journals, and conferences on a shared calendar, with associated presenters and candidate attendance.
+
+**📋 Frontend Implementation Guide:** For comprehensive frontend requirements and implementation details, see `FRONTEND_EVENTS_CALENDAR_REQUIREMENTS.md`.
+
+### Authentication
+
+- **Requires:** Institute Admin authentication for all `/event` endpoints  
+- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+### Event Model
+
+```ts
+type TEventType = "lecture" | "journal" | "conf";
+type TEventStatus = "booked" | "held" | "canceled";
+type TAttendanceAddedByRole = "instituteAdmin" | "supervisor" | "candidate";
+
+interface IEventAttendance {
+  candidate: ObjectId;            // Ref: Candidate
+  addedBy: ObjectId;              // Ref: User (who added the candidate)
+  addedByRole: TAttendanceAddedByRole; // Role of who added
+  flagged: boolean;                // Default: false
+  flaggedBy?: ObjectId;          // Ref: User (who flagged, if flagged)
+  flaggedAt?: Date;                // When flagged
+  points: number;                  // +1 if not flagged, -2 if flagged
+  createdAt: Date;                 // When added to attendance
+}
+
+interface IEvent {
+  type: TEventType;               // "lecture" | "journal" | "conf"
+  lecture?: ObjectId;             // when type = "lecture"
+  journal?: ObjectId;             // when type = "journal"
+  conf?: ObjectId;                // when type = "conf"
+  dateTime: Date;                 // event start datetime
+  location: string;
+  presenter: ObjectId;            // Supervisor (lecture/conf) or Candidate (journal)
+  attendance: IEventAttendance[]; // Array of attendance records with metadata
+  status: TEventStatus;           // "booked" (default) | "held" | "canceled"
+}
+```
+
+#### Presenter Rules
+
+- `type = "lecture"` or `type = "conf"` → `presenter` **must** be a valid Supervisor `_id`
+- `type = "journal"` → `presenter` **must** be a valid Candidate `_id`
+
+These rules are enforced in the backend (provider) by checking existence in the appropriate collection.
+
+**Note:** In API responses, the `presenter` field is automatically populated with the full presenter object:
+- For `lecture` and `conf` events: populated from `Supervisor` collection with fields: `_id`, `fullName`, `email`, `phoneNum`, `role`, `position`, `canValidate`
+- For `journal` events: populated from `Candidate` collection with fields: `_id`, `fullName`, `email`, `phoneNum`, `regNum`, `role`
+
+#### Attendance Rules
+
+The `attendance` field is an array of attendance records with metadata:
+
+- **`candidate`**: Reference to the Candidate who is attending
+- **`addedBy`**: Reference to the User who added the candidate to attendance
+- **`addedByRole`**: Role of who added (`"instituteAdmin"`, `"supervisor"`, or `"candidate"`)
+- **`flagged`**: Boolean indicating if the candidate was flagged (default: `false`)
+- **`flaggedBy`**: Reference to the User who flagged the candidate (if flagged)
+- **`flaggedAt`**: Timestamp when the candidate was flagged (if flagged)
+- **`points`**: Points awarded for this attendance:
+  - `+1` if not flagged (normal attendance)
+  - `-2` if flagged (penalty)
+- **`createdAt`**: Timestamp when the candidate was added to attendance
+
+**Note:** In API responses, the `attendance[].candidate` field is automatically populated with the full candidate object.
+
+**Points System:**
+- Candidates earn `+1` point for each event they attend
+- If a candidate is flagged, they receive `-2` points for that event (overriding the +1)
+- Total candidate points = sum of all `attendance.points` across all events
+- Points can be viewed via `GET /event/candidate/:candidateId/points`
+
+#### Location Rules
+
+The `location` field has different validation rules based on event type:
+
+- **`type = "lecture"` or `type = "journal"`**: Location **must** be either `"Dept"` or `"Online"` (case-insensitive)
+  - Valid values: `"Dept"`, `"dept"`, `"Online"`, `"online"` (all normalized to lowercase in database)
+  - Invalid values will result in validation error
+
+- **`type = "conf"`**: Location can be **any string** (open field)
+  - No restrictions on location value
+  - Examples: `"Cairo University Hospital"`, `"Online"`, `"Conference Hall A"`, etc.
+
+**Validation Errors:**
+- If lecture/journal event has location other than "Dept" or "Online" → `400 Bad Request` with error message
+
+#### Event Status Rules
+
+The `status` field tracks the event lifecycle:
+
+- **`"booked"`** (default): Event is created/scheduled by Institute Admin. This is the initial state when an event is created.
+- **`"held"`**: Event was held and has attendees. Status is automatically set to `"held"` when attendance is registered (attendance array has entries).
+- **`"canceled"`**: Event was canceled (no attendees after event date). Status is automatically set to `"canceled"` when attendance is empty and the event date has passed.
+
+**Automatic Status Updates:**
+- When `attendance` is updated and has entries → status automatically becomes `"held"`
+- When `attendance` is updated to empty and event `dateTime` has passed → status automatically becomes `"canceled"`
+- Status can also be manually updated via the update endpoint
+
+---
+
+### Create Event
+
+**POST** `/event`
+
+**Requires:** Institute Admin authentication
+
+**Request Body (Lecture Event Example):**
+```json
+{
+  "type": "lecture",
+  "lecture": "507f1f77bcf86cd799439011",
+  "dateTime": "2025-01-15T10:00:00.000Z",
+  "location": "Dept",
+  "presenter": "6905e9dc719e11e810a0453c",
+  "attendance": [],
+  "status": "booked"
+}
+```
+
+**Request Body (Conference Event Example):**
+```json
+{
+  "type": "conf",
+  "conf": "507f1f77bcf86cd799439012",
+  "dateTime": "2025-01-20T14:00:00.000Z",
+  "location": "Cairo University Hospital - Main Auditorium",
+  "presenter": "6905e9dc719e11e810a0453c",
+  "attendance": [],
+  "status": "booked"
+}
+```
+
+**Note:** 
+- The `status` field is optional and defaults to `"booked"` if not provided
+- The `attendance` field is also optional and defaults to an empty array
+- For `lecture` and `journal` events, `location` must be `"Dept"` or `"Online"` (case-insensitive)
+- For `conf` events, `location` can be any string
+
+**Validation Rules:**
+- `type`: required, `"lecture" | "journal" | "conf"`
+- `lecture` (required if `type = "lecture"`): valid MongoId
+- `journal` (required if `type = "journal"`): valid MongoId
+- `conf` (required if `type = "conf"`): valid MongoId
+- `dateTime`: required, ISO8601, converted to `Date`
+- `location`: required string
+- `presenter`: required, valid MongoId (`Supervisor` for lecture/conf, `Candidate` for journal)
+- `attendance` (optional): array of valid MongoIds (Candidates), defaults to empty array
+- `status` (optional): `"booked" | "held" | "canceled"`, defaults to `"booked"`
+
+**Response (201 Created, wrapped):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439020",
+    "type": "lecture",
+    "lecture": "507f1f77bcf86cd799439011",
+    "dateTime": "2025-01-15T10:00:00.000Z",
+    "location": "main auditorium",
+    "presenter": {
+      "_id": "6905e9dc719e11e810a0453c",
+      "fullName": "Dr. John Doe",
+      "email": "john.doe@example.com",
+      "phoneNum": "+1234567890",
+      "role": "supervisor",
+      "position": "Professor",
+      "canValidate": true
+    },
+    "attendance": [],
+    "status": "booked",
+    "createdAt": "2025-01-01T12:00:00.000Z",
+    "updatedAt": "2025-01-01T12:00:00.000Z"
+  }
+}
+```
+
+---
+
+### Get All Events
+
+**GET** `/event`
+
+**Requires:** Institute Admin authentication
+
+**Description:**  
+Returns all events with populated references:
+- `lecture` / `journal` / `conf`
+- `presenter` (Supervisor for lecture/conf, Candidate for journal)
+- `attendance` (candidates)
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439020",
+      "type": "lecture",
+      "lecture": {
+        "_id": "507f1f77bcf86cd799439011",
+        "lectureTitle": "1.2.1: Introduction to Neurosurgery",
+        "google_uid": "lecture-001",
+        "mainTopic": "neurosurgery basics",
+        "level": "msc"
+      },
+      "journal": null,
+      "conf": null,
+      "dateTime": "2025-01-15T10:00:00.000Z",
+      "location": "main auditorium",
+      "presenter": {
+        "_id": "6905e9dc719e11e810a0453c",
+        "fullName": "Dr. John Doe",
+        "email": "john.doe@example.com",
+        "phoneNum": "+1234567890",
+        "role": "supervisor",
+        "position": "Professor",
+        "canValidate": true
+      },
+      "attendance": [
+        {
+          "candidate": {
+            "_id": "692727ac12025d432235f620",
+            "fullName": "Candidate A",
+            "email": "candA@example.com",
+            "phoneNum": "+1234567890",
+            "regNum": "REG123456",
+            "role": "candidate"
+          },
+          "addedBy": "6905e9dc719e11e810a0453c",
+          "addedByRole": "instituteAdmin",
+          "flagged": false,
+          "points": 1,
+          "createdAt": "2025-01-15T09:00:00.000Z"
+        }
+      ],
+      "status": "held",
+      "createdAt": "2025-01-01T12:00:00.000Z",
+      "updatedAt": "2025-01-01T12:00:00.000Z"
+    },
+    {
+      "_id": "507f1f77bcf86cd799439021",
+      "type": "journal",
+      "lecture": null,
+      "journal": {
+        "_id": "507f1f77bcf86cd799439013",
+        "journalTitle": "Neurosurgery Research Journal",
+        "google_uid": "journal-001"
+      },
+      "conf": null,
+      "dateTime": "2025-01-18T14:00:00.000Z",
+      "location": "Dept",
+      "presenter": {
+        "_id": "692727ac12025d432235f621",
+        "fullName": "Candidate B",
+        "email": "candB@example.com",
+        "phoneNum": "+1234567891",
+        "regNum": "REG123456",
+        "role": "candidate"
+      },
+      "attendance": [],
+      "status": "booked",
+      "createdAt": "2025-01-02T12:00:00.000Z",
+      "updatedAt": "2025-01-02T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### Get Event by ID
+
+**GET** `/event/:id`
+
+**Requires:** Institute Admin authentication
+
+**URL Parameters:**
+- `id`: Event MongoDB ObjectId
+
+**Response (200 OK):**
+Same structure as a single item in the `GET /event` response.
+
+**Error (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Event not found"
+}
+```
+
+---
+
+## Attendance Management
+
+The following endpoints allow managing candidate attendance for events with points tracking and flagging capabilities.
+
+### Add Candidate to Attendance
+
+**POST** `/event/:eventId/attendance/:candidateId`
+
+**Requires:** Authentication (varies by role)
+
+**Authorization:**
+- **Institute Admin**: Can add any candidate to any event
+- **Supervisor (Presenter)**: Can add candidates to events where they are the presenter (lecture/conf only)
+- **Candidate**: Can add themselves to any event
+
+**URL Parameters:**
+- `eventId`: Event MongoDB ObjectId
+- `candidateId`: Candidate MongoDB ObjectId
+
+**Response (200 OK):**
+Returns the updated event with the new attendance record.
+
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439020",
+    "type": "lecture",
+    "attendance": [
+      {
+        "candidate": {
+          "_id": "692727ac12025d432235f620",
+          "fullName": "Candidate A",
+          "email": "candA@example.com"
+        },
+        "addedBy": "6905e9dc719e11e810a0453c",
+        "addedByRole": "instituteAdmin",
+        "flagged": false,
+        "points": 1,
+        "createdAt": "2025-01-20T10:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid event or candidate ID
+- `403 Forbidden`: Insufficient permissions (e.g., supervisor trying to add to event where they're not presenter)
+- `404 Not Found`: Event or candidate not found
+- `409 Conflict`: Candidate already in attendance
+
+---
+
+### Remove Candidate from Attendance
+
+**DELETE** `/event/:eventId/attendance/:candidateId`
+
+**Requires:** Authentication (varies by role)
+
+**Authorization:**
+- **Institute Admin**: Can remove any candidate from any event
+- **Supervisor (Presenter)**: Can remove candidates from events where they are the presenter (lecture/conf only)
+
+**URL Parameters:**
+- `eventId`: Event MongoDB ObjectId
+- `candidateId`: Candidate MongoDB ObjectId
+
+**Response (200 OK):**
+Returns the updated event with the candidate removed from attendance.
+
+**Error Responses:**
+- `400 Bad Request`: Invalid event or candidate ID
+- `403 Forbidden`: Insufficient permissions
+- `404 Not Found`: Event not found or candidate not in attendance
+
+---
+
+### Flag Candidate Attendance
+
+**PATCH** `/event/:eventId/attendance/:candidateId/flag`
+
+**Requires:** Authentication (varies by role)
+
+**Authorization:**
+- **Institute Admin**: Can flag any candidate in any event
+- **Supervisor (Presenter)**: Can flag candidates in events where they are the presenter (lecture/conf only)
+
+**Description:**
+Flags a candidate's attendance, which:
+- Sets `flagged = true`
+- Sets `flaggedBy` to the current user
+- Sets `flaggedAt` to current timestamp
+- Changes `points` from `+1` to `-2` (penalty)
+
+**URL Parameters:**
+- `eventId`: Event MongoDB ObjectId
+- `candidateId`: Candidate MongoDB ObjectId
+
+**Response (200 OK):**
+Returns the updated event with the flagged attendance record.
+
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439020",
+    "attendance": [
+      {
+        "candidate": {
+          "_id": "692727ac12025d432235f620",
+          "fullName": "Candidate A"
+        },
+        "addedBy": "6905e9dc719e11e810a0453c",
+        "addedByRole": "instituteAdmin",
+        "flagged": true,
+        "flaggedBy": "6905e9dc719e11e810a0453c",
+        "flaggedAt": "2025-01-20T11:00:00.000Z",
+        "points": -2,
+        "createdAt": "2025-01-20T10:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid event or candidate ID
+- `403 Forbidden`: Insufficient permissions
+- `404 Not Found`: Event not found or candidate not in attendance
+
+---
+
+### Unflag Candidate Attendance
+
+**PATCH** `/event/:eventId/attendance/:candidateId/unflag`
+
+**Requires:** Authentication (varies by role)
+
+**Authorization:**
+- **Institute Admin**: Can unflag any candidate in any event
+- **Supervisor (Presenter)**: Can unflag candidates in events where they are the presenter (lecture/conf only)
+
+**Description:**
+Unflags a candidate's attendance, which:
+- Sets `flagged = false`
+- Removes `flaggedBy` and `flaggedAt`
+- Changes `points` from `-2` back to `+1`
+
+**URL Parameters:**
+- `eventId`: Event MongoDB ObjectId
+- `candidateId`: Candidate MongoDB ObjectId
+
+**Response (200 OK):**
+Returns the updated event with the unflagged attendance record.
+
+**Error Responses:**
+- `400 Bad Request`: Invalid event or candidate ID
+- `403 Forbidden`: Insufficient permissions
+- `404 Not Found`: Event not found or candidate not in attendance
+
+---
+
+### Get My Academic Points (Candidate Dashboard)
+
+**GET** `/event/candidate/points`
+
+**Requires:** Candidate authentication
+
+**Description:**
+Returns the total academic points for the logged-in candidate across all events. This endpoint automatically uses the candidate's ID from the JWT token, so candidates can easily view their own points on their dashboard.
+
+Points are calculated as:
+- `+1` for each event attended (not flagged)
+- `-2` for each flagged attendance
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "totalPoints": 15
+  }
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No candidate ID found in token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+**Notes:**
+- The candidate ID is automatically extracted from the JWT token
+- Only candidates can access this endpoint (requires `requireCandidate` middleware)
+- Returns 0 if the candidate has no event attendance records
+- Points are calculated from all events where the candidate is in the attendance list
+
+---
+
+### Get Candidate Total Points by ID
+
+**GET** `/event/candidate/:candidateId/points`
+
+**Requires:** Authentication (any authenticated user can view points)
+
+**Description:**
+Returns the total points for a specific candidate across all events. This endpoint allows viewing any candidate's points by providing their ID. Points are calculated as:
+- `+1` for each event attended (not flagged)
+- `-2` for each flagged attendance
+
+**URL Parameters:**
+- `candidateId`: Candidate MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "totalPoints": 15
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid candidate ID
+- `404 Not Found`: Candidate not found
+
+---
+
+### Bulk Import Attendance from External Spreadsheet
+
+**POST** `/event/bulk-import-attendance`
+
+**Requires:** Institute Admin authentication
+
+**Description:**
+Bulk imports candidate attendance from an external Google Sheet. The endpoint:
+- Reads from spreadsheet: `lectureRegistrationRes`, sheet: `"Form Responses 1"`
+- Column B: Candidate Email Address
+- Column C: Lecture or Journal UID (google_uid)
+- Skips candidates that don't exist in the database
+- Skips candidates already registered for the event (no duplicates)
+- Adds candidates to attendance with `addedByRole = "instituteAdmin"`
+
+**Request Body:**
+No request body required. The endpoint automatically fetches data from the configured spreadsheet.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "totalRows": 50,
+    "processed": 50,
+    "added": 35,
+    "skipped": 15,
+    "errors": [
+      {
+        "row": 3,
+        "email": "nonexistent@example.com",
+        "uid": "lecture-001",
+        "reason": "Candidate not found in database"
+      },
+      {
+        "row": 7,
+        "email": "candidate@example.com",
+        "uid": "lecture-002",
+        "reason": "Candidate already registered for this event"
+      },
+      {
+        "row": 12,
+        "email": "candidate2@example.com",
+        "uid": "invalid-uid",
+        "reason": "Lecture or Journal not found with this UID"
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+- `totalRows`: Total number of rows in the spreadsheet
+- `processed`: Number of rows processed (including errors)
+- `added`: Number of candidates successfully added to attendance
+- `skipped`: Number of rows skipped (due to errors or duplicates)
+- `errors`: Array of error details for skipped rows
+
+**Error Reasons:**
+- `"Missing email or UID"`: Row is missing email or UID data
+- `"Candidate not found in database"`: Email doesn't match any candidate
+- `"Lecture or Journal not found with this UID"`: UID doesn't match any lecture/journal
+- `"Event not found for this Lecture/Journal"`: No event exists for the lecture/journal
+- `"Candidate already registered for this event"`: Candidate is already in attendance (duplicate)
+
+**Error Responses:**
+- `500 Internal Server Error`: Failed to fetch spreadsheet data or other server errors
+
+**Note:**
+- The endpoint processes all rows and returns a summary
+- Errors are collected and returned in the response (does not fail the entire operation)
+- Each successful addition awards `+1` point to the candidate
+- The `addedBy` field is set to the Institute Admin who triggered the import
+
+---
+
+### Update Event
+
+**PATCH** `/event/:id`
+
+**Requires:** Institute Admin authentication
+
+**URL Parameters:**
+- `id`: Event MongoDB ObjectId
+
+**Request Body (partial, any subset of fields):**
+```json
+{
+  "location": "Online",
+  "dateTime": "2025-01-20T10:00:00.000Z",
+  "attendance": [
+    "692727ac12025d432235f620",
+    "692727ac12025d432235f621"
+  ],
+  "status": "held"
+}
+```
+
+**Note:** When updating `location`:
+- For `lecture` or `journal` events → must be `"Dept"` or `"Online"`
+- For `conf` events → can be any string
+
+**Note:** When updating `dateTime`:
+- Must be a valid ISO 8601 format date string
+- **Business Rule**: Cannot change the date of an event that has already been held (status = `"held"`)
+- If attempting to change dateTime of a "held" event → returns `400 Bad Request` with error message
+
+**Error Response (400 Bad Request) - DateTime Validation Failed:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Cannot change date of an event that has already been held"
+}
+```
+
+**Note:** When `attendance` is updated:
+- If `attendance` has entries → status automatically becomes `"held"`
+- If `attendance` is empty and event `dateTime` has passed → status automatically becomes `"canceled"`
+- Status can also be manually updated independently
+
+**Status Change Validation:**
+The backend enforces strict rules when changing event status based on attendance:
+
+1. **Events with Unflagged Candidates**: If an event has at least one candidate with `flagged === false`, the status **must** be `"held"`. Cannot be changed to `"booked"` or `"canceled"`.
+
+2. **Events with No Candidates**: If an event has no candidates in attendance, the status can only be `"booked"` or `"canceled"`. Cannot be changed to `"held"`.
+
+3. **Events with Only Flagged Candidates**: If an event has candidates but all are flagged (`flagged === true`), all statuses are allowed (`"booked"`, `"held"`, or `"canceled"`).
+
+**Error Response (400 Bad Request) - Status Validation Failed:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Cannot change status: Event has unflagged candidates and must remain as 'held'"
+}
+```
+
+OR
+
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Cannot change status to 'held': Event has no candidates. Allowed statuses: 'booked' or 'canceled'"
+}
+```
+
+**Automatic Status Updates After Attendance Changes:**
+- **After unflagging a candidate**: If the event has unflagged candidates and status is `"booked"` or `"canceled"`, status is automatically changed to `"held"`.
+
+Backend re-validates:
+- Event `type` / `lecture` / `journal` / `conf` consistency
+- Existence of referenced lecture/journal/conf
+- Presenter role (Supervisor vs Candidate) based on type
+- Location value based on type (see Location Rules above)
+- Attendance IDs format
+- Status enum value (`"booked" | "held" | "canceled"`)
+- **Status change based on attendance rules (see above)**
+
+**Location Update Validation:**
+- If updating `location` for `lecture` or `journal` → must be `"Dept"` or `"Online"`
+- If updating `location` for `conf` → can be any string
+- If updating `type` and `location` together → location is validated against the new type
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439020",
+    "type": "lecture",
+    "lecture": "507f1f77bcf86cd799439011",
+    "dateTime": "2025-01-20T10:00:00.000Z",
+    "location": "Online",
+    "presenter": {
+      "_id": "6905e9dc719e11e810a0453c",
+      "fullName": "Dr. John Doe",
+      "email": "john.doe@example.com",
+      "phoneNum": "+1234567890",
+      "role": "supervisor",
+      "position": "Professor",
+      "canValidate": true
+    },
+    "attendance": [
+      {
+        "candidate": {
+          "_id": "692727ac12025d432235f620",
+          "fullName": "Candidate A",
+          "email": "candA@example.com",
+          "phoneNum": "+1234567890",
+          "regNum": "REG123456",
+          "role": "candidate"
+        },
+        "addedBy": "6905e9dc719e11e810a0453c",
+        "addedByRole": "instituteAdmin",
+        "flagged": false,
+        "points": 1,
+        "createdAt": "2025-01-20T09:00:00.000Z"
+      },
+      {
+        "candidate": {
+          "_id": "692727ac12025d432235f621",
+          "fullName": "Candidate B",
+          "email": "candB@example.com",
+          "phoneNum": "+1234567891",
+          "regNum": "REG123457",
+          "role": "candidate"
+        },
+        "addedBy": "692727ac12025d432235f621",
+        "addedByRole": "candidate",
+        "flagged": false,
+        "points": 1,
+        "createdAt": "2025-01-20T09:30:00.000Z"
+      }
+    ],
+    "status": "held"
+  }
+}
+```
+
+---
+
+### Delete Event
+
+**DELETE** `/event/:id`
+
+**Requires:** Institute Admin authentication
+
+**URL Parameters:**
+- `id`: Event MongoDB ObjectId
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Event deleted successfully"
+  }
+}
+```
+
+**Error (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Event not found"
+}
+```
+
+
 ### Get Arab Procedure Data
 **GET** `/external`
 
@@ -4412,6 +5749,38 @@ All PDF reports include MedScribe branding in the header:
 
 ---
 
+#### Canceled Events Report
+**GET** `/instituteAdmin/reports/events/canceled/pdf`
+
+**Requires:** Institute Admin authentication
+
+**Description:** Generates a PDF report containing **all events with `status = "canceled"`**, including key details (date/time, type, resource title + google UID, presenter, location, attendance count). Supports optional date filtering on `event.dateTime`.
+
+**Query Parameters (optional):**
+- `startDate` (ISO 8601): Include events with `dateTime >= startDate`
+- `endDate` (ISO 8601): Include events with `dateTime <= endDate`
+
+**PDF Content:**
+1. **Detailed list only** (no summary/table):
+   - Note line: **Canceled events: X / Total events: Y** for the selected period
+   - Date/Time + Type + Resource title
+   - Status, Location
+   - **Resource UID**
+   - Presenter name + presenter email
+   - Attendance count
+
+**Response (200 OK):**
+- PDF file with Content-Type: `application/pdf`
+- Filename format: `canceled-events-<timestamp>.pdf`
+
+**Error Responses:**
+- **400 Bad Request**: Invalid `startDate/endDate` (must be ISO 8601) or `endDate < startDate`
+- **401 Unauthorized**: Missing or invalid JWT token
+- **403 Forbidden**: User is not an Institute Admin
+- **500 Internal Server Error**: PDF generation failed
+
+---
+
 ## Authentication Requirements Summary
 
 | Endpoint Category | Authentication Required | Role Required |
@@ -4437,19 +5806,27 @@ All PDF reports include MedScribe branding in the header:
 | `/instituteAdmin/reports/supervisors/submission-count` | Yes | Institute Admin |
 | `/instituteAdmin/reports/candidates/submission-count` | Yes | Institute Admin |
 | `/instituteAdmin/reports/calendar-procedures/hospital-analysis` | Yes | Institute Admin |
+| `/instituteAdmin/reports/events/canceled/pdf` | Yes | Institute Admin |
 | `/instituteAdmin/candidates/:candidateId/submissions` | Yes | Institute Admin |
 | `/instituteAdmin/candidates/:candidateId/submissions/:submissionId` | Yes | Institute Admin |
+| `/event/*` | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) / Candidate (GET /candidate/points) |
+| `/lecture` (GET) | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) |
+| `/lecture/*` (POST, PATCH, DELETE, GET by ID) | Yes | Super Admin only |
+| `/journal` (GET) | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) |
+| `/journal/*` (POST, PATCH, DELETE, GET by ID) | Yes | Super Admin only |
+| `/conf` (GET) | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) |
+| `/conf/*` (POST, PATCH, DELETE, GET by ID) | Yes | Super Admin only |
 | `/supervisor/*` | Partial | Super Admin (POST, POST /resetPasswords) / Supervisor (GET /candidates) / No (GET, PUT, DELETE) |
 | `/sub/*` | Partial | Super Admin (POST /postAllFromExternal, PATCH /updateStatusFromExternal) / Candidate (GET /candidate/stats, GET /candidate/submissions, GET /candidate/submissions/:id) / Supervisor (GET /supervisor/submissions, GET /supervisor/submissions/:id, GET /supervisor/candidates/:candidateId/submissions, PATCH /supervisor/submissions/:id/review) / Institute Admin (POST /submissions/:id/generateSurgicalNotes) / No (others) |
 | `/sub/candidate/stats` | Yes | Candidate |
 | `/sub/candidate/submissions` | Yes | Candidate |
 | `/sub/supervisor/submissions` | Yes | Supervisor |
 | `/sub/supervisor/submissions/:id` | Yes | Supervisor |
-| `/sub/supervisor/submissions/:id/review` | Yes | Supervisor |
+| `/sub/supervisor/submissions/:id/review` | Yes | Validator Supervisor only (canValidate: true) |
 | `/sub/supervisor/candidates/:candidateId/submissions` | Yes | Supervisor |
 | `/sub/submissions/:id/generateSurgicalNotes` | Yes | Institute Admin or Super Admin |
 | `/supervisor/candidates` | Yes | Supervisor |
-| `/cand/*` | Partial | Super Admin (POST /createCandsFromExternal) / No (others) |
+| `/cand/*` | Partial | Super Admin (POST /createCandsFromExternal, PATCH /:id/resetPassword) / No (others) |
 | `/calSurg/*` | Partial | Super Admin (POST /postAllFromExternal) / No (GET) |
 | `/diagnosis/*` | Partial | Super Admin (POST /post) / No (POST /postBulk, GET) |
 | `/procCpt/*` | Partial | Super Admin (POST /postAllFromExternal, POST /upsert) / No (GET) |
@@ -4528,9 +5905,19 @@ if (json.status === "success") {
 
 2. **Token Access**: Decode the JWT token from cookies to access `_id`, `email`, and `role` without additional API calls.
 
-3. **Token Refresh**: Implement token refresh logic if tokens expire. Check the `exp` claim in the JWT.
+3. **Token Expiration**: 
+   - **Access Token**: Expires based on `SERVER_TOKEN_EXPIRETIME` environment variable (default: 3600 seconds / 1 hour)
+   - **Refresh Token**: Expires based on `SERVER_REFRESH_TOKEN_EXPIRETIME` environment variable (default: 604800 seconds / 7 days)
+   - When a token expires, the backend **automatically clears** both `auth_token` and `refresh_token` cookies
+   - The backend returns specific error codes: `TOKEN_EXPIRED` or `REFRESH_TOKEN_EXPIRED`
+   - **Frontend must detect these error codes and clear Redux state, then redirect to login**
 
-4. **Cookie Handling**: Ensure `credentials: "include"` is set in fetch requests to send cookies:
+4. **Token Refresh**: 
+   - Use the `/auth/refresh` endpoint to refresh an expired access token using a valid refresh token
+   - If the refresh token is also expired, the user must log in again
+   - Check the `exp` claim in the JWT to proactively refresh before expiration (optional)
+
+5. **Cookie Handling**: Ensure `credentials: "include"` is set in fetch requests to send cookies:
    ```typescript
    fetch('/api/endpoint', {
      credentials: 'include',
@@ -4540,17 +5927,45 @@ if (json.status === "success") {
    })
    ```
 
+6. **Token Expiration Handling**:
+   - When receiving a `401 Unauthorized` response, check for `code: "TOKEN_EXPIRED"` or `code: "REFRESH_TOKEN_EXPIRED"`
+   - When these codes are detected, clear all frontend authentication state (Redux, localStorage, etc.)
+   - Redirect the user to the login page
+   - The backend has already cleared the cookies, so no manual cookie clearing is needed
+
 ### Error Handling
 
 1. **Always check `status` field**: Use `json.status === "success"` to determine success
 2. **HTTP Status Codes**: Check `json.statusCode` for specific error types:
    - `401`: Unauthorized - redirect to login
+     - **Token Expired**: Check for `code: "TOKEN_EXPIRED"` or `code: "REFRESH_TOKEN_EXPIRED"` in the response
+     - When token expiration is detected, clear all frontend auth state and redirect to login
+     - The backend automatically clears cookies, so no manual cookie clearing is needed
    - `403`: Forbidden - insufficient permissions
    - `404`: Not Found - resource doesn't exist
    - `400`: Bad Request - validation errors (check `error` array)
    - `500`: Internal Server Error - server issue
 
-3. **Validation Errors**: When `statusCode === 400`, the `error` field contains an array of validation errors:
+3. **Token Expiration Detection**:
+   ```typescript
+   if (response.status === 401) {
+     const error = await response.json();
+     
+     // Check for token expiration (these responses are NOT wrapped in standard format)
+     if (error.code === "TOKEN_EXPIRED" || error.code === "REFRESH_TOKEN_EXPIRED") {
+       // Clear Redux state
+       dispatch(clearAuthState());
+       
+       // Clear local storage if used
+       localStorage.clear();
+       
+       // Redirect to login
+       window.location.href = '/login';
+     }
+   }
+   ```
+
+4. **Validation Errors**: When `statusCode === 400`, the `error` field contains an array of validation errors:
    ```typescript
    if (json.statusCode === 400) {
      json.error.forEach(err => {

@@ -15,6 +15,10 @@ import { AuthRouter } from "../auth/auth.router";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
 import { InstituteAdminRouter } from "../instituteAdmin/instituteAdmin.router";
 import { ReportsRouter } from "../reports/reports.router";
+import { LectureRouter } from "../lecture/lecture.router";
+import { JournalRouter } from "../journal/journal.router";
+import { ConfRouter } from "../conf/conf.router";
+import { EventRouter } from "../event/event.router";
 
 export function addRoutes(app: Application) {
   const hospitalRouter: HospitalRouter =
@@ -62,6 +66,18 @@ export function addRoutes(app: Application) {
   const reportsRouter: ReportsRouter =
     container.get<ReportsRouter>(ReportsRouter);
 
+  const lectureRouter: LectureRouter =
+    container.get<LectureRouter>(LectureRouter);
+
+  const journalRouter: JournalRouter =
+    container.get<JournalRouter>(JournalRouter);
+
+  const confRouter: ConfRouter =
+    container.get<ConfRouter>(ConfRouter);
+
+  const eventRouter: EventRouter =
+    container.get<EventRouter>(EventRouter);
+
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
@@ -77,6 +93,10 @@ export function addRoutes(app: Application) {
   app.use("/superAdmin", superAdminRouter.router);
   app.use("/instituteAdmin", instituteAdminRouter.router);
   app.use("/instituteAdmin/reports", reportsRouter.router);
+  app.use("/lecture", lectureRouter.router);
+  app.use("/journal", journalRouter.router);
+  app.use("/conf", confRouter.router);
+  app.use("/event", eventRouter.router);
 
   return app;
 }
