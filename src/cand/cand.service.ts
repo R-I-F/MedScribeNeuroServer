@@ -1,17 +1,21 @@
 import { inject, injectable } from "inversify";
 import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
 import { ICand, ICandDoc } from "./cand.interface";
-import { Model } from "mongoose";
-import { Cand } from "./cand.schema";
+import { AppDataSource } from "../config/database.config";
+import { CandidateEntity } from "./cand.mDbSchema";
 import { CandProvider } from "./cand.provider";
 import bcryptjs from "bcryptjs";
+import { Repository, In } from "typeorm";
 
-injectable();
+@injectable()
 export class CandService {
-  constructor(@inject(CandProvider) private candProvider: CandProvider) {}
-  private candModel: Model<ICand> = Cand;
+  private candRepository: Repository<CandidateEntity>;
 
-  public async createBulkCands(candData: ICand[]) {
+  constructor(@inject(CandProvider) private candProvider: CandProvider) {
+    this.candRepository = AppDataSource.getRepository(CandidateEntity);
+  }
+
+  public async createBulkCands(candData: ICand[]): Promise<ICandDoc[]> | never {
     try {
       // Hash passwords before inserting (for bulk operations from external sources)
       const hashedCandData = await Promise.all(
@@ -23,8 +27,9 @@ export class CandService {
           return cand;
         })
       );
-      const newCandArr: ICandDoc[] = await this.candModel.insertMany(hashedCandData);
-      return newCandArr;
+      const newCands = this.candRepository.create(hashedCandData);
+      const savedCands = await this.candRepository.save(newCands);
+      return savedCands as unknown as ICandDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -38,19 +43,22 @@ export class CandService {
     return newCandArr;
   }
 
-  public async createCand(candData: ICand): Promise<ICandDoc | never> {
+  public async createCand(candData: ICand): Promise<ICandDoc> | never {
     try {
-      const newCand: ICandDoc = await new this.candModel(candData).save();
-      return newCand;
+      const newCand = this.candRepository.create(candData);
+      const savedCand = await this.candRepository.save(newCand);
+      return savedCand as unknown as ICandDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCandByEmail(email: string): Promise<ICandDoc | null> {
+  public async getCandByEmail(email: string): Promise<ICandDoc | null> | never {
     try {
-      const cand = await this.candModel.findOne({ email });
-      return cand;
+      const cand = await this.candRepository.findOne({
+        where: { email },
+      });
+      return cand as unknown as ICandDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -62,7 +70,10 @@ export class CandService {
       if (uniqueEmails.length === 0) {
         return [];
       }
-      return await this.candModel.find({ email: { $in: uniqueEmails } }).exec();
+      const candidates = await this.candRepository.find({
+        where: { email: In(uniqueEmails) },
+      });
+      return candidates as unknown as ICandDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -70,10 +81,10 @@ export class CandService {
 
   public async resetAllCandidatePasswords(
     hashedPassword: string
-  ): Promise<number> {
+  ): Promise<number> | never {
     try {
-      const result = await this.candModel.updateMany({}, { $set: { password: hashedPassword } });
-      return (result as { modifiedCount?: number }).modifiedCount ?? 0;
+      const result = await this.candRepository.update({}, { password: hashedPassword });
+      return result.affected ?? 0;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -81,8 +92,10 @@ export class CandService {
 
   public async getAllCandidates(): Promise<ICandDoc[]> | never {
     try {
-      const allCandidates = await this.candModel.find({}).exec();
-      return allCandidates;
+      const allCandidates = await this.candRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return allCandidates as unknown as ICandDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -90,7 +103,15 @@ export class CandService {
 
   public async getCandById(id: string): Promise<ICandDoc | null> | never {
     try {
-      return await this.candModel.findById(id).exec();
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid candidate ID format");
+      }
+      const candidate = await this.candRepository.findOne({
+        where: { id },
+      });
+      return candidate as unknown as ICandDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -98,14 +119,27 @@ export class CandService {
 
   public async resetCandidatePassword(id: string): Promise<ICandDoc | null> | never {
     try {
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid candidate ID format");
+      }
       const defaultPassword = "MEDscrobe01$";
       const hashedPassword = await bcryptjs.hash(defaultPassword, 10);
-      const updatedCandidate = await this.candModel.findByIdAndUpdate(
-        id,
-        { $set: { password: hashedPassword } },
-        { new: true }
-      ).exec();
-      return updatedCandidate;
+      await this.candRepository.update(id, { password: hashedPassword });
+      const updatedCandidate = await this.candRepository.findOne({
+        where: { id },
+      });
+      return updatedCandidate as unknown as ICandDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async deleteCand(id: string): Promise<boolean> | never {
+    try {
+      const result = await this.candRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }

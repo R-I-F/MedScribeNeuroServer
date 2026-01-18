@@ -2,17 +2,18 @@ import { Request, Response } from "express";
 import { matchedData } from "express-validator";
 import { inject, injectable } from "inversify";
 import { CandService } from "./cand.service";
+import { ICandDoc } from "./cand.interface";
 
-injectable()
-export class CandController{
+@injectable()
+export class CandController {
   constructor(
     @inject(CandService) private candService: CandService
-  ){}
+  ) {}
 
   public async handlePostCandFromExternal(
     req: Request, 
     res: Response
-  ){
+  ): Promise<ICandDoc[] | any> | never {
     const validatedReq = matchedData(req);
     try {
       return await this.candService.createCandsFromExternal(validatedReq);
@@ -24,8 +25,10 @@ export class CandController{
   public async handleResetCandidatePassword(
     req: Request,
     res: Response
-  ) {
+  ): Promise<{ message: string }> | never {
     const validatedReq = matchedData(req) as { id: string };
+    // Merge id from params into validatedReq
+    validatedReq.id = req.params.id;
     try {
       const candidate = await this.candService.getCandById(validatedReq.id);
       if (!candidate) {
@@ -36,6 +39,22 @@ export class CandController{
         throw new Error("Failed to reset candidate password");
       }
       return { message: "Candidate password reset successfully" };
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleDeleteCand(
+    req: Request,
+    res: Response
+  ): Promise<{ message: string }> | never {
+    const id = req.params.id;
+    try {
+      const deleted = await this.candService.deleteCand(id);
+      if (!deleted) {
+        throw new Error("Candidate not found");
+      }
+      return { message: "Candidate deleted successfully" };
     } catch (err: any) {
       throw new Error(err);
     }

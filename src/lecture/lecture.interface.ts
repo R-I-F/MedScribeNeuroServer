@@ -1,4 +1,4 @@
-import { Types, Document } from "mongoose";
+// Removed: import { Types, Document } from "mongoose"; - Now using UUIDs directly for MariaDB
 
 export type TLectureLevel = "msc" | "md";
 
@@ -9,8 +9,10 @@ export interface ILecture {
   level: TLectureLevel;
 }
 
-export interface ILectureDoc extends ILecture, Document {
-  _id: Types.ObjectId;
+export interface ILectureDoc extends ILecture {
+  id: string; // UUID (replaces _id from MongoDB Document)
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Derived types for input operations

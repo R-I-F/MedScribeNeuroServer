@@ -1,13 +1,12 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const updateConfValidator = checkSchema({
   id: {
     in: ["params"],
     notEmpty: true,
     errorMessage: "conf ID is required.",
-    isMongoId: {
-      errorMessage: "conf ID must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   confTitle: {
@@ -23,9 +22,7 @@ export const updateConfValidator = checkSchema({
   presenter: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "presenter must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   date: {

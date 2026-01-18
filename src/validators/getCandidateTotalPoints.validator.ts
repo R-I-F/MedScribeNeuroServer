@@ -1,13 +1,12 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const getCandidateTotalPointsValidator = checkSchema({
   candidateId: {
     in: ["params"],
     notEmpty: true,
     errorMessage: "candidate ID is required.",
-    isMongoId: {
-      errorMessage: "candidate ID must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
 });

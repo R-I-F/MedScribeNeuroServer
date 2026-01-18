@@ -11,9 +11,12 @@ export class PasswordResetController {
 
   public async handleChangePassword(req: Request, res: Response) {
     try {
-      const jwtPayload = res.locals.jwt as { _id: string; email: string; role: string } | undefined;
+      const jwtPayload = res.locals.jwt as { id?: string; _id?: string; email: string; role: string } | undefined;
       
-      if (!jwtPayload || !jwtPayload._id || !jwtPayload.role) {
+      // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
+      const userId = jwtPayload?.id || jwtPayload?._id;
+      
+      if (!jwtPayload || !userId || !jwtPayload.role) {
         throw new Error("Unauthorized: No user ID found in token");
       }
 
@@ -24,7 +27,7 @@ export class PasswordResetController {
       };
 
       await this.passwordResetProvider.changePassword(
-        jwtPayload._id,
+        userId,
         jwtPayload.role as any,
         validatedData.newPassword,
         validatedData.currentPassword,
@@ -41,15 +44,18 @@ export class PasswordResetController {
 
   public async handleRequestPasswordChangeEmail(req: Request, res: Response) {
     try {
-      const jwtPayload = res.locals.jwt as { _id: string; email: string; role: string } | undefined;
+      const jwtPayload = res.locals.jwt as { id?: string; _id?: string; email: string; role: string } | undefined;
       
-      if (!jwtPayload || !jwtPayload._id || !jwtPayload.role || !jwtPayload.email) {
+      // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
+      const userId = jwtPayload?.id || jwtPayload?._id;
+      
+      if (!jwtPayload || !userId || !jwtPayload.role || !jwtPayload.email) {
         throw new Error("Unauthorized: No user information found in token");
       }
 
       // Get user details to get fullName
       const userData = await this.passwordResetProvider.findUserByIdAndRole(
-        jwtPayload._id,
+        userId,
         jwtPayload.role as any
       );
 
@@ -60,7 +66,7 @@ export class PasswordResetController {
       const userName = (userData as any).fullName || "User";
 
       await this.passwordResetProvider.createPasswordChangeToken(
-        jwtPayload._id,
+        userId,
         jwtPayload.role as any,
         jwtPayload.email,
         userName

@@ -1,13 +1,12 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const deleteLectureValidator = checkSchema({
   id: {
     in: ["params"],
     notEmpty: true,
     errorMessage: "lecture ID is required.",
-    isMongoId: {
-      errorMessage: "lecture ID must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
 });

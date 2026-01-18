@@ -1,14 +1,13 @@
-import { Types } from "mongoose";
-import { IProcCptDoc } from "../procCpt/procCpt.interface";
-
 export interface IMainDiag {
   title: string;
-  procs: Types.ObjectId[];
-  diagnosis: Types.ObjectId[];
+  procs: string[]; // Array of UUIDs (replaces Types.ObjectId[])
+  diagnosis: string[]; // Array of UUIDs (replaces Types.ObjectId[])
 }
 
 export interface IMainDiagDoc extends IMainDiag {
-  _id: Types.ObjectId;
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Input interface for creating mainDiag with codes

@@ -1,15 +1,17 @@
-import { Types, Document } from "mongoose";
+// Removed: import { Types, Document } from "mongoose"; - Now using UUIDs directly for MariaDB
 
 export type TEventType = "lecture" | "journal" | "conf";
 export type TEventStatus = "booked" | "held" | "canceled";
 export type TAttendanceAddedByRole = "instituteAdmin" | "supervisor" | "candidate";
 
 export interface IEventAttendance {
-  candidate: Types.ObjectId; // Ref: Candidate
-  addedBy: Types.ObjectId; // Ref: User (who added the candidate)
+  id?: string; // UUID (for populated records)
+  candidateId: string; // UUID ref: Candidate
+  candidate?: any; // Populated candidate when relations loaded
+  addedBy: string; // UUID ref: User (who added the candidate)
   addedByRole: TAttendanceAddedByRole; // Role of who added
   flagged: boolean; // Default: false
-  flaggedBy?: Types.ObjectId; // Ref: User (who flagged, if flagged)
+  flaggedBy?: string; // UUID ref: User (who flagged, if flagged)
   flaggedAt?: Date; // When flagged
   points: number; // +1 if not flagged, -2 if flagged
   createdAt: Date; // When added to attendance
@@ -19,9 +21,9 @@ export interface IEvent {
   type: TEventType;
 
   // One of these will be set based on type
-  lecture?: Types.ObjectId; // Ref: Lecture
-  journal?: Types.ObjectId; // Ref: Journal
-  conf?: Types.ObjectId; // Ref: Conf
+  lectureId?: string; // UUID ref: Lecture
+  journalId?: string; // UUID ref: Journal
+  confId?: string; // UUID ref: Conf
 
   dateTime: Date;
   // Location rules:
@@ -30,12 +32,9 @@ export interface IEvent {
   location: string;
 
   // Presenter:
-  // - For lecture & conf: MUST be a valid Supervisor ObjectId
-  // - For journal: MUST be a valid Candidate ObjectId
-  presenter: Types.ObjectId;
-
-  // Attendance: array of attendance records with metadata
-  attendance: IEventAttendance[];
+  // - For lecture & conf: MUST be a valid Supervisor UUID
+  // - For journal: MUST be a valid Candidate UUID
+  presenterId: string;
 
   // Status: tracks event lifecycle
   // - "booked": Event is created/scheduled (default)
@@ -44,13 +43,36 @@ export interface IEvent {
   status: TEventStatus;
 }
 
-export interface IEventDoc extends IEvent, Document {
-  _id: Types.ObjectId;
+export interface IEventDoc extends IEvent {
+  id: string; // UUID (replaces _id from MongoDB Document)
+  createdAt: Date;
+  updatedAt: Date;
+  
+  // Populated relations
+  lecture?: any; // Populated lecture when relations loaded
+  journal?: any; // Populated journal when relations loaded
+  conf?: any; // Populated conf when relations loaded
+  presenter?: any; // Populated presenter (Supervisor or Candidate) when loaded
+  attendance?: IEventAttendance[]; // Populated attendance when relations loaded
 }
 
 // Derived types for input operations
-export type IEventInput = IEvent;
-export type IEventUpdateInput = Partial<IEvent> & { id: string };
+// Accept legacy field names for backward compatibility
+export type IEventInput = Omit<IEvent, 'lectureId' | 'journalId' | 'confId' | 'presenterId'> & {
+  lecture?: string; // Accept 'lecture' in input, convert to 'lectureId' internally
+  journal?: string; // Accept 'journal' in input, convert to 'journalId' internally
+  conf?: string; // Accept 'conf' in input, convert to 'confId' internally
+  presenter: string; // Accept 'presenter' in input, convert to 'presenterId' internally
+  attendance?: IEventAttendance[]; // Optional attendance for create
+};
+export type IEventUpdateInput = Partial<Omit<IEvent, 'lectureId' | 'journalId' | 'confId' | 'presenterId'>> & {
+  id: string;
+  lecture?: string; // Accept 'lecture' in update
+  journal?: string; // Accept 'journal' in update
+  conf?: string; // Accept 'conf' in update
+  presenter?: string; // Accept 'presenter' in update
+  attendance?: IEventAttendance[]; // Optional attendance for update
+};
 
 // Attendance management input types
 export interface IAddAttendanceInput {

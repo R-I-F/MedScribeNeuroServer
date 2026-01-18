@@ -1,16 +1,22 @@
 import { inject, injectable } from "inversify";
 import { IJournal, IJournalDoc } from "./journal.interface";
-import { Model, Types } from "mongoose";
-import { Journal } from "./journal.schema";
+import { AppDataSource } from "../config/database.config";
+import { JournalEntity } from "./journal.mDbSchema";
+import { Repository, In, Not } from "typeorm";
 
 @injectable()
 export class JournalService {
-  private journalModel: Model<IJournal> = Journal;
+  private journalRepository: Repository<JournalEntity>;
+
+  constructor() {
+    this.journalRepository = AppDataSource.getRepository(JournalEntity);
+  }
 
   public async createJournal(journalData: IJournal): Promise<IJournalDoc> | never {
     try {
-      const newJournal = new this.journalModel(journalData);
-      return await newJournal.save();
+      const newJournal = this.journalRepository.create(journalData);
+      const savedJournal = await this.journalRepository.save(newJournal);
+      return savedJournal as unknown as IJournalDoc;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -18,7 +24,10 @@ export class JournalService {
 
   public async getAllJournals(): Promise<IJournalDoc[]> | never {
     try {
-      return await this.journalModel.find().exec();
+      const allJournals = await this.journalRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return allJournals as unknown as IJournalDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -26,10 +35,15 @@ export class JournalService {
 
   public async getJournalById(id: string): Promise<IJournalDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid journal ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid journal ID format");
       }
-      return await this.journalModel.findById(id).exec();
+      const journal = await this.journalRepository.findOne({
+        where: { id },
+      });
+      return journal as unknown as IJournalDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -37,10 +51,16 @@ export class JournalService {
 
   public async updateJournal(id: string, updateData: Partial<IJournal>): Promise<IJournalDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid journal ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid journal ID format");
       }
-      return await this.journalModel.findByIdAndUpdate(id, updateData, { new: true }).exec();
+      await this.journalRepository.update(id, updateData);
+      const updatedJournal = await this.journalRepository.findOne({
+        where: { id },
+      });
+      return updatedJournal as unknown as IJournalDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -48,11 +68,13 @@ export class JournalService {
 
   public async deleteJournal(id: string): Promise<boolean> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid journal ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid journal ID format");
       }
-      const result = await this.journalModel.findByIdAndDelete(id).exec();
-      return result !== null;
+      const result = await this.journalRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -60,11 +82,18 @@ export class JournalService {
 
   public async findByGoogleUid(google_uid: string, excludeId?: string): Promise<IJournalDoc | null> | never {
     try {
-      const query: any = { google_uid };
-      if (excludeId && Types.ObjectId.isValid(excludeId)) {
-        query._id = { $ne: excludeId };
+      const where: any = { google_uid };
+      if (excludeId) {
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(excludeId)) {
+          where.id = Not(excludeId);
+        }
       }
-      return await this.journalModel.findOne(query).exec();
+      const journal = await this.journalRepository.findOne({
+        where,
+      });
+      return journal as unknown as IJournalDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -72,7 +101,9 @@ export class JournalService {
 
   public async createBulkJournals(journalDataArray: IJournal[]): Promise<IJournalDoc[]> | never {
     try {
-      return await this.journalModel.insertMany(journalDataArray);
+      const journals = this.journalRepository.create(journalDataArray);
+      const savedJournals = await this.journalRepository.save(journals);
+      return savedJournals as unknown as IJournalDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -84,10 +115,12 @@ export class JournalService {
       if (uniqueUids.length === 0) {
         return [];
       }
-      return await this.journalModel.find({ google_uid: { $in: uniqueUids } }).exec();
+      const journals = await this.journalRepository.find({
+        where: { google_uid: In(uniqueUids) },
+      });
+      return journals as unknown as IJournalDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 }
-

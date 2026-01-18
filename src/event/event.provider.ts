@@ -21,7 +21,7 @@ import { SupervisorService } from "../supervisor/supervisor.service";
 import { CandService } from "../cand/cand.service";
 import { ExternalService } from "../externalService/external.service";
 import { IGoogleRes } from "../externalService/interfaces/IGoogleRes.interface";
-import { Types } from "mongoose";
+// Removed: import { Types } from "mongoose"; - Now using UUIDs directly for MariaDB
 
 @injectable()
 export class EventProvider {
@@ -43,27 +43,36 @@ export class EventProvider {
       await this.validateReferencedEntityExists(validatedReq);
 
       // Validate presenter based on type
-      await this.validatePresenter(validatedReq.type, validatedReq.presenter.toString());
+      const presenterId = validatedReq.presenter;
+      await this.validatePresenter(validatedReq.type, presenterId);
 
       // Validate location based on type
       this.validateLocation(validatedReq.type, validatedReq.location);
 
       // Process attendance: convert to new structure if needed
       const processedAttendance: IEventAttendance[] = validatedReq.attendance
-        ? validatedReq.attendance.map((att) => {
-            // If it's already in new format, use it
-            if (typeof att === "object" && "candidate" in att) {
-              return att as IEventAttendance;
+        ? validatedReq.attendance.map((att: any) => {
+            // Handle both old format (candidate: ObjectId) and new format (candidateId: string)
+            let candidateId: string;
+            if (typeof att === "object" && "candidateId" in att) {
+              candidateId = att.candidateId;
+            } else if (typeof att === "object" && "candidate" in att) {
+              // Old format: candidate is ObjectId or string
+              candidateId = typeof att.candidate === "string" ? att.candidate : (att.candidate?.toString() || String(att.candidate));
+            } else {
+              // Legacy: att is just an ID string or ObjectId
+              candidateId = typeof att === "string" ? att : (att?.toString() || String(att));
             }
-            // If it's old format (just ObjectId), convert it
-            // Note: This handles backward compatibility
+
             return {
-              candidate: att as Types.ObjectId,
-              addedBy: new Types.ObjectId(), // Will be set by admin creating event
-              addedByRole: "instituteAdmin",
-              flagged: false,
-              points: 1,
-              createdAt: new Date(),
+              candidateId,
+              addedBy: (att as any).addedBy || "", // Will be set by admin creating event
+              addedByRole: (att as any).addedByRole || "instituteAdmin",
+              flagged: (att as any).flagged || false,
+              flaggedBy: (att as any).flaggedBy,
+              flaggedAt: (att as any).flaggedAt,
+              points: (att as any).points || 1,
+              createdAt: (att as any).createdAt || new Date(),
             };
           })
         : [];
@@ -71,19 +80,25 @@ export class EventProvider {
       // Validate attendance candidate IDs
       this.validateAttendanceIds(processedAttendance);
 
+      // Convert input fields to UUID-based fields
       const processedData: IEvent = {
         type: validatedReq.type,
-        lecture: validatedReq.lecture,
-        journal: validatedReq.journal,
-        conf: validatedReq.conf,
+        lectureId: validatedReq.lecture,
+        journalId: validatedReq.journal,
+        confId: validatedReq.conf,
         dateTime: validatedReq.dateTime,
         location: this.utilService.stringToLowerCaseTrim(validatedReq.location),
-        presenter: validatedReq.presenter,
-        attendance: processedAttendance,
+        presenterId: presenterId,
         status: validatedReq.status || "booked", // Default to "booked" when created
       };
 
-      return await this.eventService.createEvent(processedData);
+      // Add attendance as separate property for service to handle
+      const eventWithAttendance = {
+        ...processedData,
+        attendance: processedAttendance,
+      } as any;
+
+      return await this.eventService.createEvent(eventWithAttendance);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -117,16 +132,17 @@ export class EventProvider {
         updateFields.type = updateData.type;
       }
 
+      // Convert input fields to UUID-based fields
       if (updateData.lecture !== undefined) {
-        updateFields.lecture = updateData.lecture;
+        updateFields.lectureId = updateData.lecture;
       }
 
       if (updateData.journal !== undefined) {
-        updateFields.journal = updateData.journal;
+        updateFields.journalId = updateData.journal;
       }
 
       if (updateData.conf !== undefined) {
-        updateFields.conf = updateData.conf;
+        updateFields.confId = updateData.conf;
       }
 
       // Get current event state for validation (needed for status and dateTime validation)
@@ -166,30 +182,40 @@ export class EventProvider {
       }
 
       if (updateData.presenter !== undefined) {
-        updateFields.presenter = updateData.presenter;
+        updateFields.presenterId = updateData.presenter;
       }
 
       let processedAttendance: IEventAttendance[] | undefined;
 
       if (updateData.attendance !== undefined) {
         // Process attendance: convert to new structure if needed
-        processedAttendance = updateData.attendance.map((att) => {
-          // If it's already in new format, use it
-          if (typeof att === "object" && "candidate" in att) {
-            return att as IEventAttendance;
+        processedAttendance = updateData.attendance.map((att: any) => {
+          // Handle both old format (candidate: ObjectId) and new format (candidateId: string)
+          let candidateId: string;
+          if (typeof att === "object" && "candidateId" in att) {
+            candidateId = att.candidateId;
+          } else if (typeof att === "object" && "candidate" in att) {
+            // Old format: candidate is ObjectId or string
+            candidateId = typeof att.candidate === "string" ? att.candidate : (att.candidate?.toString() || String(att.candidate));
+          } else {
+            // Legacy: att is just an ID string or ObjectId
+            candidateId = typeof att === "string" ? att : (att?.toString() || String(att));
           }
-          // If it's old format (just ObjectId), convert it
+
           return {
-            candidate: att as Types.ObjectId,
-            addedBy: new Types.ObjectId(), // Will be set by admin updating event
-            addedByRole: "instituteAdmin",
-            flagged: false,
-            points: 1,
-            createdAt: new Date(),
+            candidateId,
+            addedBy: (att as any).addedBy || "",
+            addedByRole: (att as any).addedByRole || "instituteAdmin",
+            flagged: (att as any).flagged || false,
+            flaggedBy: (att as any).flaggedBy,
+            flaggedAt: (att as any).flaggedAt,
+            points: (att as any).points || 1,
+            createdAt: (att as any).createdAt || new Date(),
           };
         });
         
-        updateFields.attendance = processedAttendance;
+        // Add attendance as separate property for service to handle
+        (updateFields as any).attendance = processedAttendance;
         
         // Auto-update status based on attendance:
         // - If attendance has attendees, set status to "held"
@@ -210,23 +236,30 @@ export class EventProvider {
         // Use updated attendance if provided, otherwise use current attendance
         const attendanceToCheck = processedAttendance !== undefined
           ? processedAttendance
-          : currentEvent.attendance;
+          : (currentEvent.attendance || []);
         
         this.validateStatusChange(attendanceToCheck, updateData.status);
         updateFields.status = updateData.status;
       }
 
       // If type or refs or presenter/attendance changed, re-validate
+      const currentState = await this.buildCurrentEventState(id);
       const merged: IEventInput = {
-        ...(await this.buildCurrentEventState(id)),
+        ...currentState,
         ...updateFields,
+        // Convert UUID fields back to input format for validation
+        lecture: (updateFields.lectureId !== undefined ? updateFields.lectureId : currentState.lecture) || undefined,
+        journal: (updateFields.journalId !== undefined ? updateFields.journalId : currentState.journal) || undefined,
+        conf: (updateFields.confId !== undefined ? updateFields.confId : currentState.conf) || undefined,
+        presenter: (updateFields.presenterId !== undefined ? updateFields.presenterId : currentState.presenter) || "",
       };
 
       this.validateTypeAndRefs(merged);
       await this.validateReferencedEntityExists(merged);
-      await this.validatePresenter(merged.type, merged.presenter.toString());
+      await this.validatePresenter(merged.type, merged.presenter);
       this.validateLocation(merged.type, merged.location);
-      this.validateAttendanceIds(merged.attendance);
+      const attendanceToValidate = processedAttendance !== undefined ? processedAttendance : (currentState.attendance || []);
+      this.validateAttendanceIds(attendanceToValidate);
 
       return await this.eventService.updateEvent(id, updateFields);
     } catch (err: any) {
@@ -248,11 +281,12 @@ export class EventProvider {
         throw new Error("Candidate not found");
       }
 
-      // Validate IDs
-      if (!Types.ObjectId.isValid(validatedReq.eventId) || 
-          !Types.ObjectId.isValid(validatedReq.candidateId) ||
-          !Types.ObjectId.isValid(validatedReq.addedBy)) {
-        throw new Error("Invalid event, candidate, or user ID");
+      // Validate UUID formats
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(validatedReq.eventId) || 
+          !uuidRegex.test(validatedReq.candidateId) ||
+          !uuidRegex.test(validatedReq.addedBy)) {
+        throw new Error("Invalid event, candidate, or user ID format");
       }
 
       const result = await this.eventService.addAttendance(
@@ -278,10 +312,11 @@ export class EventProvider {
         throw new Error("Event not found");
       }
 
-      // Validate IDs
-      if (!Types.ObjectId.isValid(validatedReq.eventId) || 
-          !Types.ObjectId.isValid(validatedReq.candidateId)) {
-        throw new Error("Invalid event or candidate ID");
+      // Validate UUID formats
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(validatedReq.eventId) || 
+          !uuidRegex.test(validatedReq.candidateId)) {
+        throw new Error("Invalid event or candidate ID format");
       }
 
       const result = await this.eventService.removeAttendance(
@@ -305,11 +340,12 @@ export class EventProvider {
         throw new Error("Event not found");
       }
 
-      // Validate IDs
-      if (!Types.ObjectId.isValid(validatedReq.eventId) || 
-          !Types.ObjectId.isValid(validatedReq.candidateId) ||
-          !Types.ObjectId.isValid(validatedReq.flaggedBy)) {
-        throw new Error("Invalid event, candidate, or user ID");
+      // Validate UUID formats
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(validatedReq.eventId) || 
+          !uuidRegex.test(validatedReq.candidateId) ||
+          !uuidRegex.test(validatedReq.flaggedBy)) {
+        throw new Error("Invalid event, candidate, or user ID format");
       }
 
       const result = await this.eventService.flagAttendance(
@@ -334,10 +370,11 @@ export class EventProvider {
         throw new Error("Event not found");
       }
 
-      // Validate IDs
-      if (!Types.ObjectId.isValid(validatedReq.eventId) || 
-          !Types.ObjectId.isValid(validatedReq.candidateId)) {
-        throw new Error("Invalid event or candidate ID");
+      // Validate UUID formats
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(validatedReq.eventId) || 
+          !uuidRegex.test(validatedReq.candidateId)) {
+        throw new Error("Invalid event or candidate ID format");
       }
 
       const result = await this.eventService.unflagAttendance(
@@ -355,8 +392,9 @@ export class EventProvider {
 
   public async getCandidateTotalPoints(candidateId: string): Promise<number> | never {
     try {
-      if (!Types.ObjectId.isValid(candidateId)) {
-        throw new Error("Invalid candidate ID");
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(candidateId)) {
+        throw new Error("Invalid candidate ID format");
       }
 
       return await this.eventService.getCandidateTotalPoints(candidateId);
@@ -382,13 +420,13 @@ export class EventProvider {
 
     return {
       type: existing.type,
-      lecture: existing.lecture,
-      journal: existing.journal,
-      conf: existing.conf,
+      lecture: existing.lectureId || undefined,
+      journal: existing.journalId || undefined,
+      conf: existing.confId || undefined,
       dateTime: existing.dateTime,
       location: existing.location,
-      presenter: existing.presenter,
-      attendance: existing.attendance,
+      presenter: existing.presenterId,
+      attendance: existing.attendance || [],
       status: existing.status,
     };
   }
@@ -420,28 +458,29 @@ export class EventProvider {
   private async validateReferencedEntityExists(event: IEventInput): Promise<void> {
     const { type, lecture, journal, conf } = event;
 
-    if (type === "lecture" && lecture) {
-      const lectureDoc = await this.lectureService.getLectureById(
-        lecture.toString()
-      );
+    // Convert to string for validation
+    const lectureId = lecture ? (typeof lecture === "string" ? lecture : String(lecture)) : null;
+    const journalId = journal ? (typeof journal === "string" ? journal : String(journal)) : null;
+    const confId = conf ? (typeof conf === "string" ? conf : String(conf)) : null;
+
+    if (type === "lecture" && lectureId) {
+      const lectureDoc = await this.lectureService.getLectureById(lectureId);
       if (!lectureDoc) {
-        throw new Error(`Lecture with ID '${lecture}' not found`);
+        throw new Error(`Lecture with ID '${lectureId}' not found`);
       }
     }
 
-    if (type === "journal" && journal) {
-      const journalDoc = await this.journalService.getJournalById(
-        journal.toString()
-      );
+    if (type === "journal" && journalId) {
+      const journalDoc = await this.journalService.getJournalById(journalId);
       if (!journalDoc) {
-        throw new Error(`Journal with ID '${journal}' not found`);
+        throw new Error(`Journal with ID '${journalId}' not found`);
       }
     }
 
-    if (type === "conf" && conf) {
-      const confDoc = await this.confService.getConfById(conf.toString());
+    if (type === "conf" && confId) {
+      const confDoc = await this.confService.getConfById(confId);
       if (!confDoc) {
-        throw new Error(`Conf with ID '${conf}' not found`);
+        throw new Error(`Conf with ID '${confId}' not found`);
       }
     }
   }
@@ -451,7 +490,8 @@ export class EventProvider {
     type: TEventType,
     presenterId: string
   ): Promise<void> {
-    if (!Types.ObjectId.isValid(presenterId)) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(presenterId)) {
       throw new Error("Invalid presenter ID format");
     }
 
@@ -474,11 +514,14 @@ export class EventProvider {
   private validateAttendanceIds(attendance: IEventAttendance[]): void {
     if (!attendance) return;
 
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
     for (const att of attendance) {
-      if (!att.candidate || !Types.ObjectId.isValid(att.candidate.toString())) {
-        throw new Error(`Invalid candidate ID in attendance: '${att.candidate}'`);
+      const candidateId = att.candidateId || (att as any).candidate?.toString() || (att as any).candidate;
+      if (!candidateId || !uuidRegex.test(candidateId)) {
+        throw new Error(`Invalid candidate ID in attendance: '${candidateId}'`);
       }
-      if (!att.addedBy || !Types.ObjectId.isValid(att.addedBy.toString())) {
+      if (!att.addedBy || !uuidRegex.test(att.addedBy)) {
         throw new Error(`Invalid addedBy ID in attendance: '${att.addedBy}'`);
       }
       if (!["instituteAdmin", "supervisor", "candidate"].includes(att.addedByRole)) {
@@ -678,33 +721,42 @@ export class EventProvider {
       }
 
       // Step 4: Collect all resource IDs (lecture/journal/conf) to batch fetch events
-      const lectureIds: Types.ObjectId[] = [];
-      const journalIds: Types.ObjectId[] = [];
-      const confIds: Types.ObjectId[] = [];
+      // Handle both id (MariaDB UUID) and _id (MongoDB ObjectId) formats
+      const lectureIds: (string | any)[] = [];
+      const journalIds: (string | any)[] = [];
+      const confIds: (string | any)[] = [];
       const uidToResourceType = new Map<string, "lecture" | "journal" | "conf">();
 
       for (const parsedRow of parsedRows) {
         const uid = parsedRow.uid;
         if (lectureMap.has(uid)) {
           const lecture = lectureMap.get(uid);
-          lectureIds.push(lecture._id);
+          // Handle both id (MariaDB) and _id (MongoDB) formats
+          const lectureId = (lecture as any).id || (lecture as any)._id?.toString() || (lecture as any)._id;
+          lectureIds.push(lectureId);
           uidToResourceType.set(uid, "lecture");
         } else if (journalMap.has(uid)) {
           const journal = journalMap.get(uid);
-          journalIds.push(journal._id);
+          // Handle both id (MariaDB) and _id (MongoDB) formats
+          const journalId = (journal as any).id || (journal as any)._id?.toString() || (journal as any)._id;
+          journalIds.push(journalId);
           uidToResourceType.set(uid, "journal");
         } else if (confMap.has(uid)) {
           const conf = confMap.get(uid);
-          confIds.push(conf._id);
+          // Handle both id (MariaDB) and _id (MongoDB) formats
+          const confId = (conf as any).id || (conf as any)._id?.toString() || (conf as any)._id;
+          confIds.push(confId);
           uidToResourceType.set(uid, "conf");
         }
       }
 
       // Step 5: Batch fetch all events
+      // Note: Event service still uses MongoDB ObjectId, so we cast arrays as any[]
+      // This will be fixed when event service is migrated to MariaDB
       const eventMap = await this.eventService.findEventsByLectureJournalConfIds(
-        lectureIds,
-        journalIds,
-        confIds
+        lectureIds as any,
+        journalIds as any,
+        confIds as any
       );
 
       // Step 6: Process all rows using the maps
@@ -740,13 +792,19 @@ export class EventProvider {
           }
 
           // Get resource ID
-          let resourceId: Types.ObjectId | null = null;
+          let resourceId: string | null = null;
           if (resourceType === "lecture") {
-            resourceId = lectureMap.get(uid)?._id;
+            const lecture = lectureMap.get(uid);
+            // Handle both id (MariaDB) and _id (MongoDB) formats
+            resourceId = lecture ? ((lecture as any).id || (lecture as any)._id?.toString() || (lecture as any)._id) : null;
           } else if (resourceType === "journal") {
-            resourceId = journalMap.get(uid)?._id;
+            const journal = journalMap.get(uid);
+            // Handle both id (MariaDB) and _id (MongoDB) formats
+            resourceId = journal ? ((journal as any).id || (journal as any)._id?.toString() || (journal as any)._id) : null;
           } else if (resourceType === "conf") {
-            resourceId = confMap.get(uid)?._id;
+            const conf = confMap.get(uid);
+            // Handle both id (MariaDB) and _id (MongoDB) formats
+            resourceId = conf ? ((conf as any).id || (conf as any)._id?.toString() || (conf as any)._id) : null;
           }
 
           if (!resourceId) {
@@ -774,9 +832,13 @@ export class EventProvider {
           }
 
           // Check if candidate is already in attendance
-          const isAlreadyRegistered = event.attendance.some(
-            (att) => att.candidate.toString() === candidate._id.toString()
-          );
+          const candidateIdStr = (candidate as any).id || (candidate as any)._id?.toString() || String((candidate as any)._id || candidate);
+          const isAlreadyRegistered = (event.attendance || []).some(
+            (att: any) => {
+              const attCandidateId = att.candidateId || (att.candidate as any)?.id || (att.candidate as any)?._id?.toString() || (att.candidate?.toString?.() || String(att.candidate));
+              return attCandidateId === candidateIdStr;
+            }
+          ) || false;
 
           if (isAlreadyRegistered) {
             skipped++;
@@ -790,9 +852,10 @@ export class EventProvider {
           }
 
           // Add candidate to attendance
+          const eventIdStr = (event as any).id || (event as any)._id?.toString() || event.toString();
           await this.eventService.addAttendance(
-            event._id.toString(),
-            candidate._id.toString(),
+            eventIdStr,
+            candidateIdStr,
             addedBy,
             addedByRole
           );

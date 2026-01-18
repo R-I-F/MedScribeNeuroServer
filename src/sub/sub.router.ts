@@ -248,5 +248,23 @@ export class SubRouter {
         }
       }
     )
+
+    this.router.delete(
+      "/:id",
+      extractJWT,
+      requireSuperAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          const resp = await this.subController.handleDeleteSub(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          if (err.message.includes("not found")) {
+            res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    )
   }
 }

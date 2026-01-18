@@ -1,5 +1,4 @@
 import { User } from "../user/user.interface";
-import { Types } from "mongoose";
 import { TUserRole } from "../types/role.types";
 
 export interface IInstituteAdmin extends User {
@@ -10,6 +9,11 @@ export interface IInstituteAdmin extends User {
 }
 
 export interface IInstituteAdminDoc extends IInstituteAdmin {
-  _id: Types.ObjectId;
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
 
+// Input types for create/update operations
+export type IInstituteAdminInput = IInstituteAdmin;
+export type IInstituteAdminUpdateInput = Partial<IInstituteAdmin> & { id: string };

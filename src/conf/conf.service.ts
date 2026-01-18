@@ -1,16 +1,22 @@
 import { inject, injectable } from "inversify";
 import { IConf, IConfDoc } from "./conf.interface";
-import { Model, Types } from "mongoose";
-import { Conf } from "./conf.schema";
+import { AppDataSource } from "../config/database.config";
+import { ConfEntity } from "./conf.mDbSchema";
+import { Repository, In, Not } from "typeorm";
 
 @injectable()
 export class ConfService {
-  private confModel: Model<IConf> = Conf;
+  private confRepository: Repository<ConfEntity>;
+
+  constructor() {
+    this.confRepository = AppDataSource.getRepository(ConfEntity);
+  }
 
   public async createConf(confData: IConf): Promise<IConfDoc> | never {
     try {
-      const newConf = new this.confModel(confData);
-      return await newConf.save();
+      const newConf = this.confRepository.create(confData);
+      const savedConf = await this.confRepository.save(newConf);
+      return savedConf as unknown as IConfDoc;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -18,7 +24,11 @@ export class ConfService {
 
   public async getAllConfs(): Promise<IConfDoc[]> | never {
     try {
-      return await this.confModel.find().populate('presenter').exec();
+      const allConfs = await this.confRepository.find({
+        relations: ["presenter"],
+        order: { createdAt: "DESC" },
+      });
+      return allConfs as unknown as IConfDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -26,10 +36,16 @@ export class ConfService {
 
   public async getConfById(id: string): Promise<IConfDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid conf ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid conf ID format");
       }
-      return await this.confModel.findById(id).populate('presenter').exec();
+      const conf = await this.confRepository.findOne({
+        where: { id },
+        relations: ["presenter"],
+      });
+      return conf as unknown as IConfDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -37,10 +53,17 @@ export class ConfService {
 
   public async updateConf(id: string, updateData: Partial<IConf>): Promise<IConfDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid conf ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid conf ID format");
       }
-      return await this.confModel.findByIdAndUpdate(id, updateData, { new: true }).populate('presenter').exec();
+      await this.confRepository.update(id, updateData);
+      const updatedConf = await this.confRepository.findOne({
+        where: { id },
+        relations: ["presenter"],
+      });
+      return updatedConf as unknown as IConfDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -48,11 +71,13 @@ export class ConfService {
 
   public async deleteConf(id: string): Promise<boolean> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid conf ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid conf ID format");
       }
-      const result = await this.confModel.findByIdAndDelete(id).exec();
-      return result !== null;
+      const result = await this.confRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -60,11 +85,18 @@ export class ConfService {
 
   public async findByGoogleUid(google_uid: string, excludeId?: string): Promise<IConfDoc | null> | never {
     try {
-      const query: any = { google_uid };
-      if (excludeId && Types.ObjectId.isValid(excludeId)) {
-        query._id = { $ne: excludeId };
+      const where: any = { google_uid };
+      if (excludeId) {
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(excludeId)) {
+          where.id = Not(excludeId);
+        }
       }
-      return await this.confModel.findOne(query).exec();
+      const conf = await this.confRepository.findOne({
+        where,
+      });
+      return conf as unknown as IConfDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -76,10 +108,12 @@ export class ConfService {
       if (uniqueUids.length === 0) {
         return [];
       }
-      return await this.confModel.find({ google_uid: { $in: uniqueUids } }).exec();
+      const confs = await this.confRepository.find({
+        where: { google_uid: In(uniqueUids) },
+      });
+      return confs as unknown as IConfDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 }
-

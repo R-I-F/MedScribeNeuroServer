@@ -1,5 +1,3 @@
-import { Types } from "mongoose";
-
 export interface IArabProc {
   title: string;
   alphaCode: string;
@@ -8,5 +6,11 @@ export interface IArabProc {
 }
 
 export interface IArabProcDoc extends IArabProc {
-  _id: Types.ObjectId
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+// Input types for create/update operations
+export type IArabProcInput = IArabProc;
+export type IArabProcUpdateInput = Partial<IArabProc> & { id: string };

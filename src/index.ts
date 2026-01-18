@@ -1,6 +1,5 @@
 import "reflect-metadata";
 import express, { Express, Request, Response } from "express";
-import mongoose from "mongoose";
 import * as dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -30,23 +29,13 @@ app.use(cookieParser()); // Parse httpOnly cookies
 app.use(responseFormatter);
 
 async function bootstrap() {
-  if (!process.env.MONGODB_URL) {
-    throw new Error("Cannot read environment variables");
-    process.exit(1);
-  }
-
   try {
     // Initialize MariaDB connection
     validateDatabaseConfig();
     await initializeDatabase();
-
-    // Initialize MongoDB connection (keep for now during migration)
-    await mongoose.connect(process.env.MONGODB_URL, {
-      dbName: process.env.DB_NAME,
-    });
     
     app.listen(port, () => {
-      // Server started successfully
+      console.log(`✅ Server running on port ${port}`);
     });
   } catch (err) {
     console.error("Bootstrap error:", err);

@@ -1,13 +1,12 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const reviewSubmissionValidator = checkSchema({
   id: {
     in: ["params"],
     notEmpty: true,
     errorMessage: "Submission ID is required.",
-    isMongoId: {
-      errorMessage: "Submission ID must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   status: {

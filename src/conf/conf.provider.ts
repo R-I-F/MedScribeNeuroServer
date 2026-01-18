@@ -3,7 +3,7 @@ import { ConfService } from "./conf.service";
 import { IConf, IConfDoc, IConfInput, IConfUpdateInput } from "./conf.interface";
 import { UtilService } from "../utils/utils.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
-import { Types } from "mongoose";
+// Removed: import { Types } from "mongoose"; - Now using UUIDs directly for MariaDB
 
 @injectable()
 export class ConfProvider {
@@ -15,14 +15,17 @@ export class ConfProvider {
 
   public async createConf(validatedReq: IConfInput): Promise<IConfDoc> | never {
     try {
+      // Handle both 'presenter' (input) and 'presenterId' (internal) formats
+      const presenterId = (validatedReq as any).presenter || (validatedReq as any).presenterId;
+      
       // Validate that presenter is a valid Supervisor
-      await this.validateSupervisorExists(validatedReq.presenter.toString());
+      await this.validateSupervisorExists(presenterId);
 
       // Business logic: Process and transform data
       const processedData: IConf = {
         confTitle: this.utilService.stringToLowerCaseTrim(validatedReq.confTitle),
         google_uid: validatedReq.google_uid.trim(),
-        presenter: validatedReq.presenter,
+        presenterId: presenterId, // Use presenterId for MariaDB
         date: validatedReq.date,
       };
 
@@ -69,10 +72,12 @@ export class ConfProvider {
         await this.checkForDuplicateGoogleUid(updateFields.google_uid, id);
       }
 
-      if (updateData.presenter !== undefined) {
+      // Handle both 'presenter' (input) and 'presenterId' (internal) formats
+      if (updateData.presenter !== undefined || (updateData as any).presenterId !== undefined) {
+        const presenterId = updateData.presenter || (updateData as any).presenterId;
         // Validate that presenter is a valid Supervisor
-        await this.validateSupervisorExists(updateData.presenter.toString());
-        updateFields.presenter = updateData.presenter;
+        await this.validateSupervisorExists(presenterId);
+        updateFields.presenterId = presenterId; // Use presenterId for MariaDB
       }
 
       if (updateData.date !== undefined) {
@@ -94,13 +99,15 @@ export class ConfProvider {
   }
 
   /**
-   * Validates that the presenter ObjectId exists in the Supervisor collection
-   * @param presenterId - Supervisor ObjectId to validate
+   * Validates that the presenter UUID exists in the Supervisor collection
+   * @param presenterId - Supervisor UUID to validate
    * @throws Error if supervisor not found
    */
   private async validateSupervisorExists(presenterId: string): Promise<void> {
     try {
-      if (!Types.ObjectId.isValid(presenterId)) {
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(presenterId)) {
         throw new Error("Invalid presenter ID format");
       }
 

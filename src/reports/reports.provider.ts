@@ -329,7 +329,8 @@ export class ReportsProvider {
             const stats: ISupervisorSubmissionStats[] = [];
             for (const supervisor of filteredSupervisors) {
               const submissions = await this.reportsService.getSubmissionsBySupervisorId(
-                supervisor._id.toString(),
+                // Use id (UUID) instead of _id (supervisors now use MariaDB)
+                (supervisor as any).id || (supervisor as any)._id?.toString() || supervisor.id,
                 filters.startDate,
                 filters.endDate
               );
@@ -430,8 +431,10 @@ export class ReportsProvider {
             // Calculate stats for each candidate
             const stats: ICandidateSubmissionStats[] = [];
             for (const candidate of filteredCandidates) {
+              // Use id (UUID) instead of _id (candidates now use MariaDB)
+              const candidateId = (candidate as any).id || (candidate as any)._id?.toString() || candidate.id;
               const submissions = await this.reportsService.getSubmissionsByCandidateId(
-                candidate._id.toString(),
+                candidateId,
                 filters.startDate,
                 filters.endDate
               );
@@ -548,7 +551,8 @@ export class ReportsProvider {
 
               if (!hospital || !arabProc) return;
 
-              const hospitalId = hospital._id.toString();
+              // Handle both id (MariaDB) and _id (MongoDB) formats
+              const hospitalId = (hospital as any).id || (hospital as any)._id?.toString() || (hospital as any)._id;
               const key = filters.groupBy === "alphaCode" 
                 ? arabProc.alphaCode 
                 : arabProc.title;
@@ -599,10 +603,16 @@ export class ReportsProvider {
 
             // List hospitals with no procedures
             const hospitalsWithProceduresIds = new Set(
-              hospitalsWithProcedures.map((e) => e.hospital._id.toString())
+              hospitalsWithProcedures.map((e) => {
+                const hId = (e.hospital as any).id || (e.hospital as any)._id?.toString() || (e.hospital as any)._id;
+                return hId ? hId.toString() : '';
+              })
             );
             const hospitalsWithNoProcedures = hospitals.filter(
-              (h) => !hospitalsWithProceduresIds.has(h._id.toString())
+              (h) => {
+                const hId = (h as any).id || (h as any)._id?.toString() || (h as any)._id;
+                return hId ? !hospitalsWithProceduresIds.has(hId.toString()) : true;
+              }
             );
 
             if (hospitalsWithNoProcedures.length > 0) {

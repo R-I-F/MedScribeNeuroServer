@@ -66,8 +66,8 @@ export class EventController {
     const validatedReq = matchedData(req) as IAddAttendanceInput;
     validatedReq.eventId = req.params.eventId;
     validatedReq.candidateId = req.params.candidateId;
-    // Get user info from JWT
-    validatedReq.addedBy = res.locals.jwt._id;
+    // Get user info from JWT (use id if available, fallback to _id for backward compatibility)
+    validatedReq.addedBy = res.locals.jwt.id || res.locals.jwt._id;
     validatedReq.addedByRole = res.locals.jwt.role === "candidate" ? "candidate" : 
                                res.locals.jwt.role === "supervisor" ? "supervisor" : 
                                "instituteAdmin";
@@ -93,7 +93,7 @@ export class EventController {
     const validatedReq = matchedData(req) as IFlagAttendanceInput;
     validatedReq.eventId = req.params.eventId;
     validatedReq.candidateId = req.params.candidateId;
-    validatedReq.flaggedBy = res.locals.jwt._id;
+    validatedReq.flaggedBy = res.locals.jwt.id || res.locals.jwt._id;
     try {
       return await this.eventProvider.flagAttendance(validatedReq);
     } catch (err: any) {
@@ -125,8 +125,8 @@ export class EventController {
 
   public async handleGetMyPoints(req: Request, res: Response) {
     try {
-      // Get candidate ID from JWT token
-      const candidateId = res.locals.jwt._id;
+      // Get candidate ID from JWT token (use id if available, fallback to _id for backward compatibility)
+      const candidateId = res.locals.jwt.id || res.locals.jwt._id;
       if (!candidateId) {
         throw new Error("Unauthorized: No candidate ID found in token");
       }

@@ -147,10 +147,22 @@ export class DiagnosisProvider {
   }
 
   /**
+   * Deletes a diagnosis by ID
+   * @param id - Diagnosis ID to delete
+   * @returns Promise<boolean>
+   */
+  public async deleteDiagnosis(id: string): Promise<boolean> {
+    try {
+      return await this.diagnosisService.deleteDiagnosis(id);
+    } catch (error: any) {
+      throw new Error(`Failed to delete diagnosis: ${error.message}`);
+    }
+  }
+
+  /**
    * Additional provider methods can be added here as needed
    * Examples:
    * - updateDiagnosis()
-   * - deleteDiagnosis()
    * - getDiagnosisById()
    * - searchDiagnoses()
    */

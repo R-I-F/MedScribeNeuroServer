@@ -1,4 +1,5 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const createEventValidator = checkSchema({
   type: {
@@ -14,25 +15,19 @@ export const createEventValidator = checkSchema({
   lecture: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "lecture must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   journal: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "journal must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   conf: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "conf must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   dateTime: {
@@ -54,9 +49,7 @@ export const createEventValidator = checkSchema({
     in: ["body"],
     notEmpty: true,
     errorMessage: "presenter is required.",
-    isMongoId: {
-      errorMessage: "presenter must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   attendance: {
@@ -69,9 +62,7 @@ export const createEventValidator = checkSchema({
   "attendance.*": {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "each attendance entry must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   status: {

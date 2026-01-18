@@ -121,8 +121,8 @@ export class AuthController {
         throw new Error("UnAuthorized: wrong password");
       }
 
-      // Extract _id from user document (convert ObjectId to string)
-      const userId = user._id ? user._id.toString() : null;
+      // Extract id from user document (support both UUID 'id' and ObjectId '_id' for backward compatibility)
+      const userId = user.id || (user._id ? user._id.toString() : null);
       if (!userId) {
         throw new Error("User ID not found");
       }
@@ -130,13 +130,15 @@ export class AuthController {
       const accessToken = await this.authTokenService.sign({ 
         email: user.email,
         role: userRole,
-        _id: userId
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId  // Keep '_id' for backward compatibility with existing tokens
       });
 
       const refreshToken = await this.authTokenService.signRefreshToken({
         email: user.email,
         role: userRole,
-        _id: userId
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId  // Keep '_id' for backward compatibility with existing tokens
       });
 
       // Log successful login (logging happens in router to access request info)
@@ -178,10 +180,11 @@ export class AuthController {
    */
   public async refreshToken(refreshTokenPayload: any) {
     try {
-      // Extract user info from refresh token payload
-      const { email, role, _id } = refreshTokenPayload;
+      // Extract user info from refresh token payload (support both 'id' and '_id')
+      const { email, role, id, _id } = refreshTokenPayload;
+      const userId = id || _id;
 
-      if (!email || !role || !_id) {
+      if (!email || !role || !userId) {
         throw new Error("Invalid refresh token payload");
       }
 
@@ -189,14 +192,16 @@ export class AuthController {
       const newAccessToken = await this.authTokenService.sign({
         email,
         role: role as UserRole,
-        _id,
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId  // Keep '_id' for backward compatibility
       });
 
       // Optionally generate new refresh token (token rotation)
       const newRefreshToken = await this.authTokenService.signRefreshToken({
         email,
         role: role as UserRole,
-        _id,
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId  // Keep '_id' for backward compatibility
       });
 
       return {
@@ -216,6 +221,10 @@ export class AuthController {
         : candidate;
 
     const { password, __v, ...rest } = candidateObject;
+    // Ensure 'id' is present (convert _id to id if needed for backward compatibility)
+    if (rest._id && !rest.id) {
+      rest.id = typeof rest._id === "string" ? rest._id : rest._id.toString();
+    }
     return rest;
   }
 
@@ -224,6 +233,10 @@ export class AuthController {
       ? user.toObject() 
       : user;
     const { password, __v, ...rest } = userObject;
+    // Ensure 'id' is present (convert _id to id if needed for backward compatibility)
+    if (rest._id && !rest.id) {
+      rest.id = typeof rest._id === "string" ? rest._id : rest._id.toString();
+    }
     return rest;
   }
 }

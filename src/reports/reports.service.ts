@@ -10,10 +10,7 @@ import { SupervisorService } from "../supervisor/supervisor.service";
 import { CandService } from "../cand/cand.service";
 import { CalSurgService } from "../calSurg/calSurg.service";
 import { HospitalService } from "../hospital/hospital.service";
-import { Model, Types } from "mongoose";
-import { Event } from "../event/event.schema";
-import { Supervisor } from "../supervisor/supervisor.schema";
-import { Cand } from "../cand/cand.schema";
+import { EventService } from "../event/event.service";
 import { ICanceledEventReportItem } from "./reports.interface";
 
 @injectable()
@@ -23,10 +20,9 @@ export class ReportsService {
     @inject(SupervisorService) private supervisorService: SupervisorService,
     @inject(CandService) private candService: CandService,
     @inject(CalSurgService) private calSurgService: CalSurgService,
-    @inject(HospitalService) private hospitalService: HospitalService
+    @inject(HospitalService) private hospitalService: HospitalService,
+    @inject(EventService) private eventService: EventService
   ) {}
-
-  private eventModel: Model<any> = Event;
 
   public async getAllSupervisors(): Promise<ISupervisorDoc[]> | never {
     try {
@@ -123,74 +119,85 @@ export class ReportsService {
     endDate?: Date
   ): Promise<ICanceledEventReportItem[]> | never {
     try {
-      const dateQuery: any = {};
-      if (startDate) dateQuery.$gte = startDate;
-      if (endDate) dateQuery.$lte = endDate;
+      // Get all events using EventService (now using MariaDB)
+      const allEvents = await this.eventService.getAllEvents();
 
-      const query: any = { status: "canceled" };
-      if (Object.keys(dateQuery).length > 0) {
-        query.dateTime = dateQuery;
+      // Filter for canceled events and date range
+      let events: IEventDoc[] = allEvents.filter((e) => e.status === "canceled");
+
+      if (startDate || endDate) {
+        events = events.filter((e) => {
+          const eventDate = e.dateTime;
+          if (!eventDate) return false;
+          if (startDate && eventDate < startDate) return false;
+          if (endDate && eventDate > endDate) return false;
+          return true;
+        });
       }
 
-      const events: IEventDoc[] = await this.eventModel
-        .find(query)
-        .sort({ dateTime: -1 })
-        .populate("lecture")
-        .populate("journal")
-        .populate("conf")
-        .populate("attendance.candidate")
-        .exec();
+      // Sort by dateTime descending
+      events.sort((a, b) => {
+        const dateA = a.dateTime?.getTime() || 0;
+        const dateB = b.dateTime?.getTime() || 0;
+        return dateB - dateA;
+      });
 
       if (!events || events.length === 0) {
         return [];
       }
 
       // Batch fetch presenters (supervisors for lecture/conf, candidates for journal)
-      const supervisorPresenterIds: Types.ObjectId[] = [];
-      const candidatePresenterIds: Types.ObjectId[] = [];
+      const supervisorPresenterIds: string[] = [];
+      const candidatePresenterIds: string[] = [];
 
       for (const e of events) {
-        const presenterId = e.presenter as any;
+        const presenterId = e.presenterId || (e.presenter as any)?.id || (e.presenter as any)?._id;
         if (!presenterId) continue;
+        const presenterIdStr = typeof presenterId === "string" ? presenterId : presenterId.toString();
         if (e.type === "lecture" || e.type === "conf") {
-          if (Types.ObjectId.isValid(presenterId)) supervisorPresenterIds.push(presenterId);
+          supervisorPresenterIds.push(presenterIdStr);
         } else if (e.type === "journal") {
-          if (Types.ObjectId.isValid(presenterId)) candidatePresenterIds.push(presenterId);
+          candidatePresenterIds.push(presenterIdStr);
         }
       }
 
-      const uniqueSupervisorIds = [...new Set(supervisorPresenterIds.map((id) => id.toString()))].map(
-        (id) => new Types.ObjectId(id)
-      );
-      const uniqueCandidateIds = [...new Set(candidatePresenterIds.map((id) => id.toString()))].map(
-        (id) => new Types.ObjectId(id)
-      );
+      const uniqueSupervisorIds = [...new Set(supervisorPresenterIds)];
+      const uniqueCandidateIds = [...new Set(candidatePresenterIds)];
 
+      // Fetch supervisors and candidates (using MariaDB UUIDs)
       const [supervisors, candidates] = await Promise.all([
         uniqueSupervisorIds.length
-          ? Supervisor.find({ _id: { $in: uniqueSupervisorIds } })
-              .select("_id fullName email role position canValidate")
-              .exec()
+          ? this.supervisorService.getAllSupervisors().then(allSupervisors => 
+              allSupervisors.filter((s: any) => {
+                const sId = s.id || s._id?.toString();
+                return uniqueSupervisorIds.includes(sId);
+              })
+            )
           : Promise.resolve([]),
         uniqueCandidateIds.length
-          ? Cand.find({ _id: { $in: uniqueCandidateIds } })
-              .select("_id fullName email role regNum")
-              .exec()
+          ? this.candService.getAllCandidates().then(allCandidates =>
+              allCandidates.filter((c: any) => {
+                const cId = c.id || c._id?.toString();
+                return uniqueCandidateIds.includes(cId);
+              })
+            )
           : Promise.resolve([]),
       ]);
 
       const supervisorMap = new Map<string, any>();
       for (const s of supervisors as any[]) {
-        supervisorMap.set(s._id.toString(), s);
+        const sId = s.id || s._id?.toString();
+        supervisorMap.set(sId, s);
       }
 
       const candidateMap = new Map<string, any>();
       for (const c of candidates as any[]) {
-        candidateMap.set(c._id.toString(), c);
+        const cId = c.id || c._id?.toString();
+        candidateMap.set(cId, c);
       }
 
       const items: ICanceledEventReportItem[] = events.map((e: any) => {
-        const presenterId = e.presenter?.toString();
+        const presenterId = e.presenterId || e.presenter?.id || e.presenter?._id?.toString() || e.presenter?.toString();
         const presenter =
           e.type === "journal" ? candidateMap.get(presenterId) : supervisorMap.get(presenterId);
 
@@ -234,19 +241,22 @@ export class ReportsService {
     endDate?: Date
   ): Promise<{ total: number; canceled: number }> | never {
     try {
-      const dateQuery: any = {};
-      if (startDate) dateQuery.$gte = startDate;
-      if (endDate) dateQuery.$lte = endDate;
+      // Get all events using EventService (now using MariaDB)
+      let allEvents = await this.eventService.getAllEvents();
 
-      const baseQuery: any = {};
-      if (Object.keys(dateQuery).length > 0) {
-        baseQuery.dateTime = dateQuery;
+      // Filter by date range if provided
+      if (startDate || endDate) {
+        allEvents = allEvents.filter((e) => {
+          const eventDate = e.dateTime;
+          if (!eventDate) return false;
+          if (startDate && eventDate < startDate) return false;
+          if (endDate && eventDate > endDate) return false;
+          return true;
+        });
       }
 
-      const [total, canceled] = await Promise.all([
-        this.eventModel.countDocuments(baseQuery).exec(),
-        this.eventModel.countDocuments({ ...baseQuery, status: "canceled" }).exec(),
-      ]);
+      const total = allEvents.length;
+      const canceled = allEvents.filter((e) => e.status === "canceled").length;
 
       return { total, canceled };
     } catch (err: any) {

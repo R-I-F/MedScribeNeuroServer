@@ -1,4 +1,4 @@
-import { Types, Document } from "mongoose";
+// Removed: import { Types, Document } from "mongoose"; - Now using UUIDs directly for MariaDB
 
 export interface IJournal {
   journalTitle: string;
@@ -6,8 +6,10 @@ export interface IJournal {
   google_uid: string;
 }
 
-export interface IJournalDoc extends IJournal, Document {
-  _id: Types.ObjectId;
+export interface IJournalDoc extends IJournal {
+  id: string; // UUID (replaces _id from MongoDB Document)
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 // Derived types for input operations

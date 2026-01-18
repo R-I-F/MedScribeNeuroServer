@@ -38,14 +38,21 @@ export class AuthTokenService {
     console.log(`  Refresh Token: ${refreshExpireTimeInSeconds} seconds`);
   }
 
-  public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; _id: string }): Promise<string> {
+  public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string }): Promise<string> {
     try {
+      // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
+      const userId = user.id || user._id || "";
+      if (!userId) {
+        throw new Error("User ID is required");
+      }
+
       return await new Promise<string>((resolve, reject) => {
         jwt.sign(
           {
             email: user.email,
             role: user.role,
-            _id: user._id,
+            id: userId,      // New format (UUID)
+            _id: userId,     // Keep for backward compatibility
           },
           config.server.token.secret,
           this.signOptions,
@@ -67,14 +74,21 @@ export class AuthTokenService {
   /**
    * Sign a refresh token with longer expiration
    */
-  public async signRefreshToken(user: Pick<IAuth, "email"> & { role: TUserRole; _id: string }): Promise<string> {
+  public async signRefreshToken(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string }): Promise<string> {
     try {
+      // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
+      const userId = user.id || user._id || "";
+      if (!userId) {
+        throw new Error("User ID is required");
+      }
+
       return await new Promise<string>((resolve, reject) => {
         jwt.sign(
           {
             email: user.email,
             role: user.role,
-            _id: user._id,
+            id: userId,      // New format (UUID)
+            _id: userId,     // Keep for backward compatibility
             type: "refresh",
           },
           config.server.refreshToken.secret,

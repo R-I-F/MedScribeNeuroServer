@@ -1,18 +1,51 @@
 import { injectable, inject } from "inversify";
 import { ISub, ISubDoc } from "./interfaces/sub.interface";
-import { Model } from "mongoose";
-import { Sub } from "./sub.schema";
+import { AppDataSource } from "../config/database.config";
+import { SubmissionEntity } from "./sub.mDbSchema";
+import { Repository, In } from "typeorm";
+import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
+import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
 
 @injectable()
 export class SubService {
-  constructor() {}
-  private subModel: Model<ISub> = Sub;
+  private subRepository: Repository<SubmissionEntity>;
+  private procCptRepository: Repository<ProcCptEntity>;
+  private diagnosisRepository: Repository<DiagnosisEntity>;
+
+  constructor() {
+    this.subRepository = AppDataSource.getRepository(SubmissionEntity);
+    this.procCptRepository = AppDataSource.getRepository(ProcCptEntity);
+    this.diagnosisRepository = AppDataSource.getRepository(DiagnosisEntity);
+  }
 
   public async createBulkSub(subData: ISub[]): Promise<ISubDoc[]> {
     try {
-      // console.log("subData ", subData[0])
-      const newSubArr = await this.subModel.insertMany(subData);
-      return newSubArr;
+      const savedSubs: ISubDoc[] = [];
+      
+      for (const sub of subData) {
+        const submission = this.subRepository.create(sub as any) as unknown as SubmissionEntity;
+        
+        // Load and assign procCpts if provided
+        if (sub.procCptDocId && sub.procCptDocId.length > 0) {
+          const procCpts = await this.procCptRepository.find({
+            where: { id: In(sub.procCptDocId) },
+          });
+          submission.procCpts = procCpts;
+        }
+        
+        // Load and assign icds if provided
+        if (sub.icdDocId && sub.icdDocId.length > 0) {
+          const icds = await this.diagnosisRepository.find({
+            where: { id: In(sub.icdDocId) },
+          });
+          submission.icds = icds;
+        }
+        
+        const savedSub = await this.subRepository.save(submission);
+        savedSubs.push(savedSub as unknown as ISubDoc);
+      }
+      
+      return savedSubs;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -20,8 +53,11 @@ export class SubService {
 
   public async getAllSubs(): Promise<ISubDoc[]> {
     try {
-      const allSubs = await this.subModel.find({});
-      return allSubs;
+      const allSubs = await this.subRepository.find({
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+        order: { createdAt: "DESC" },
+      });
+      return allSubs as unknown as ISubDoc[];
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -29,28 +65,12 @@ export class SubService {
 
   public async getSubsByCandidateId(candidateId: string): Promise<ISubDoc[]> | never {
     try {
-      const subs = await this.subModel
-        .find({ candDocId: candidateId })
-        .populate('candDocId')
-        .populate({
-          path: 'procDocId',
-          populate: [
-            {
-              path: 'hospital',
-              select: '_id engName arabName location'
-            },
-            {
-              path: 'arabProc',
-              select: '_id title numCode alphaCode description'
-            }
-          ]
-        })
-        .populate('supervisorDocId')
-        .populate('mainDiagDocId')
-        .populate('procCptDocId')
-        .populate('icdDocId')
-        .exec();
-      return subs;
+      const subs = await this.subRepository.find({
+        where: { candDocId: candidateId },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+        order: { createdAt: "DESC" },
+      });
+      return subs as unknown as ISubDoc[];
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -61,28 +81,12 @@ export class SubService {
     status: "approved" | "pending" | "rejected"
   ): Promise<ISubDoc[]> | never {
     try {
-      const subs = await this.subModel
-        .find({ candDocId: candidateId, subStatus: status })
-        .populate('candDocId')
-        .populate({
-          path: 'procDocId',
-          populate: [
-            {
-              path: 'hospital',
-              select: '_id engName arabName location'
-            },
-            {
-              path: 'arabProc',
-              select: '_id title numCode alphaCode description'
-            }
-          ]
-        })
-        .populate('supervisorDocId')
-        .populate('mainDiagDocId')
-        .populate('procCptDocId')
-        .populate('icdDocId')
-        .exec();
-      return subs;
+      const subs = await this.subRepository.find({
+        where: { candDocId: candidateId, subStatus: status },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+        order: { createdAt: "DESC" },
+      });
+      return subs as unknown as ISubDoc[];
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -90,28 +94,12 @@ export class SubService {
 
   public async getSubsBySupervisorId(supervisorId: string): Promise<ISubDoc[]> | never {
     try {
-      const subs = await this.subModel
-        .find({ supervisorDocId: supervisorId })
-        .populate('candDocId')
-        .populate({
-          path: 'procDocId',
-          populate: [
-            {
-              path: 'hospital',
-              select: '_id engName arabName location'
-            },
-            {
-              path: 'arabProc',
-              select: '_id title numCode alphaCode description'
-            }
-          ]
-        })
-        .populate('supervisorDocId')
-        .populate('mainDiagDocId')
-        .populate('procCptDocId')
-        .populate('icdDocId')
-        .exec();
-      return subs;
+      const subs = await this.subRepository.find({
+        where: { supervisorDocId: supervisorId },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+        order: { createdAt: "DESC" },
+      });
+      return subs as unknown as ISubDoc[];
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -122,28 +110,12 @@ export class SubService {
     status: "approved" | "pending" | "rejected"
   ): Promise<ISubDoc[]> | never {
     try {
-      const subs = await this.subModel
-        .find({ supervisorDocId: supervisorId, subStatus: status })
-        .populate('candDocId')
-        .populate({
-          path: 'procDocId',
-          populate: [
-            {
-              path: 'hospital',
-              select: '_id engName arabName location'
-            },
-            {
-              path: 'arabProc',
-              select: '_id title numCode alphaCode description'
-            }
-          ]
-        })
-        .populate('supervisorDocId')
-        .populate('mainDiagDocId')
-        .populate('procCptDocId')
-        .populate('icdDocId')
-        .exec();
-      return subs;
+      const subs = await this.subRepository.find({
+        where: { supervisorDocId: supervisorId, subStatus: status },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+        order: { createdAt: "DESC" },
+      });
+      return subs as unknown as ISubDoc[];
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -151,28 +123,11 @@ export class SubService {
 
   public async getSubById(subId: string): Promise<ISubDoc | null> | never {
     try {
-      const sub = await this.subModel
-        .findById(subId)
-        .populate('candDocId')
-        .populate({
-          path: 'procDocId',
-          populate: [
-            {
-              path: 'hospital',
-              select: '_id engName arabName location'
-            },
-            {
-              path: 'arabProc',
-              select: '_id title numCode alphaCode description'
-            }
-          ]
-        })
-        .populate('supervisorDocId')
-        .populate('mainDiagDocId')
-        .populate('procCptDocId')
-        .populate('icdDocId')
-        .exec();
-      return sub;
+      const sub = await this.subRepository.findOne({
+        where: { id: subId },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+      });
+      return sub as unknown as ISubDoc | null;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -183,28 +138,12 @@ export class SubService {
     candidateId: string
   ): Promise<ISubDoc[]> | never {
     try {
-      const subs = await this.subModel
-        .find({ supervisorDocId: supervisorId, candDocId: candidateId })
-        .populate('candDocId')
-        .populate({
-          path: 'procDocId',
-          populate: [
-            {
-              path: 'hospital',
-              select: '_id engName arabName location'
-            },
-            {
-              path: 'arabProc',
-              select: '_id title numCode alphaCode description'
-            }
-          ]
-        })
-        .populate('supervisorDocId')
-        .populate('mainDiagDocId')
-        .populate('procCptDocId')
-        .populate('icdDocId')
-        .exec();
-      return subs;
+      const subs = await this.subRepository.find({
+        where: { supervisorDocId: supervisorId, candDocId: candidateId },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+        order: { createdAt: "DESC" },
+      });
+      return subs as unknown as ISubDoc[];
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -215,9 +154,9 @@ export class SubService {
     candidateId: string
   ): Promise<boolean> | never {
     try {
-      const count = await this.subModel
-        .countDocuments({ supervisorDocId: supervisorId, candDocId: candidateId })
-        .exec();
+      const count = await this.subRepository.count({
+        where: { supervisorDocId: supervisorId, candDocId: candidateId },
+      });
       return count > 0;
     } catch (error: any) {
       throw new Error(error.message);
@@ -229,32 +168,12 @@ export class SubService {
     status: "approved" | "rejected"
   ): Promise<ISubDoc | null> | never {
     try {
-      const updatedSub = await this.subModel
-        .findByIdAndUpdate(
-          submissionId,
-          { subStatus: status },
-          { new: true }
-        )
-        .populate('candDocId')
-        .populate({
-          path: 'procDocId',
-          populate: [
-            {
-              path: 'hospital',
-              select: '_id engName arabName location'
-            },
-            {
-              path: 'arabProc',
-              select: '_id title numCode alphaCode description'
-            }
-          ]
-        })
-        .populate('supervisorDocId')
-        .populate('mainDiagDocId')
-        .populate('procCptDocId')
-        .populate('icdDocId')
-        .exec();
-      return updatedSub;
+      await this.subRepository.update(submissionId, { subStatus: status });
+      const updatedSub = await this.subRepository.findOne({
+        where: { id: submissionId },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+      });
+      return updatedSub as unknown as ISubDoc | null;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -265,7 +184,11 @@ export class SubService {
       if (!subGoogleUid || subGoogleUid.trim() === "") {
         return null;
       }
-      return await this.subModel.findOne({ subGoogleUid: subGoogleUid.trim() }).exec();
+      const sub = await this.subRepository.findOne({
+        where: { subGoogleUid: subGoogleUid.trim() },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+      });
+      return sub as unknown as ISubDoc | null;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -277,7 +200,20 @@ export class SubService {
       if (uniqueUids.length === 0) {
         return [];
       }
-      return await this.subModel.find({ subGoogleUid: { $in: uniqueUids } }).exec();
+      const subs = await this.subRepository.find({
+        where: { subGoogleUid: In(uniqueUids) },
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
+      });
+      return subs as unknown as ISubDoc[];
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  public async deleteSub(id: string): Promise<boolean> | never {
+    try {
+      const result = await this.subRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (error: any) {
       throw new Error(error.message);
     }

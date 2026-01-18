@@ -1,28 +1,43 @@
-import { Request, Response } from "express";
 import { inject, injectable } from "inversify";
 import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
 import { ExternalService } from "../externalService/external.service";
 import { IProcCpt, IProcCptDoc } from "./procCpt.interface";
 import { UtilService } from "../utils/utils.service";
-import { Model } from "mongoose";
-import { ProcCpt } from "./procCpt.schema";
+import { AppDataSource } from "../config/database.config";
+import { ProcCptEntity } from "./procCpt.mDbSchema";
+import { Repository, In } from "typeorm";
 
-injectable();
+@injectable()
 export class ProcCptService {
+  private procCptRepository: Repository<ProcCptEntity>;
+
   constructor(
     @inject(ExternalService) private externalService: ExternalService,
     @inject(UtilService) private utilService: UtilService
-  ) {}
+  ) {
+    this.procCptRepository = AppDataSource.getRepository(ProcCptEntity);
+  }
 
-  private procCptModel: Model<IProcCpt> = ProcCpt;
-
-  public async findByNumCode(data: Pick<IProcCpt, "numCode">): Promise<IProcCptDoc | null> | never{
+  public async getAllProcCpts(): Promise<IProcCptDoc[]> | never {
     try {
-      const foundProcCpt: IProcCptDoc | null = await ProcCpt.findOne({numCode: data.numCode})
-      if(foundProcCpt){
-        return foundProcCpt
-      } 
-      return null
+      const allProcCpts = await this.procCptRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return allProcCpts as unknown as IProcCptDoc[];
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async findByNumCode(data: Pick<IProcCpt, "numCode">): Promise<IProcCptDoc | null> | never {
+    try {
+      const foundProcCpt = await this.procCptRepository.findOne({
+        where: { numCode: data.numCode },
+      });
+      if (foundProcCpt) {
+        return foundProcCpt as unknown as IProcCptDoc;
+      }
+      return null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -30,55 +45,57 @@ export class ProcCptService {
 
   public async findByNumCodes(numCodes: string[]): Promise<IProcCptDoc[]> | never {
     try {
-      const foundProcCpts: IProcCptDoc[] = await ProcCpt.find({ numCode: { $in: numCodes } }).exec();
-      return foundProcCpts;
+      const foundProcCpts = await this.procCptRepository.find({
+        where: { numCode: In(numCodes) },
+      });
+      return foundProcCpts as unknown as IProcCptDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async createProcCpt(procCptData: IProcCpt) {
+  public async createProcCpt(procCptData: IProcCpt): Promise<IProcCptDoc> | never {
     try {
-      const newProcCpt = await new this.procCptModel(procCptData).save();
-      return newProcCpt;
+      const newProcCpt = this.procCptRepository.create(procCptData);
+      const savedProcCpt = await this.procCptRepository.save(newProcCpt);
+      return savedProcCpt as unknown as IProcCptDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async upsertProcCpt(procCptData: IProcCpt): Promise<IProcCptDoc> {
+  public async upsertProcCpt(procCptData: IProcCpt): Promise<IProcCptDoc> | never {
     try {
       // Check if ProcCpt exists by numCode
       const existingProcCpt = await this.findByNumCode({ numCode: procCptData.numCode });
       
       if (existingProcCpt) {
         // Update existing record
-        const updatedProcCpt = await this.procCptModel.findByIdAndUpdate(
-          existingProcCpt._id,
-          procCptData,
-          { new: true, runValidators: true }
-        ).exec();
-        return updatedProcCpt as IProcCptDoc;
+        this.procCptRepository.merge(existingProcCpt as any, procCptData);
+        const updatedProcCpt = await this.procCptRepository.save(existingProcCpt as any);
+        return updatedProcCpt as unknown as IProcCptDoc;
       } else {
         // Create new record
-        const newProcCpt = await new this.procCptModel(procCptData).save();
-        return newProcCpt;
+        const newProcCpt = this.procCptRepository.create(procCptData);
+        const savedProcCpt = await this.procCptRepository.save(newProcCpt);
+        return savedProcCpt as unknown as IProcCptDoc;
       }
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async createBulkProcCpt(procCptData: IProcCpt[]) {
+  public async createBulkProcCpt(procCptData: IProcCpt[]): Promise<IProcCptDoc[]> | never {
     try {
-      const newProcCptArr = await this.procCptModel.insertMany(procCptData);
-      return newProcCptArr;
+      const newProcCpts = this.procCptRepository.create(procCptData);
+      const savedProcCpts = await this.procCptRepository.save(newProcCpts);
+      return savedProcCpts as unknown as IProcCptDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async createProcCptFromExternal(validatedReq: Partial<IExternalRow>) {
+  public async createProcCptFromExternal(validatedReq: Partial<IExternalRow>): Promise<IProcCptDoc[] | any> | never {
     try {
       let apiString;
       if (validatedReq.row) {
@@ -114,6 +131,15 @@ export class ProcCptService {
       } else {
         return externalData;
       }
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async deleteProcCpt(id: string): Promise<boolean> | never {
+    try {
+      const result = await this.procCptRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }

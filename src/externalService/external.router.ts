@@ -5,7 +5,7 @@ import { getArabProcDataValidator } from "../validators/getArabProcData.validato
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 
-injectable();
+@injectable()
 export class ExternalRouter {
   public router: Router;
   constructor(

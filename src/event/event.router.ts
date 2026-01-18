@@ -15,12 +15,14 @@ import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { requireInstituteAdmin, requireSupervisor, requireCandidate } from "../middleware/authorize.middleware";
 import { EventService } from "./event.service";
-import { container } from "../config/container.config";
 
 @injectable()
 export class EventRouter {
   public router: Router;
-  constructor(@inject(EventController) private eventController: EventController) {
+  constructor(
+    @inject(EventController) private eventController: EventController,
+    @inject(EventService) private eventService: EventService
+  ) {
     this.router = express.Router();
     this.initRoutes();
   }
@@ -231,7 +233,7 @@ export class EventRouter {
 
         const jwt = res.locals.jwt;
         const userRole = jwt.role;
-        const userId = jwt._id;
+        const userId = jwt.id || jwt._id; // Support both UUID (id) and ObjectId (_id) for backward compatibility
 
         // Allow candidates to add themselves
         if (userRole === "candidate" && req.params.candidateId === userId) {
@@ -246,14 +248,16 @@ export class EventRouter {
         // For supervisors, check if they are the presenter
         if (userRole === "supervisor") {
           try {
-            const eventService = container.get<EventService>(EventService);
+            const eventService = this.eventService;
             const event = await eventService.getEventById(req.params.eventId);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });
             }
             // Check if supervisor is the presenter (for lecture/conf events)
+            // Handle both UUID (id) and ObjectId (_id) formats
+            const presenterId = event.presenterId || (event.presenter as any)?.id || (event.presenter as any)?._id?.toString() || event.presenter?.toString();
             if ((event.type === "lecture" || event.type === "conf") && 
-                event.presenter.toString() === userId) {
+                presenterId === userId) {
               return next();
             }
             return res.status(StatusCodes.FORBIDDEN).json({ 
@@ -293,7 +297,7 @@ export class EventRouter {
 
         const jwt = res.locals.jwt;
         const userRole = jwt.role;
-        const userId = jwt._id;
+        const userId = jwt.id || jwt._id; // Support both UUID (id) and ObjectId (_id) for backward compatibility
 
         // Allow institute admins
         if (userRole === "instituteAdmin" || userRole === "superAdmin") {
@@ -303,7 +307,7 @@ export class EventRouter {
         // For supervisors, check if they are the presenter
         if (userRole === "supervisor") {
           try {
-            const eventService = container.get<EventService>(EventService);
+            const eventService = this.eventService;
             const event = await eventService.getEventById(req.params.eventId);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });
@@ -349,7 +353,7 @@ export class EventRouter {
 
         const jwt = res.locals.jwt;
         const userRole = jwt.role;
-        const userId = jwt._id;
+        const userId = jwt.id || jwt._id; // Support both UUID (id) and ObjectId (_id) for backward compatibility
 
         // Allow institute admins
         if (userRole === "instituteAdmin" || userRole === "superAdmin") {
@@ -359,7 +363,7 @@ export class EventRouter {
         // For supervisors, check if they are the presenter
         if (userRole === "supervisor") {
           try {
-            const eventService = container.get<EventService>(EventService);
+            const eventService = this.eventService;
             const event = await eventService.getEventById(req.params.eventId);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });
@@ -405,7 +409,7 @@ export class EventRouter {
 
         const jwt = res.locals.jwt;
         const userRole = jwt.role;
-        const userId = jwt._id;
+        const userId = jwt.id || jwt._id; // Support both UUID (id) and ObjectId (_id) for backward compatibility
 
         // Allow institute admins
         if (userRole === "instituteAdmin" || userRole === "superAdmin") {
@@ -415,7 +419,7 @@ export class EventRouter {
         // For supervisors, check if they are the presenter
         if (userRole === "supervisor") {
           try {
-            const eventService = container.get<EventService>(EventService);
+            const eventService = this.eventService;
             const event = await eventService.getEventById(req.params.eventId);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });

@@ -1,14 +1,22 @@
 import { injectable } from "inversify";
 import { ISuperAdmin, ISuperAdminDoc } from "./superAdmin.interface";
-import { SuperAdmin } from "./superAdmin.schema";
-import { Types } from "mongoose";
+import { AppDataSource } from "../config/database.config";
+import { SuperAdminEntity } from "./superAdmin.mDbSchema";
+import { Repository } from "typeorm";
 
 @injectable()
 export class SuperAdminProvider {
+  private superAdminRepository: Repository<SuperAdminEntity>;
+
+  constructor() {
+    this.superAdminRepository = AppDataSource.getRepository(SuperAdminEntity);
+  }
+
   public async createSuperAdmin(validatedReq: Partial<ISuperAdmin>): Promise<ISuperAdminDoc> | never {
     try {
-      const superAdmin = new SuperAdmin(validatedReq);
-      return await superAdmin.save();
+      const newSuperAdmin = this.superAdminRepository.create(validatedReq);
+      const savedSuperAdmin = await this.superAdminRepository.save(newSuperAdmin);
+      return savedSuperAdmin as unknown as ISuperAdminDoc;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -16,7 +24,10 @@ export class SuperAdminProvider {
 
   public async getAllSuperAdmins(): Promise<ISuperAdminDoc[]> | never {
     try {
-      return await SuperAdmin.find().exec();
+      const superAdmins = await this.superAdminRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return superAdmins as unknown as ISuperAdminDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -24,10 +35,15 @@ export class SuperAdminProvider {
 
   public async getSuperAdminById(id: string): Promise<ISuperAdminDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid super admin ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid super admin ID format");
       }
-      return await SuperAdmin.findById(id).exec();
+      const superAdmin = await this.superAdminRepository.findOne({
+        where: { id },
+      });
+      return superAdmin as unknown as ISuperAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -35,7 +51,10 @@ export class SuperAdminProvider {
 
   public async getSuperAdminByEmail(email: string): Promise<ISuperAdminDoc | null> | never {
     try {
-      return await SuperAdmin.findOne({ email }).exec();
+      const superAdmin = await this.superAdminRepository.findOne({
+        where: { email },
+      });
+      return superAdmin as unknown as ISuperAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -44,10 +63,16 @@ export class SuperAdminProvider {
   public async updateSuperAdmin(validatedReq: Partial<ISuperAdmin> & { id: string }): Promise<ISuperAdminDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid super admin ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid super admin ID format");
       }
-      return await SuperAdmin.findByIdAndUpdate(id, updateData, { new: true }).exec();
+      await this.superAdminRepository.update(id, updateData);
+      const updatedSuperAdmin = await this.superAdminRepository.findOne({
+        where: { id },
+      });
+      return updatedSuperAdmin as unknown as ISuperAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -55,11 +80,13 @@ export class SuperAdminProvider {
 
   public async deleteSuperAdmin(id: string): Promise<boolean> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid super admin ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid super admin ID format");
       }
-      const result = await SuperAdmin.findByIdAndDelete(id).exec();
-      return result !== null;
+      const result = await this.superAdminRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }

@@ -1,20 +1,27 @@
 import { inject, injectable } from "inversify";
 import { ISupervisor, ISupervisorDoc } from "./supervisor.interface";
-import { Supervisor } from "./supervisor.schema";
-import { Types } from "mongoose";
+import { AppDataSource } from "../config/database.config";
+import { SupervisorEntity } from "./supervisor.mDbSchema";
+import { Repository } from "typeorm";
 import { SubService } from "../sub/sub.service";
 import { ISubDoc } from "../sub/interfaces/sub.interface";
 import { ICandDoc } from "../cand/cand.interface";
 
 @injectable()
 export class SupervisorProvider {
+  private supervisorRepository: Repository<SupervisorEntity>;
+
   constructor(
     @inject(SubService) private subService: SubService
-  ) {}
+  ) {
+    this.supervisorRepository = AppDataSource.getRepository(SupervisorEntity);
+  }
+
   public async createSupervisor(validatedReq: Partial<ISupervisor>): Promise<ISupervisorDoc> | never {
     try {
-      const supervisor = new Supervisor(validatedReq);
-      return await supervisor.save();
+      const newSupervisor = this.supervisorRepository.create(validatedReq);
+      const savedSupervisor = await this.supervisorRepository.save(newSupervisor);
+      return savedSupervisor as unknown as ISupervisorDoc;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -22,7 +29,10 @@ export class SupervisorProvider {
 
   public async getAllSupervisors(): Promise<ISupervisorDoc[]> | never {
     try {
-      return await Supervisor.find().exec();
+      const supervisors = await this.supervisorRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return supervisors as unknown as ISupervisorDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -30,10 +40,15 @@ export class SupervisorProvider {
 
   public async getSupervisorById(id: string): Promise<ISupervisorDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid supervisor ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid supervisor ID format");
       }
-      return await Supervisor.findById(id).exec();
+      const supervisor = await this.supervisorRepository.findOne({
+        where: { id },
+      });
+      return supervisor as unknown as ISupervisorDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -41,7 +56,10 @@ export class SupervisorProvider {
 
   public async getSupervisorByEmail(email: string): Promise<ISupervisorDoc | null> | never {
     try {
-      return await Supervisor.findOne({ email }).exec();
+      const supervisor = await this.supervisorRepository.findOne({
+        where: { email },
+      });
+      return supervisor as unknown as ISupervisorDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -50,10 +68,16 @@ export class SupervisorProvider {
   public async updateSupervisor(validatedReq: Partial<ISupervisor> & { id: string }): Promise<ISupervisorDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid supervisor ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid supervisor ID format");
       }
-      return await Supervisor.findByIdAndUpdate(id, updateData, { new: true }).exec();
+      await this.supervisorRepository.update(id, updateData);
+      const updatedSupervisor = await this.supervisorRepository.findOne({
+        where: { id },
+      });
+      return updatedSupervisor as unknown as ISupervisorDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -61,11 +85,13 @@ export class SupervisorProvider {
 
   public async deleteSupervisor(id: string): Promise<boolean> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid supervisor ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid supervisor ID format");
       }
-      const result = await Supervisor.findByIdAndDelete(id).exec();
-      return result !== null;
+      const result = await this.supervisorRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -73,8 +99,10 @@ export class SupervisorProvider {
 
   public async getSupervisedCandidates(supervisorId: string): Promise<Array<ICandDoc & { submissionStats: { total: number; approved: number; pending: number; rejected: number } }>> | never {
     try {
-      if (!Types.ObjectId.isValid(supervisorId)) {
-        throw new Error("Invalid supervisor ID");
+      // Validate UUID format (supervisor now uses MariaDB UUID)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(supervisorId)) {
+        throw new Error("Invalid supervisor ID format");
       }
       
       // Get all submissions for this supervisor

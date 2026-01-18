@@ -77,15 +77,16 @@ export class AuthRouter {
             const resp = await this.authController.login({ ...payload, role: "candidate" as any });
             
             // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: candidate, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: candidate, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
-            // Return only user and role (not tokens)
+            // Return user, role, and token (token included for testing purposes only)
             res.status(StatusCodes.OK).json({
               user: resp.user,
-              role: resp.role
+              role: resp.role,
+              token: resp.token  // TEMPORARY: For testing token generation
             });
           } catch(err: any){
             // Log failed login attempt with request details
@@ -112,15 +113,16 @@ export class AuthRouter {
             const resp = await this.authController.login({ ...payload, role: "supervisor" as any });
             
             // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: supervisor, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: supervisor, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
-            // Return only user and role (not tokens)
+            // Return user, role, and token (token included for testing purposes only)
             res.status(StatusCodes.OK).json({
               user: resp.user,
-              role: resp.role
+              role: resp.role,
+              token: resp.token  // TEMPORARY: For testing token generation
             });
           } catch(err: any){
             // Log failed login attempt with request details
@@ -147,15 +149,16 @@ export class AuthRouter {
             const resp = await this.authController.login({ ...payload, role: "superAdmin" as any });
             
             // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: superAdmin, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: superAdmin, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
-            // Return only user and role (not tokens)
+            // Return user, role, and token (token included for testing purposes only)
             res.status(StatusCodes.OK).json({
               user: resp.user,
-              role: resp.role
+              role: resp.role,
+              token: resp.token  // TEMPORARY: For testing token generation
             });
           } catch(err: any){
             // Log failed login attempt with request details
@@ -182,15 +185,16 @@ export class AuthRouter {
             const resp = await this.authController.login({ ...payload, role: "instituteAdmin" as any });
             
             // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: instituteAdmin, UserId: ${resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: instituteAdmin, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
             
-            // Return only user and role (not tokens)
+            // Return user, role, and token (token included for testing purposes only)
             res.status(StatusCodes.OK).json({
               user: resp.user,
-              role: resp.role
+              role: resp.role,
+              token: resp.token  // TEMPORARY: For testing token generation
             });
           } catch(err: any){
             // Log failed login attempt with request details
@@ -247,7 +251,7 @@ export class AuthRouter {
           setAuthCookies(res, newTokens.token, newTokens.refreshToken);
           
           // Log successful token refresh
-          console.log(`[AuthRouter] Token refresh successful - Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded._id || "unknown"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+          console.log(`[AuthRouter] Token refresh successful - Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded.id || decoded._id || "unknown"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
           
           return res.status(StatusCodes.OK).json({ 
             success: true 
@@ -263,7 +267,7 @@ export class AuthRouter {
               try {
                 const decoded = jwt.decode(refreshToken) as any;
                 if (decoded) {
-                  userInfo = `Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded._id || "unknown"}`;
+                  userInfo = `Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded.id || decoded._id || "unknown"}`;
                 }
               } catch (decodeError) {
                 userInfo = "Token decode failed";

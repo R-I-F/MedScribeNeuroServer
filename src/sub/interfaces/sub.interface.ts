@@ -1,4 +1,4 @@
-import { Types, Document } from "mongoose";
+// Removed: import { Types, Document } from "mongoose";
 
 export type TRoleInSurg = 
   "operator" 
@@ -168,9 +168,9 @@ export interface ICsf extends IDiagProc, INotesIntEvents {}
 
 export interface ISubBase {
   timeStamp: Date | never | undefined;
-  candDocId: Types.ObjectId ;
-  procDocId: Types.ObjectId ;
-  supervisorDocId: Types.ObjectId ;
+  candDocId: string; // UUID (replaces Types.ObjectId)
+  procDocId: string; // UUID (replaces Types.ObjectId)
+  supervisorDocId: string; // UUID (replaces Types.ObjectId)
   roleInSurg: TRoleInSurg;
   assRoleDesc?: string;
   otherSurgRank: TOtherSurgRank;
@@ -180,11 +180,11 @@ export interface ISubBase {
   insUsed: TInsUsed;
   consUsed: TConsUsed;
   consDetails?: string;
-  mainDiagDocId: Types.ObjectId | undefined;
+  mainDiagDocId: string | undefined; // UUID (replaces Types.ObjectId)
   subGoogleUid: string;
   subStatus: "approved" | "pending" | "rejected";
-  procCptDocId: Types.ObjectId[] ;
-  icdDocId: Types.ObjectId[] ;
+  procCptDocId: string[]; // UUID[] (replaces Types.ObjectId[])
+  icdDocId: string[]; // UUID[] (replaces Types.ObjectId[])
 }
 
 export interface ISubCongAnom extends ISubBase, ICongAnom {}
@@ -223,4 +223,14 @@ export type ISub =
   | ISubFuncNeuro
   | ISubCsf;
 
-export type ISubDoc = ISub & Document;
+// ISubDoc includes all properties from ISub (union type) plus id, createdAt, updatedAt
+// Since all ISub types extend ISubBase, all have candDocId, procDocId, etc.
+export type ISubDoc = ISub & {
+  id: string; // UUID (replaces _id from MongoDB Document)
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+// Input types for create/update operations
+export type ISubInput = ISub;
+export type ISubUpdateInput = Partial<ISub> & { id: string };

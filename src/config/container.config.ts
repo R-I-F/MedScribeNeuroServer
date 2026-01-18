@@ -100,6 +100,10 @@ import { EventProvider } from "../event/event.provider";
 
 export const container: Container = new Container();
 
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/db12905f-f51f-4e05-87f7-a5e4d0693c3e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'container.config.ts:102',message:'Checking HospitalRouter import',data:{hospitalRouterType:typeof HospitalRouter,hospitalRouterIsUndefined:HospitalRouter===undefined,hospitalRouterIsFunction:typeof HospitalRouter==='function',hospitalRouterName:HospitalRouter?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+// #endregion
+
 container.bind(UtilService).toSelf().inTransientScope();
 
 container.bind(HospitalController).toSelf().inTransientScope();

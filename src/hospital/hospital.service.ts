@@ -1,21 +1,42 @@
 import { inject, injectable } from "inversify";
-import { IHospital } from "./hospital.interface";
-import { Hospital } from "./hospital.schema";
-import { Model } from "mongoose";
+import { IHospital, IHospitalDoc } from "./hospital.interface";
+import { AppDataSource } from "../config/database.config";
+import { HospitalEntity } from "./hospital.mDbSchema";
+import { Repository } from "typeorm";
 
 @injectable()
 export class HospitalService {
-  private hospitalModel: Model<IHospital> = Hospital;
+  private hospitalRepository: Repository<HospitalEntity>;
 
-  public async createHospital(hospitalData: IHospital) {
-    const newHospital = await new this.hospitalModel(hospitalData).save();
-    return newHospital;
+  constructor() {
+    this.hospitalRepository = AppDataSource.getRepository(HospitalEntity);
   }
 
-  public async getAllHospitals() {
+  public async createHospital(hospitalData: IHospital): Promise<IHospitalDoc> | never {
     try {
-      const allHospitals = await this.hospitalModel.find({}).exec();
-      return allHospitals;
+      const newHospital = this.hospitalRepository.create(hospitalData);
+      const savedHospital = await this.hospitalRepository.save(newHospital);
+      return savedHospital as unknown as IHospitalDoc;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getAllHospitals(): Promise<IHospitalDoc[]> | never {
+    try {
+      const allHospitals = await this.hospitalRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return allHospitals as unknown as IHospitalDoc[];
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async deleteHospital(id: string): Promise<boolean> | never {
+    try {
+      const result = await this.hospitalRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }

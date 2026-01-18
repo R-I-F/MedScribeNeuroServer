@@ -1,108 +1,148 @@
 import { inject, injectable } from "inversify";
 import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
-import { Model } from "mongoose";
-import { CalSurg } from "./calSurg.schema";
+import { AppDataSource } from "../config/database.config";
+import { CalSurgEntity } from "./calSurg.mDbSchema";
+import { Repository, Between, In, MoreThanOrEqual, LessThanOrEqual } from "typeorm";
 
 @injectable()
 export class CalSurgService {
-  constructor() {}
+  private calSurgRepository: Repository<CalSurgEntity>;
 
-  private calSurgModel: Model<ICalSurg> = CalSurg
+  constructor() {
+    this.calSurgRepository = AppDataSource.getRepository(CalSurgEntity);
+  }
 
-  public async createCalSurg(calSurgData: ICalSurg): Promise<ICalSurgDoc> {
+  public async createCalSurg(calSurgData: ICalSurg): Promise<ICalSurgDoc> | never {
     try {
-      const newCalSurg = await new this.calSurgModel(calSurgData).save();
-      return newCalSurg;
+      // Map interface fields to entity fields (hospital/arabProc are UUIDs in interface, but entity uses hospitalId/arabProcId)
+      const entityData: any = {
+        timeStamp: calSurgData.timeStamp,
+        patientName: calSurgData.patientName,
+        patientDob: calSurgData.patientDob,
+        gender: calSurgData.gender,
+        hospitalId: calSurgData.hospital,
+        arabProcId: calSurgData.arabProc,
+        procDate: calSurgData.procDate,
+        google_uid: calSurgData.google_uid,
+        formLink: calSurgData.formLink,
+      };
+      const newCalSurg = this.calSurgRepository.create(entityData);
+      const savedCalSurg = await this.calSurgRepository.save(newCalSurg) as unknown as CalSurgEntity;
+      
+      // Load with relations for return
+      const result = await this.calSurgRepository.findOne({
+        where: { id: savedCalSurg.id },
+        relations: ["hospital", "arabProc"],
+      });
+      
+      return result as unknown as ICalSurgDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async createBulkCalSurg(calSurgData: ICalSurg[]): Promise<ICalSurgDoc[]> {
+  public async createBulkCalSurg(calSurgData: ICalSurg[]): Promise<ICalSurgDoc[]> | never {
     try {
-      const newCalSurgArr = await this.calSurgModel.insertMany(calSurgData);
-      return newCalSurgArr;
+      // Map interface fields to entity fields
+      const entityDataArray = calSurgData.map(data => ({
+        timeStamp: data.timeStamp,
+        patientName: data.patientName,
+        patientDob: data.patientDob,
+        gender: data.gender,
+        hospitalId: data.hospital,
+        arabProcId: data.arabProc,
+        procDate: data.procDate,
+        google_uid: data.google_uid,
+        formLink: data.formLink,
+      }));
+      const newCalSurgs = this.calSurgRepository.create(entityDataArray);
+      const savedCalSurgs = await this.calSurgRepository.save(newCalSurgs);
+      
+      // Load with relations for return
+      const ids = savedCalSurgs.map(cs => cs.id);
+      const results = await this.calSurgRepository.find({
+        where: { id: In(ids) },
+        relations: ["hospital", "arabProc"],
+      });
+      
+      return results as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgById(calSurgId: string): Promise<ICalSurgDoc> {
+  public async getCalSurgById(calSurgId: string): Promise<ICalSurgDoc> | never {
     try {
-      const calSurg = await this.calSurgModel
-        .findById(calSurgId)
-        .populate('hospital')
-        .populate('arabProc')
-        .exec();
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(calSurgId)) {
+        throw new Error("Invalid calSurg ID format");
+      }
+      
+      const calSurg = await this.calSurgRepository.findOne({
+        where: { id: calSurgId },
+        relations: ["hospital", "arabProc"],
+      });
       
       if (!calSurg) {
         throw new Error(`CalSurg with id ${calSurgId} not found`);
       }
       
-      return calSurg;
+      return calSurg as unknown as ICalSurgDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllCalSurg(): Promise<ICalSurgDoc[]> {
+  public async getAllCalSurg(): Promise<ICalSurgDoc[]> | never {
     try {
-      const calSurgs = await this.calSurgModel
-        .find({})
-        .populate('hospital')
-        .populate('arabProc')
-        .exec();
+      const calSurgs = await this.calSurgRepository.find({
+        relations: ["hospital", "arabProc"],
+        order: { procDate: "DESC" },
+      });
       
-      return calSurgs;
+      return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgByDateRange(startDate: Date, endDate: Date): Promise<ICalSurgDoc[]> {
+  public async getCalSurgByDateRange(startDate: Date, endDate: Date): Promise<ICalSurgDoc[]> | never {
     try {
-      const calSurgs = await this.calSurgModel
-        .find({
-          procDate: {
-            $gte: startDate,
-            $lte: endDate
-          }
-        })
-        .populate('hospital')
-        .populate('arabProc')
-        .sort({ procDate: 1 }) // Sort by procedure date ascending
-        .exec();
+      const calSurgs = await this.calSurgRepository.find({
+        where: {
+          procDate: Between(startDate, endDate),
+        },
+        relations: ["hospital", "arabProc"],
+        order: { procDate: "ASC" },
+      });
       
-      return calSurgs;
+      return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgByMonth(year: number, month: number): Promise<ICalSurgDoc[]> {
+  public async getCalSurgByMonth(year: number, month: number): Promise<ICalSurgDoc[]> | never {
     try {
       const startDate = new Date(year, month - 1, 1); // month is 0-indexed
       const endDate = new Date(year, month, 0, 23, 59, 59, 999); // Last day of month
       
-      const calSurgs = await this.calSurgModel
-        .find({
-          procDate: {
-            $gte: startDate,
-            $lte: endDate
-          }
-        })
-        .populate('hospital')
-        .populate('arabProc')
-        .sort({ procDate: 1 })
-        .exec();
+      const calSurgs = await this.calSurgRepository.find({
+        where: {
+          procDate: Between(startDate, endDate),
+        },
+        relations: ["hospital", "arabProc"],
+        order: { procDate: "ASC" },
+      });
       
-      return calSurgs;
+      return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgByDay(date: Date): Promise<ICalSurgDoc[]> {
+  public async getCalSurgByDay(date: Date): Promise<ICalSurgDoc[]> | never {
     try {
       const startDate = new Date(date);
       startDate.setHours(0, 0, 0, 0);
@@ -110,42 +150,34 @@ export class CalSurgService {
       const endDate = new Date(date);
       endDate.setHours(23, 59, 59, 999);
       
-      const calSurgs = await this.calSurgModel
-        .find({
-          procDate: {
-            $gte: startDate,
-            $lte: endDate
-          }
-        })
-        .populate('hospital')
-        .populate('arabProc')
-        .sort({ procDate: 1 })
-        .exec();
+      const calSurgs = await this.calSurgRepository.find({
+        where: {
+          procDate: Between(startDate, endDate),
+        },
+        relations: ["hospital", "arabProc"],
+        order: { procDate: "ASC" },
+      });
       
-      return calSurgs;
+      return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgByYear(year: number): Promise<ICalSurgDoc[]> {
+  public async getCalSurgByYear(year: number): Promise<ICalSurgDoc[]> | never {
     try {
       const startDate = new Date(year, 0, 1); // January 1st
       const endDate = new Date(year, 11, 31, 23, 59, 59, 999); // December 31st
       
-      const calSurgs = await this.calSurgModel
-        .find({
-          procDate: {
-            $gte: startDate,
-            $lte: endDate
-          }
-        })
-        .populate('hospital')
-        .populate('arabProc')
-        .sort({ procDate: 1 })
-        .exec();
+      const calSurgs = await this.calSurgRepository.find({
+        where: {
+          procDate: Between(startDate, endDate),
+        },
+        relations: ["hospital", "arabProc"],
+        order: { procDate: "ASC" },
+      });
       
-      return calSurgs;
+      return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -161,66 +193,52 @@ export class CalSurgService {
     endDate?: Date;
   }): Promise<ICalSurgDoc[]> | never {
     try {
-      const query: any = {};
+      const whereConditions: any = {};
 
       // Hospital filtering
       if (filters.hospitalId) {
-        query.hospital = filters.hospitalId;
+        whereConditions.hospitalId = filters.hospitalId;
       }
 
       // Date filtering
       if (filters.startDate && filters.endDate) {
-        query.procDate = {
-          $gte: filters.startDate,
-          $lte: filters.endDate
-        };
+        whereConditions.procDate = Between(filters.startDate, filters.endDate);
       } else if (filters.month && filters.year) {
         const startDate = new Date(filters.year, filters.month - 1, 1);
         const endDate = new Date(filters.year, filters.month, 0, 23, 59, 59, 999);
-        query.procDate = {
-          $gte: startDate,
-          $lte: endDate
-        };
+        whereConditions.procDate = Between(startDate, endDate);
       } else if (filters.year) {
         const startDate = new Date(filters.year, 0, 1);
         const endDate = new Date(filters.year, 11, 31, 23, 59, 59, 999);
-        query.procDate = {
-          $gte: startDate,
-          $lte: endDate
-        };
+        whereConditions.procDate = Between(startDate, endDate);
       } else if (filters.month) {
         const now = new Date();
         const startDate = new Date(now.getFullYear(), filters.month - 1, 1);
         const endDate = new Date(now.getFullYear(), filters.month, 0, 23, 59, 59, 999);
-        query.procDate = {
-          $gte: startDate,
-          $lte: endDate
-        };
+        whereConditions.procDate = Between(startDate, endDate);
       }
 
-      let calSurgs = await this.calSurgModel
-        .find(query)
-        .populate('hospital')
-        .populate('arabProc')
-        .sort({ procDate: 1 })
-        .exec();
+      let calSurgs = await this.calSurgRepository.find({
+        where: whereConditions,
+        relations: ["hospital", "arabProc"],
+        order: { procDate: "ASC" },
+      });
 
-      // Filter by arabProc title or numCode after population (since these require regex on populated field)
+      // Filter by arabProc title or numCode after loading relations
       if (filters.arabProcTitle || filters.arabProcNumCode) {
         calSurgs = calSurgs.filter(cs => {
           if (!cs.arabProc) return false;
-          const arabProc = cs.arabProc as any;
-          if (filters.arabProcTitle && !arabProc.title?.toLowerCase().includes(filters.arabProcTitle.toLowerCase())) {
+          if (filters.arabProcTitle && !cs.arabProc.title?.toLowerCase().includes(filters.arabProcTitle.toLowerCase())) {
             return false;
           }
-          if (filters.arabProcNumCode && !arabProc.numCode?.includes(filters.arabProcNumCode)) {
+          if (filters.arabProcNumCode && !cs.arabProc.numCode?.includes(filters.arabProcNumCode)) {
             return false;
           }
           return true;
         });
       }
 
-      return calSurgs;
+      return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -231,7 +249,10 @@ export class CalSurgService {
       if (!google_uid || google_uid.trim() === "") {
         return null;
       }
-      return await this.calSurgModel.findOne({ google_uid: google_uid.trim() }).exec();
+      const calSurg = await this.calSurgRepository.findOne({
+        where: { google_uid: google_uid.trim() },
+      });
+      return calSurg as unknown as ICalSurgDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -243,7 +264,19 @@ export class CalSurgService {
       if (uniqueUids.length === 0) {
         return [];
       }
-      return await this.calSurgModel.find({ google_uid: { $in: uniqueUids } }).exec();
+      const calSurgs = await this.calSurgRepository.find({
+        where: { google_uid: In(uniqueUids) },
+      });
+      return calSurgs as unknown as ICalSurgDoc[];
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async deleteCalSurg(id: string): Promise<boolean> | never {
+    try {
+      const result = await this.calSurgRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }

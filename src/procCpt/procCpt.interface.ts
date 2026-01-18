@@ -1,5 +1,3 @@
-import { Types } from "mongoose";
-
 export interface IProcCpt {
   title: string;
   alphaCode: string;
@@ -8,5 +6,11 @@ export interface IProcCpt {
 }
 
 export interface IProcCptDoc extends IProcCpt {
-  _id: Types.ObjectId
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+// Input types for create/update operations
+export type IProcCptInput = IProcCpt;
+export type IProcCptUpdateInput = Partial<IProcCpt> & { id: string };

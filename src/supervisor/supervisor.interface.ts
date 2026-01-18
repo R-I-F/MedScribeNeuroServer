@@ -1,5 +1,4 @@
 import { User } from "../user/user.interface";
-import { Types } from "mongoose";
 import { TUserRole } from "../types/role.types";
 import { TSupervisorPosition } from "../types/supervisorPosition.types";
 
@@ -11,5 +10,11 @@ export interface ISupervisor extends User {
 }
 
 export interface ISupervisorDoc extends ISupervisor {
-  _id: Types.ObjectId;
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+// Input types for create/update operations
+export type ISupervisorInput = ISupervisor;
+export type ISupervisorUpdateInput = Partial<ISupervisor> & { id: string };

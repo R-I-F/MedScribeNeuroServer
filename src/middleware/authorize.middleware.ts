@@ -1,12 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
 import { UserRole } from "../types/role.types";
-import { Supervisor } from "../supervisor/supervisor.schema";
+import { SupervisorService } from "../supervisor/supervisor.service";
+import { container } from "../config/container.config";
 
 export interface JwtPayload {
   email: string;
   role: string;
-  _id: string; // User's MongoDB ObjectId as string
+  id?: string;  // User's UUID (new format)
+  _id?: string; // User's MongoDB ObjectId as string (backward compatibility)
 }
 
 // Middleware to check if user has required role or higher
@@ -81,7 +83,17 @@ export const requireValidatorSupervisor = async (req: Request, res: Response, ne
   // For supervisors, check if they have canValidate permission
   if (userRole === UserRole.SUPERVISOR) {
     try {
-      const supervisor = await Supervisor.findById(jwtPayload._id).exec();
+      // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
+      const supervisorId = jwtPayload.id || jwtPayload._id;
+      
+      if (!supervisorId) {
+        return res.status(StatusCodes.UNAUTHORIZED).json({
+          error: "Supervisor ID not found in token"
+        });
+      }
+
+      const supervisorService = container.get<SupervisorService>(SupervisorService);
+      const supervisor = await supervisorService.getSupervisorById({ id: supervisorId });
       
       if (!supervisor) {
         return res.status(StatusCodes.NOT_FOUND).json({

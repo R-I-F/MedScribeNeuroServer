@@ -2,26 +2,27 @@ import { Request, Response } from "express";
 import { inject, injectable } from "inversify";
 import { CalSurgProvider } from "./calSurg.provider";
 import { matchedData } from "express-validator";
+import { ICalSurgDoc } from "./calSurg.interface";
 
 @injectable()
 export class CalSurgController {
   constructor(
     @inject(CalSurgProvider) private calSurgProvider: CalSurgProvider
-  )
-  {}
+  ) {}
 
-  public async handlePostCalSurgFromExternal(req: Request, res: Response) {
-    try {    
-      const newCalSurgs = await this.calSurgProvider.createCalSurgFromExternal(matchedData(req))
-      return newCalSurgs;     
+  public async handlePostCalSurgFromExternal(req: Request, res: Response): Promise<ICalSurgDoc[] | any> | never {
+    try {
+      const validatedReq = matchedData(req) as Partial<any>;
+      const newCalSurgs = await this.calSurgProvider.createCalSurgFromExternal(validatedReq);
+      return newCalSurgs;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async handleGetCalSurgById(req: Request, res: Response) {
+  public async handleGetCalSurgById(req: Request, res: Response): Promise<ICalSurgDoc> | never {
     try {
-      const validatedReq: { _id: string } = matchedData(req);
+      const validatedReq: { _id: string } = matchedData(req) as { _id: string };
       const calSurg = await this.calSurgProvider.getCalSurgById(validatedReq._id);
       return calSurg;
     } catch (err: any) {
@@ -29,7 +30,7 @@ export class CalSurgController {
     }
   }
 
-  public async handleGetAllCalSurg(req: Request, res: Response) {
+  public async handleGetAllCalSurg(req: Request, res: Response): Promise<ICalSurgDoc[]> | never {
     try {
       // Extract query parameters for filtering
       const filters = {
@@ -50,6 +51,22 @@ export class CalSurgController {
         const calSurgs = await this.calSurgProvider.getAllCalSurg();
         return calSurgs;
       }
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleDeleteCalSurg(
+    req: Request,
+    res: Response
+  ): Promise<{ message: string }> | never {
+    const id = req.params.id;
+    try {
+      const deleted = await this.calSurgProvider.deleteCalSurg(id);
+      if (!deleted) {
+        throw new Error("CalSurg not found");
+      }
+      return { message: "CalSurg deleted successfully" };
     } catch (err: any) {
       throw new Error(err);
     }

@@ -1,20 +1,21 @@
-import { Types } from "mongoose";
-
 export interface ICalSurg {
   timeStamp: Date;
   patientName: string;
   patientDob: Date;
   gender: "male" | "female";
-  hospital: Types.ObjectId; // mongoDb object / model -> hospital
-  arabProc?: Types.ObjectId; // mongoDb object / model -> arabProc
+  hospital: string; // UUID (replaces Types.ObjectId)
+  arabProc?: string; // UUID (replaces Types.ObjectId, optional)
   procDate: Date;
-  google_uid?: string; //opt
-  formLink?: string
+  google_uid?: string;
+  formLink?: string;
 }
 
 export interface ICalSurgDoc extends ICalSurg {
-  _id: Types.ObjectId;
-  __v?: number;
-  createdAt?: Date;
-  updatedAt?: Date;
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+// Input types for create/update operations
+export type ICalSurgInput = ICalSurg;
+export type ICalSurgUpdateInput = Partial<ICalSurg> & { id: string };

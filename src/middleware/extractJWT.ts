@@ -48,7 +48,7 @@ export const extractJWT = (req: Request, res: Response, next: NextFunction) => {
       try {
         const decoded = jwt.decode(token) as any;
         if (decoded) {
-          userInfo = `Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded._id || "unknown"}`;
+          userInfo = `Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded.id || decoded._id || "unknown"}`;
         }
       } catch (decodeError) {
         // If decode fails, just use token info

@@ -1,5 +1,3 @@
-import mongoose, { Document, Types } from "mongoose";
-
 export interface IHospital {
   arabName: string;
   engName: string;
@@ -9,6 +7,12 @@ export interface IHospital {
   };
 }
 
-export interface IHospitalDoc extends IHospital{
-  _id : Types.ObjectId
+export interface IHospitalDoc extends IHospital {
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+// Input types for create/update operations
+export type IHospitalInput = IHospital;
+export type IHospitalUpdateInput = Partial<IHospital> & { id: string };

@@ -2,12 +2,12 @@ import { injectable, inject } from "inversify";
 import { ExternalService } from "../externalService/external.service";
 import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
 import { UtilService } from "../utils/utils.service";
-import { Cand } from "../cand/cand.schema";
-import { CalSurg } from "../calSurg/calSurg.schema";
-import { Supervisor } from "../supervisor/supervisor.schema";
-import { MainDiag } from "../mainDiag/mainDiag.schema";
-import { ProcCpt } from "../procCpt/procCpt.schema";
-import { Diagnosis } from "../diagnosis/diagnosis.schema";
+import { CandService } from "../cand/cand.service";
+import { CalSurgService } from "../calSurg/calSurg.service";
+import { SupervisorService } from "../supervisor/supervisor.service";
+import { MainDiagService } from "../mainDiag/mainDiag.service";
+import { ProcCptService } from "../procCpt/procCpt.service";
+import { DiagnosisService } from "../diagnosis/diagnosis.service";
 import { ICandDoc } from "../cand/cand.interface";
 import {
   ISubRawData,
@@ -22,7 +22,7 @@ import {
   TSubStatus,
   SubPayloadMap,
 } from "./interfaces/sub.interface";
-import { Types } from "mongoose";
+// Removed: import { Types } from "mongoose"; - Now using UUIDs directly for MariaDB
 import { SubService } from "./sub.service";
 import { IExternalResponse } from "../externalService/external.interface";
 import { MailerService } from "../mailer/mailer.service";
@@ -30,12 +30,21 @@ import { AiAgentProvider } from "../aiAgent/aiAgent.provider";
 
 @injectable()
 export class SubProvider {
+  // UUID validation regex
+  private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   constructor(
     @inject(ExternalService) private externalService: ExternalService,
     @inject(UtilService) private utilService: UtilService,
     @inject(SubService) private subService: SubService,
     @inject(MailerService) private mailerService: MailerService,
-    @inject(AiAgentProvider) private aiAgentProvider: AiAgentProvider
+    @inject(AiAgentProvider) private aiAgentProvider: AiAgentProvider,
+    @inject(ProcCptService) private procCptService: ProcCptService,
+    @inject(DiagnosisService) private diagnosisService: DiagnosisService,
+    @inject(MainDiagService) private mainDiagService: MainDiagService,
+    @inject(CalSurgService) private calSurgService: CalSurgService,
+    @inject(CandService) private candService: CandService,
+    @inject(SupervisorService) private supervisorService: SupervisorService
   ) {}
 
   public async createSubFromExternal(
@@ -65,24 +74,42 @@ export class SubProvider {
   }
 
   private async processExternalData(externalData: any): Promise<ISubDoc[]> {
-    const cands = await Cand.find({});
+    // Use candService instead of direct Mongoose model (cand is now MariaDB)
+    const cands = await this.candService.getAllCandidates();
+    // Note: cand now uses UUID (id), but sub still uses MongoDB ObjectId
+    // Create map with email -> cand for lookup
     const candsMap: Map<string, ICandDoc> = new Map(
-      cands.map((c) => [c.email, c])
+      cands.map((c: any) => [c.email, c])
     );
 
-    const calSurgs = await CalSurg.find({});
-    const calSurgsMap = new Map(calSurgs.map((c) => [c.google_uid, c]));
+    // Use calSurgService instead of direct Mongoose model (calSurg is now MariaDB)
+    const calSurgs = await this.calSurgService.getAllCalSurg();
+    // Note: calSurg now uses UUID (id), but sub still uses MongoDB ObjectId
+    // Create map with google_uid -> calSurg for lookup
+    const calSurgsMap = new Map(calSurgs.map((c: any) => [c.google_uid, c]));
 
-    const supervisors = await Supervisor.find({});
-    const supervisorsMap = new Map(supervisors.map((s) => [s.fullName, s]));
+    // Use supervisorService instead of direct Mongoose model (supervisor is now MariaDB)
+    const supervisors = await this.supervisorService.getAllSupervisors();
+    // Note: supervisor now uses UUID (id), but sub still uses MongoDB ObjectId
+    // Create map with fullName -> supervisor for lookup
+    const supervisorsMap = new Map(supervisors.map((s: any) => [s.fullName, s]));
 
-    const mainDiags = await MainDiag.find({});
-    const mainDiagsMap = new Map(mainDiags.map((m) => [m.title, m]));
+    // Use mainDiagService instead of direct Mongoose model (mainDiag is now MariaDB)
+    const mainDiags = await this.mainDiagService.getAllMainDiags();
+    // Note: mainDiag now uses UUID (id), but sub still uses MongoDB ObjectId
+    // Create map with title -> mainDiag for lookup
+    const mainDiagsMap = new Map(mainDiags.map((m: any) => [m.title, m]));
 
-    const procCpts = await ProcCpt.find({});
+    // Use procCptService instead of direct Mongoose model (procCpt is now MariaDB)
+    const procCpts = await this.procCptService.getAllProcCpts();
+    // Note: procCpt now uses UUID (id), but sub still uses MongoDB ObjectId
+    // Create map with numCode -> procCpt for lookup
     const procCptsMap = new Map(procCpts.map((p) => [p.numCode, p]));
 
-    const diagnoses = await Diagnosis.find({});
+    // Use diagnosisService instead of direct Mongoose model (diagnosis is now MariaDB)
+    const diagnoses = await this.diagnosisService.getAllDiagnoses();
+    // Note: diagnosis now uses UUID (id), but sub still uses MongoDB ObjectId
+    // Create map with icdCode -> diagnosis for lookup
     const diagnosesMap = new Map(diagnoses.map((d) => [d.icdCode, d]));
 
     const subPayloads: ISub[] = [];
@@ -108,27 +135,63 @@ export class SubProvider {
         rawItemArr[indexes.numCode],
         ", "
       );
+      // Use UUID directly for MariaDB
       const procDocIds = procCodes
-        .map((code) => procCptsMap.get(code)?._id)
-        .filter((id): id is Types.ObjectId => Boolean(id));
+        .map((code) => {
+          const procCpt = procCptsMap.get(code);
+          if (procCpt && procCpt.id) {
+            return procCpt.id; // UUID string
+          }
+          return null;
+        })
+        .filter((id): id is string => Boolean(id));
 
       const icdCodes = this.utilService.extractCodes(
         rawItemArr[indexes.icd],
         ", "
       );
+      // Use UUID directly for MariaDB
       const icdDocIds = icdCodes
-        .map((code) => diagnosesMap.get(code)?._id)
-        .filter((id): id is Types.ObjectId => Boolean(id));
+        .map((code) => {
+          const diagnosis = diagnosesMap.get(code);
+          if (diagnosis && diagnosis.id) {
+            return diagnosis.id; // UUID string
+          }
+          return null;
+        })
+        .filter((id): id is string => Boolean(id));
 
       const subBase: ISubBase = {
         timeStamp: this.utilService.stringToDateConverter(
           rawItemArr[indexes.timeStamp]
         ),
-        candDocId: candsMap.get(rawItemArr[indexes.candEmail])?._id as Types.ObjectId,
-        procDocId: calSurgsMap.get(rawItemArr[indexes.procUid])?._id as Types.ObjectId,
-        supervisorDocId: supervisorsMap.get(
-          rawItemArr[indexes.superEmail]
-        )?._id as Types.ObjectId,
+        // Use UUID directly for MariaDB
+        candDocId: (() => {
+          const cand = candsMap.get(rawItemArr[indexes.candEmail]);
+          if (cand && cand.id) {
+            return cand.id; // UUID string
+          }
+          return undefined as any;
+        })(),
+        // Use UUID directly for MariaDB
+        procDocId: (() => {
+          const calSurg = calSurgsMap.get(rawItemArr[indexes.procUid]);
+          if (calSurg && calSurg.id) {
+            return calSurg.id; // UUID string
+          }
+          return undefined as any;
+        })(),
+        // Use UUID directly for MariaDB
+        supervisorDocId: (() => {
+          const supervisor = supervisorsMap.get(rawItemArr[indexes.superEmail]);
+          if (supervisor && (supervisor.id || (supervisor as any)._id)) {
+            const supervisorId = supervisor.id || (supervisor as any)._id?.toString();
+            if (supervisorId) {
+              return supervisorId; // UUID string
+            }
+          }
+          return undefined as any;
+        })(),
         roleInSurg: this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.roleInProc]
         ) as TRoleInSurg,
@@ -154,7 +217,14 @@ export class SubProvider {
         consDetails: this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.consDet]
         ),
-        mainDiagDocId: mainDiagsMap.get(mainDiagTitle)?._id as Types.ObjectId,
+        // Use UUID directly for MariaDB
+        mainDiagDocId: (() => {
+          const mainDiag = mainDiagsMap.get(mainDiagTitle);
+          if (mainDiag && mainDiag.id) {
+            return mainDiag.id; // UUID string
+          }
+          return undefined;
+        })(),
         subGoogleUid: rawItemArr[indexes.subUid] || "",
         subStatus: this.utilService.normalizeSubStatus(
           rawItemArr[indexes.subStatus]
@@ -368,15 +438,16 @@ export class SubProvider {
         const subDoc = allSubDocs.find((sub) => sub.subGoogleUid === rawItemArr[indexes.subUid]);
         if(subDoc){
           if(rawItemArr[indexes.subStatus] === "Approved" && subDoc.subStatus !== "approved"){
-            subDoc.subStatus = "approved";
-            await subDoc.save();
-            updatedSubDocs.push(subDoc);
+            const updatedSub = await this.subService.updateSubmissionStatus(subDoc.id, "approved");
+            if (updatedSub) {
+              updatedSubDocs.push(updatedSub);
+            }
           }
           else if(rawItemArr[indexes.subStatus] === "Rejected" && subDoc.subStatus !== "rejected"){
-            subDoc.subStatus = "rejected";
-            await subDoc.save();
-            updatedSubDocs.push(subDoc);
-
+            const updatedSub = await this.subService.updateSubmissionStatus(subDoc.id, "rejected");
+            if (updatedSub) {
+              updatedSubDocs.push(updatedSub);
+            }
           } 
         }
       }
@@ -440,11 +511,11 @@ export class SubProvider {
     submissionId: string
   ): Promise<ISubDoc | null> | never {
     try {
-      // Business logic: Validate ObjectIds
-      if (!Types.ObjectId.isValid(submissionId)) {
+      // Business logic: Validate UUIDs
+      if (!this.uuidRegex.test(submissionId)) {
         throw new Error("Invalid submission ID format");
       }
-      if (!Types.ObjectId.isValid(supervisorId)) {
+      if (!this.uuidRegex.test(supervisorId)) {
         throw new Error("Invalid supervisor ID format");
       }
       
@@ -453,16 +524,28 @@ export class SubProvider {
         return null;
       }
       
-      // Extract supervisor ID - handle both populated (object) and unpopulated (ObjectId) cases
+      // Extract supervisor ID - handle both populated (object) and unpopulated (UUID) cases
       let submissionSupervisorId: string;
       const supervisorDoc = submission.supervisorDocId as any;
-      if (supervisorDoc && typeof supervisorDoc === 'object' && supervisorDoc._id) {
-        // Populated document - extract _id
-        submissionSupervisorId = supervisorDoc._id.toString();
+      if (supervisorDoc && typeof supervisorDoc === 'object') {
+        // Populated document - check for id (MariaDB) or _id (MongoDB - legacy)
+        if (supervisorDoc.id) {
+          submissionSupervisorId = supervisorDoc.id;
+        } else if (supervisorDoc._id) {
+          submissionSupervisorId = supervisorDoc._id.toString();
+        } else {
+          throw new Error("Submission does not belong to this supervisor");
+        }
       } else if (supervisorDoc) {
-        // Unpopulated ObjectId - convert directly
+        // Unpopulated UUID - convert directly
         submissionSupervisorId = supervisorDoc.toString();
       } else {
+        throw new Error("Submission does not belong to this supervisor");
+      }
+      
+      // Compare supervisor IDs (both should be UUIDs now)
+      // Both supervisorId and submissionSupervisorId are now UUIDs (MariaDB)
+      if (submissionSupervisorId !== supervisorId) {
         throw new Error("Submission does not belong to this supervisor");
       }
       
@@ -484,11 +567,11 @@ export class SubProvider {
     submissionId: string
   ): Promise<ISubDoc | null> | never {
     try {
-      // Business logic: Validate ObjectIds
-      if (!Types.ObjectId.isValid(submissionId)) {
+      // Business logic: Validate UUIDs
+      if (!this.uuidRegex.test(submissionId)) {
         throw new Error("Invalid submission ID format");
       }
-      if (!Types.ObjectId.isValid(candidateId)) {
+      if (!this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
       }
       
@@ -497,14 +580,20 @@ export class SubProvider {
         return null;
       }
       
-      // Extract candidate ID - handle both populated (object) and unpopulated (ObjectId) cases
+      // Extract candidate ID - handle both populated (object) and unpopulated (ObjectId/UUID) cases
       let submissionCandidateId: string;
       const candidateDoc = submission.candDocId as any;
-      if (candidateDoc && typeof candidateDoc === 'object' && candidateDoc._id) {
-        // Populated document - extract _id
-        submissionCandidateId = candidateDoc._id.toString();
+      if (candidateDoc && typeof candidateDoc === 'object') {
+        // Populated document - check for id (MariaDB) or _id (MongoDB)
+        if (candidateDoc.id) {
+          submissionCandidateId = candidateDoc.id;
+        } else if (candidateDoc._id) {
+          submissionCandidateId = candidateDoc._id.toString();
+        } else {
+          throw new Error("Submission does not belong to this candidate");
+        }
       } else if (candidateDoc) {
-        // Unpopulated ObjectId - convert directly
+        // Unpopulated ObjectId/UUID - convert directly
         submissionCandidateId = candidateDoc.toString();
       } else {
         throw new Error("Submission does not belong to this candidate");
@@ -562,11 +651,11 @@ export class SubProvider {
     review?: string
   ): Promise<ISubDoc> | never {
     try {
-      // Validate ObjectIds
-      if (!Types.ObjectId.isValid(submissionId)) {
+      // Validate UUIDs
+      if (!this.uuidRegex.test(submissionId)) {
         throw new Error("Invalid submission ID format");
       }
-      if (!Types.ObjectId.isValid(supervisorId)) {
+      if (!this.uuidRegex.test(supervisorId)) {
         throw new Error("Invalid supervisor ID format");
       }
 
@@ -1095,8 +1184,8 @@ export class SubProvider {
     submissionId: string
   ): Promise<{ surgicalNotes: string }> | never {
     try {
-      // Validate ObjectId
-      if (!Types.ObjectId.isValid(submissionId)) {
+      // Validate UUID
+      if (!this.uuidRegex.test(submissionId)) {
         throw new Error("Invalid submission ID format");
       }
 
@@ -1162,6 +1251,19 @@ export class SubProvider {
       return uniqueSubs;
     } catch (err: any) {
       throw new Error(`Failed to filter duplicate submissions: ${err.message}`);
+    }
+  }
+
+  /**
+   * Deletes a submission by ID
+   * @param id - Submission ID to delete
+   * @returns Promise<boolean>
+   */
+  public async deleteSub(id: string): Promise<boolean> {
+    try {
+      return await this.subService.deleteSub(id);
+    } catch (error: any) {
+      throw new Error(`Failed to delete submission: ${error.message}`);
     }
   }
 }

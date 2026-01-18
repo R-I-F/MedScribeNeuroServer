@@ -1,41 +1,57 @@
 import { inject, injectable } from "inversify";
 import { IDiagnosis, IDiagnosisDoc } from "./diagnosis.interface";
-import { Model } from "mongoose";
-import { Diagnosis } from "./diagnosis.schema";
+import { AppDataSource } from "../config/database.config";
+import { DiagnosisEntity } from "./diagnosis.mDbSchema";
+import { Repository, In, Or } from "typeorm";
 
-injectable();
+@injectable()
 export class DiagnosisService {
-  constructor() {}
+  private diagnosisRepository: Repository<DiagnosisEntity>;
 
-  private diagnosisModel: Model<IDiagnosis> = Diagnosis
+  constructor() {
+    this.diagnosisRepository = AppDataSource.getRepository(DiagnosisEntity);
+  }
 
-  public async createDiagnosis(diagnosisData: IDiagnosis){
+  public async getAllDiagnoses(): Promise<IDiagnosisDoc[]> | never {
     try {
-      const newDiagnosis = await new this.diagnosisModel(diagnosisData).save();
-      return newDiagnosis;
+      const allDiagnoses = await this.diagnosisRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return allDiagnoses as unknown as IDiagnosisDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async createBulkDiagnosis(diagnosisData: IDiagnosis[]){
+  public async createDiagnosis(diagnosisData: IDiagnosis): Promise<IDiagnosisDoc> | never {
     try {
-      const newDiagnosisArr = await this.diagnosisModel.insertMany(diagnosisData);
-      return newDiagnosisArr;
+      const newDiagnosis = this.diagnosisRepository.create(diagnosisData);
+      const savedDiagnosis = await this.diagnosisRepository.save(newDiagnosis);
+      return savedDiagnosis as unknown as IDiagnosisDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async findExistingDiagnosis(icdCode: string, icdName: string): Promise<IDiagnosis | null> {
+  public async createBulkDiagnosis(diagnosisData: IDiagnosis[]): Promise<IDiagnosisDoc[]> | never {
     try {
-      const existingDiagnosis = await this.diagnosisModel.findOne({
-        $or: [
+      const newDiagnoses = this.diagnosisRepository.create(diagnosisData);
+      const savedDiagnoses = await this.diagnosisRepository.save(newDiagnoses);
+      return savedDiagnoses as unknown as IDiagnosisDoc[];
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async findExistingDiagnosis(icdCode: string, icdName: string): Promise<IDiagnosisDoc | null> | never {
+    try {
+      const existingDiagnosis = await this.diagnosisRepository.findOne({
+        where: [
           { icdCode: icdCode },
           { icdName: icdName }
         ]
       });
-      return existingDiagnosis;
+      return existingDiagnosis as unknown as IDiagnosisDoc | null;
     } catch (err: any) {
       throw new Error(`Failed to check for existing diagnosis: ${err.message}`);
     }
@@ -43,8 +59,19 @@ export class DiagnosisService {
 
   public async findByIcdCodes(icdCodes: string[]): Promise<IDiagnosisDoc[]> | never {
     try {
-      const foundDiagnoses = await this.diagnosisModel.find({ icdCode: { $in: icdCodes } }).exec();
-      return foundDiagnoses;
+      const foundDiagnoses = await this.diagnosisRepository.find({
+        where: { icdCode: In(icdCodes) },
+      });
+      return foundDiagnoses as unknown as IDiagnosisDoc[];
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async deleteDiagnosis(id: string): Promise<boolean> | never {
+    try {
+      const result = await this.diagnosisRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }

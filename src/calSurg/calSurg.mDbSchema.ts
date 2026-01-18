@@ -19,11 +19,17 @@ export class CalSurgEntity {
   @Column({ type: "enum", enum: ["male", "female"] })
   gender!: "male" | "female";
 
-  @ManyToOne(() => HospitalEntity)
+  @Column({ type: "char", length: 36 })
+  hospitalId!: string;
+
+  @ManyToOne(() => HospitalEntity, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "hospitalId" })
   hospital!: HospitalEntity;
 
-  @ManyToOne(() => ArabProcEntity, { nullable: true })
+  @Column({ type: "char", length: 36, nullable: true })
+  arabProcId?: string;
+
+  @ManyToOne(() => ArabProcEntity, { onDelete: "RESTRICT", nullable: true })
   @JoinColumn({ name: "arabProcId" })
   arabProc?: ArabProcEntity;
 

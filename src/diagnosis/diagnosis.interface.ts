@@ -1,5 +1,3 @@
-import { Types } from "mongoose";
-
 export interface IDiagnosis {
   icdCode: string;
   icdName: string;
@@ -7,5 +5,11 @@ export interface IDiagnosis {
 }
 
 export interface IDiagnosisDoc extends IDiagnosis {
-  _id: Types.ObjectId;
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+// Input types for create/update operations
+export type IDiagnosisInput = IDiagnosis;
+export type IDiagnosisUpdateInput = Partial<IDiagnosis> & { id: string };

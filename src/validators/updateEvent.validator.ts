@@ -1,13 +1,12 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const updateEventValidator = checkSchema({
   id: {
     in: ["params"],
     notEmpty: true,
     errorMessage: "event ID is required.",
-    isMongoId: {
-      errorMessage: "event ID must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   type: {
@@ -22,25 +21,19 @@ export const updateEventValidator = checkSchema({
   lecture: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "lecture must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   journal: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "journal must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   conf: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "conf must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   dateTime: {
@@ -59,9 +52,7 @@ export const updateEventValidator = checkSchema({
   presenter: {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "presenter must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   attendance: {
@@ -74,9 +65,7 @@ export const updateEventValidator = checkSchema({
   "attendance.*": {
     in: ["body"],
     optional: true,
-    isMongoId: {
-      errorMessage: "each attendance entry must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   status: {

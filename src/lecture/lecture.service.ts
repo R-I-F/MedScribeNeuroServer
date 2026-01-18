@@ -1,16 +1,22 @@
 import { inject, injectable } from "inversify";
 import { ILecture, ILectureDoc } from "./lecture.interface";
-import { Model, Types } from "mongoose";
-import { Lecture } from "./lecture.schema";
+import { AppDataSource } from "../config/database.config";
+import { LectureEntity } from "./lecture.mDbSchema";
+import { Repository, In, Not } from "typeorm";
 
 @injectable()
 export class LectureService {
-  private lectureModel: Model<ILecture> = Lecture;
+  private lectureRepository: Repository<LectureEntity>;
+
+  constructor() {
+    this.lectureRepository = AppDataSource.getRepository(LectureEntity);
+  }
 
   public async createLecture(lectureData: ILecture): Promise<ILectureDoc> | never {
     try {
-      const newLecture = new this.lectureModel(lectureData);
-      return await newLecture.save();
+      const newLecture = this.lectureRepository.create(lectureData);
+      const savedLecture = await this.lectureRepository.save(newLecture);
+      return savedLecture as unknown as ILectureDoc;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -18,7 +24,10 @@ export class LectureService {
 
   public async getAllLectures(): Promise<ILectureDoc[]> | never {
     try {
-      return await this.lectureModel.find().exec();
+      const allLectures = await this.lectureRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return allLectures as unknown as ILectureDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -26,10 +35,15 @@ export class LectureService {
 
   public async getLectureById(id: string): Promise<ILectureDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid lecture ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid lecture ID format");
       }
-      return await this.lectureModel.findById(id).exec();
+      const lecture = await this.lectureRepository.findOne({
+        where: { id },
+      });
+      return lecture as unknown as ILectureDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -37,10 +51,16 @@ export class LectureService {
 
   public async updateLecture(id: string, updateData: Partial<ILecture>): Promise<ILectureDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid lecture ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid lecture ID format");
       }
-      return await this.lectureModel.findByIdAndUpdate(id, updateData, { new: true }).exec();
+      await this.lectureRepository.update(id, updateData);
+      const updatedLecture = await this.lectureRepository.findOne({
+        where: { id },
+      });
+      return updatedLecture as unknown as ILectureDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -48,11 +68,13 @@ export class LectureService {
 
   public async deleteLecture(id: string): Promise<boolean> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid lecture ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid lecture ID format");
       }
-      const result = await this.lectureModel.findByIdAndDelete(id).exec();
-      return result !== null;
+      const result = await this.lectureRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -60,11 +82,18 @@ export class LectureService {
 
   public async findByGoogleUid(google_uid: string, excludeId?: string): Promise<ILectureDoc | null> | never {
     try {
-      const query: any = { google_uid };
-      if (excludeId && Types.ObjectId.isValid(excludeId)) {
-        query._id = { $ne: excludeId };
+      const where: any = { google_uid };
+      if (excludeId) {
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(excludeId)) {
+          where.id = Not(excludeId);
+        }
       }
-      return await this.lectureModel.findOne(query).exec();
+      const lecture = await this.lectureRepository.findOne({
+        where,
+      });
+      return lecture as unknown as ILectureDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -72,7 +101,9 @@ export class LectureService {
 
   public async createBulkLectures(lectureDataArray: ILecture[]): Promise<ILectureDoc[]> | never {
     try {
-      return await this.lectureModel.insertMany(lectureDataArray);
+      const lectures = this.lectureRepository.create(lectureDataArray);
+      const savedLectures = await this.lectureRepository.save(lectures);
+      return savedLectures as unknown as ILectureDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -84,10 +115,12 @@ export class LectureService {
       if (uniqueUids.length === 0) {
         return [];
       }
-      return await this.lectureModel.find({ google_uid: { $in: uniqueUids } }).exec();
+      const lectures = await this.lectureRepository.find({
+        where: { google_uid: In(uniqueUids) },
+      });
+      return lectures as unknown as ILectureDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 }
-

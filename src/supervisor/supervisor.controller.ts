@@ -100,15 +100,17 @@ export class SupervisorController {
   public async handleGetSupervisedCandidates(
     req: Request,
     res: Response
-  ) {
+  ): Promise<Array<any>> | never {
     try {
-      const jwtPayload = res.locals.jwt as { _id: string; email: string; role: string } | undefined;
+      const jwtPayload = res.locals.jwt as { _id: string; id?: string; email: string; role: string } | undefined;
 
-      if (!jwtPayload || !jwtPayload._id) {
+      if (!jwtPayload || (!jwtPayload._id && !jwtPayload.id)) {
         throw new Error("Unauthorized: No supervisor ID found in token");
       }
 
-      const candidates = await this.supervisorService.getSupervisedCandidates(jwtPayload._id);
+      // Use id (MariaDB UUID) if available, otherwise fall back to _id (MongoDB ObjectId)
+      const supervisorId = jwtPayload.id || jwtPayload._id;
+      const candidates = await this.supervisorService.getSupervisedCandidates(supervisorId);
 
       return candidates;
     } catch (err: any) {

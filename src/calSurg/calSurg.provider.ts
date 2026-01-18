@@ -4,17 +4,19 @@ import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
 import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
 import { ExternalService } from "../externalService/external.service";
 import { UtilService } from "../utils/utils.service";
-import { Hospital } from "../hospital/hospital.schema";
+import { HospitalService } from "../hospital/hospital.service";
 import { IHospitalDoc } from "../hospital/hospital.interface";
 import { IArabProcDoc } from "../arabProc/arabProc.interface";
-import { ArabProc } from "../arabProc/arabProc.schema";
+import { ArabProcService } from "../arabProc/arabProc.service";
 
 @injectable()
 export class CalSurgProvider {
   constructor(
     @inject(CalSurgService) private calSurgService: CalSurgService,
     @inject(ExternalService) private externalService: ExternalService,
-    @inject(UtilService) private utilService: UtilService
+    @inject(UtilService) private utilService: UtilService,
+    @inject(ArabProcService) private arabProcService: ArabProcService,
+    @inject(HospitalService) private hospitalService: HospitalService
   ) {}
 
   /**
@@ -224,10 +226,16 @@ export class CalSurgProvider {
    */
   private async processExternalData(externalData: any): Promise<ICalSurg[]> {
     // Business logic: Get reference data for mapping
-    const hospitals: IHospitalDoc[] = await Hospital.find({});
-    const hospitalsMap = new Map(hospitals.map(h => [h.engName, h]));
+    // Use hospitalService instead of direct Mongoose model (hospital may still be MongoDB)
+    const hospitals: IHospitalDoc[] = await this.hospitalService.getAllHospitals();
+    // Handle both MongoDB (_id) and MariaDB (id) formats
+    const hospitalsMap = new Map(hospitals.map(h => {
+      const hospitalId = (h as any).id || (h as any)._id?.toString() || '';
+      return [h.engName, { ...h, id: hospitalId }];
+    }));
 
-    const arabicProcs: IArabProcDoc[] = await ArabProc.find({});
+    // Use arabProcService instead of direct Mongoose model access
+    const arabicProcs: IArabProcDoc[] = await this.arabProcService.getAllArabProcs();
     const arabicProcsMap = new Map(arabicProcs.map(p => [p.title, p]));
 
     const items: ICalSurg[] = [];
@@ -238,18 +246,19 @@ export class CalSurgProvider {
       
       // Business logic: Sanitize and validate data
       const sanPatientName = this.utilService.sanitizeName(rawItem["Patient Name"]);
-      const location: IHospitalDoc | undefined = hospitalsMap.get(rawItem["Location"]);
+      const location: any = hospitalsMap.get(rawItem["Location"]);
       const arabicProc: IArabProcDoc | undefined = arabicProcsMap.get(rawItem["Procedure"]);
       
       // Business logic: Only create record if both references exist
       if (location && arabicProc) {
+        // Now calSurg uses UUIDs directly (no conversion needed)
         const normalizedItem: ICalSurg = {
           timeStamp: this.utilService.stringToDateConverter(rawItem["Timestamp"]),
           patientName: sanPatientName,
           patientDob: rawItem["Patient DOB"],
           gender: rawItem["Gender"],
-          hospital: location._id,
-          arabProc: arabicProc._id,
+          hospital: location.id, // Use UUID directly (handles both MongoDB _id and MariaDB id)
+          arabProc: arabicProc.id, // Use UUID directly
           procDate: this.utilService.stringToDateConverter(rawItem["Operation Date"]),
           google_uid: rawItem["uid"],
           formLink: rawItem["Link"]
@@ -285,9 +294,10 @@ export class CalSurgProvider {
    * @throws Error if invalid format
    */
   private validateObjectId(id: string): void {
-    // Business logic: Basic ObjectId validation
-    if (!id || typeof id !== 'string' || id.length !== 24) {
-      throw new Error("Invalid ObjectId format");
+    // Business logic: Basic UUID validation (calSurg now uses UUID instead of ObjectId)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!id || typeof id !== 'string' || !uuidRegex.test(id)) {
+      throw new Error("Invalid UUID format");
     }
   }
 
@@ -333,10 +343,22 @@ export class CalSurgProvider {
   }
 
   /**
+   * Deletes a calSurg by ID
+   * @param id - CalSurg ID to delete
+   * @returns Promise<boolean>
+   */
+  public async deleteCalSurg(id: string): Promise<boolean> {
+    try {
+      return await this.calSurgService.deleteCalSurg(id);
+    } catch (error: any) {
+      throw new Error(`Failed to delete calSurg: ${error.message}`);
+    }
+  }
+
+  /**
    * Additional provider methods can be added here as needed
    * Examples:
    * - updateCalSurg()
-   * - deleteCalSurg()
    * - searchCalSurgs()
    * - validateCalSurgData()
    */

@@ -1,18 +1,24 @@
 import { injectable } from "inversify";
-import { Model } from "mongoose";
-import { PasswordResetToken } from "./passwordReset.schema";
+import { AppDataSource } from "../config/database.config";
+import { PasswordResetTokenEntity } from "./passwordReset.mDbSchema";
 import { IPasswordResetToken, IPasswordResetTokenDoc } from "./passwordReset.interface";
+import { Repository, LessThan, MoreThanOrEqual } from "typeorm";
 
 @injectable()
 export class PasswordResetService {
-  private passwordResetModel: Model<IPasswordResetToken> = PasswordResetToken;
+  private passwordResetRepository: Repository<PasswordResetTokenEntity>;
+
+  constructor() {
+    this.passwordResetRepository = AppDataSource.getRepository(PasswordResetTokenEntity);
+  }
 
   public async createPasswordResetToken(
-    data: Omit<IPasswordResetToken, "_id" | "createdAt" | "updatedAt">
+    data: IPasswordResetToken
   ): Promise<IPasswordResetTokenDoc> | never {
     try {
-      const tokenDoc = new this.passwordResetModel(data);
-      return await tokenDoc.save();
+      const tokenDoc = this.passwordResetRepository.create(data);
+      const savedToken = await this.passwordResetRepository.save(tokenDoc);
+      return savedToken as unknown as IPasswordResetTokenDoc;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -20,7 +26,10 @@ export class PasswordResetService {
 
   public async findTokenByValue(token: string): Promise<IPasswordResetTokenDoc | null> | never {
     try {
-      return await this.passwordResetModel.findOne({ token }).exec();
+      const tokenDoc = await this.passwordResetRepository.findOne({
+        where: { token },
+      });
+      return tokenDoc as unknown as IPasswordResetTokenDoc | null;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -28,13 +37,14 @@ export class PasswordResetService {
 
   public async markTokenAsUsed(token: string): Promise<IPasswordResetTokenDoc | null> | never {
     try {
-      return await this.passwordResetModel
-        .findOneAndUpdate(
-          { token },
-          { used: true },
-          { new: true }
-        )
-        .exec();
+      await this.passwordResetRepository.update(
+        { token },
+        { used: true }
+      );
+      const updatedToken = await this.passwordResetRepository.findOne({
+        where: { token },
+      });
+      return updatedToken as unknown as IPasswordResetTokenDoc | null;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -42,10 +52,26 @@ export class PasswordResetService {
 
   public async countTokensByEmail(email: string, timeWindowMs: number): Promise<number> | never {
     try {
-      const cutoffTime = new Date(Date.now() - timeWindowMs);
-      // We need to check tokens by userId, but we don't have email in token model
-      // This will be handled in the provider layer
+      // This method is not fully implemented as it requires finding user by email first
+      // The provider layer handles this by finding the user first, then counting tokens
+      // For now, return 0 as placeholder
       return 0;
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
+  public async countTokensByUserId(userId: string, timeWindowMs: number): Promise<number> | never {
+    try {
+      const cutoffTime = new Date(Date.now() - timeWindowMs);
+      // Count tokens created AFTER the cutoff time (within the time window)
+      const count = await this.passwordResetRepository.count({
+        where: {
+          userId,
+          createdAt: MoreThanOrEqual(cutoffTime),
+        },
+      });
+      return count;
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -53,13 +79,13 @@ export class PasswordResetService {
 
   public async deleteExpiredTokens(): Promise<number> | never {
     try {
-      const result = await this.passwordResetModel.deleteMany({
-        expiresAt: { $lt: new Date() },
-      }).exec();
-      return (result as { deletedCount?: number }).deletedCount ?? 0;
+      const now = new Date();
+      const result = await this.passwordResetRepository.delete({
+        expiresAt: LessThan(now),
+      });
+      return result.affected ?? 0;
     } catch (error: any) {
       throw new Error(error.message);
     }
   }
 }
-

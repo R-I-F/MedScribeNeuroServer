@@ -1,7 +1,7 @@
 import { inject, injectable } from "inversify";
 import bcryptjs from "bcryptjs";
 import crypto from "crypto";
-import { Types } from "mongoose";
+// Removed: import { Types } from "mongoose"; - Now using UUIDs directly for MariaDB
 import { PasswordResetService } from "./passwordReset.service";
 import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
@@ -10,7 +10,8 @@ import { InstituteAdminService } from "../instituteAdmin/instituteAdmin.service"
 import { MailerService } from "../mailer/mailer.service";
 import { TUserRole } from "../types/role.types";
 import { IPasswordResetTokenDoc } from "./passwordReset.interface";
-import { Cand } from "../cand/cand.schema";
+import { AppDataSource } from "../config/database.config";
+import { CandidateEntity } from "../cand/cand.mDbSchema";
 
 @injectable()
 export class PasswordResetProvider {
@@ -76,14 +77,17 @@ export class PasswordResetProvider {
     role: TUserRole
   ): Promise<any | null> | never {
     try {
-      if (!Types.ObjectId.isValid(userId)) {
-        throw new Error("Invalid user ID");
+      // Validate UUID format (support both UUID and ObjectId for backward compatibility)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const objectIdRegex = /^[0-9a-f]{24}$/i;
+      
+      if (!uuidRegex.test(userId) && !objectIdRegex.test(userId)) {
+        throw new Error("Invalid user ID format");
       }
 
       switch (role) {
         case "candidate":
-          // Use findById directly on the model
-          const cand = await Cand.findById(userId).exec();
+          const cand = await this.candService.getCandById(userId);
           return cand;
         case "supervisor":
           const supervisor = await this.supervisorService.getSupervisorById({ id: userId });
@@ -115,10 +119,16 @@ export class PasswordResetProvider {
       }
 
       // Count tokens for this user in the last hour
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      // This would require querying tokens by userId
-      // For now, we'll implement a simpler check in the service
-      return true; // Simplified - can be enhanced later
+      const userId = userData.user.id || (userData.user._id ? userData.user._id.toString() : null);
+      if (!userId) {
+        return true; // Allow if user ID not found
+      }
+
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const tokenCount = await this.passwordResetService.countTokensByUserId(userId, oneHourAgo);
+      
+      // Allow if less than 3 tokens in the last hour
+      return tokenCount < 3;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -137,7 +147,8 @@ export class PasswordResetProvider {
       }
 
       const { user, role } = userData;
-      const userId = user._id ? user._id.toString() : null;
+      // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
+      const userId = user.id || (user._id ? user._id.toString() : null);
       if (!userId) {
         return;
       }
@@ -220,16 +231,27 @@ export class PasswordResetProvider {
     newPassword: string
   ): Promise<void> | never {
     try {
-      if (!Types.ObjectId.isValid(userId)) {
-        throw new Error("Invalid user ID");
+      // Validate UUID format (support both UUID and ObjectId for backward compatibility)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const objectIdRegex = /^[0-9a-f]{24}$/i;
+      
+      if (!uuidRegex.test(userId) && !objectIdRegex.test(userId)) {
+        throw new Error("Invalid user ID format");
       }
 
       const hashedPassword = await bcryptjs.hash(newPassword, 10);
 
       switch (userRole) {
         case "candidate":
-          // Update candidate password directly using model
-          await Cand.findByIdAndUpdate(userId, { password: hashedPassword }).exec();
+          // Update candidate password using repository directly
+          // Note: CandService doesn't have a generic update method, so we use the repository pattern
+          const cand = await this.candService.getCandById(userId);
+          if (!cand) {
+            throw new Error("Candidate not found");
+          }
+          // Use the repository update pattern similar to resetCandidatePassword
+          const candRepository = AppDataSource.getRepository(CandidateEntity);
+          await candRepository.update(userId, { password: hashedPassword });
           break;
         case "supervisor":
           await this.supervisorService.updateSupervisor({
@@ -267,8 +289,12 @@ export class PasswordResetProvider {
     userName: string
   ): Promise<void> | never {
     try {
-      if (!Types.ObjectId.isValid(userId)) {
-        throw new Error("Invalid user ID");
+      // Validate UUID format (support both UUID and ObjectId for backward compatibility)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const objectIdRegex = /^[0-9a-f]{24}$/i;
+      
+      if (!uuidRegex.test(userId) && !objectIdRegex.test(userId)) {
+        throw new Error("Invalid user ID format");
       }
 
       // Generate secure token
@@ -316,8 +342,12 @@ export class PasswordResetProvider {
     token?: string
   ): Promise<void> | never {
     try {
-      if (!Types.ObjectId.isValid(userId)) {
-        throw new Error("Invalid user ID");
+      // Validate UUID format (support both UUID and ObjectId for backward compatibility)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const objectIdRegex = /^[0-9a-f]{24}$/i;
+      
+      if (!uuidRegex.test(userId) && !objectIdRegex.test(userId)) {
+        throw new Error("Invalid user ID format");
       }
 
       // If token is provided, validate and use it
@@ -333,8 +363,7 @@ export class PasswordResetProvider {
         let user: any = null;
         switch (userRole) {
           case "candidate":
-            // Use findById directly on the model
-            user = await Cand.findById(userId).exec();
+            user = await this.candService.getCandById(userId);
             break;
           case "supervisor":
             user = await this.supervisorService.getSupervisorById({ id: userId });

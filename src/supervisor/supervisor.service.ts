@@ -1,13 +1,17 @@
 import { inject, injectable } from "inversify";
 import { ISupervisor, ISupervisorDoc } from "./supervisor.interface";
-import { Model } from "mongoose";
-import { Supervisor } from "./supervisor.schema";
+import { AppDataSource } from "../config/database.config";
+import { SupervisorEntity } from "./supervisor.mDbSchema";
 import { SupervisorProvider } from "./supervisor.provider";
+import { Repository } from "typeorm";
 
 @injectable()
 export class SupervisorService {
-  constructor(@inject(SupervisorProvider) private supervisorProvider: SupervisorProvider) {}
-  private supervisorModel: Model<ISupervisor> = Supervisor;
+  private supervisorRepository: Repository<SupervisorEntity>;
+
+  constructor(@inject(SupervisorProvider) private supervisorProvider: SupervisorProvider) {
+    this.supervisorRepository = AppDataSource.getRepository(SupervisorEntity);
+  }
 
   public async createSupervisor(validatedReq: Partial<ISupervisor>): Promise<ISupervisorDoc> | never {
     try {
@@ -61,8 +65,8 @@ export class SupervisorService {
     hashedPassword: string
   ): Promise<number> | never {
     try {
-      const result = await this.supervisorModel.updateMany({}, { $set: { password: hashedPassword } });
-      return (result as { modifiedCount?: number }).modifiedCount ?? 0;
+      const result = await this.supervisorRepository.update({}, { password: hashedPassword });
+      return result.affected ?? 0;
     } catch (err: any) {
       throw new Error(err);
     }

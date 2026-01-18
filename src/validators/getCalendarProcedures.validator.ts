@@ -1,12 +1,11 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const getCalendarProceduresValidator = checkSchema({
   hospitalId: {
     in: ["query"],
     optional: true,
-    isMongoId: {
-      errorMessage: "Hospital ID must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   arabProcTitle: {

@@ -1,5 +1,4 @@
 import { User } from "../user/user.interface";
-import { Types } from "mongoose";
 import { TUserRole } from "../types/role.types";
 
 export enum Rank {
@@ -20,6 +19,7 @@ export enum RegDegree {
   SelfRegistration = "self registration",
   Other = "other",
 }
+
 export interface ICand extends User {
   timeStamp?: Date;
   regNum: string;
@@ -32,5 +32,11 @@ export interface ICand extends User {
 }
 
 export interface ICandDoc extends ICand {
-  _id: Types.ObjectId
+  id: string; // UUID (replaces _id from MongoDB)
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+// Input types for create/update operations
+export type ICandInput = ICand;
+export type ICandUpdateInput = Partial<ICand> & { id: string };

@@ -1,82 +1,65 @@
 import { Application } from "express";
-import { HospitalRouter } from "../hospital/hospital.router";
-import { ArabProcRouter } from "../arabProc/arabProc.router";
-import { CalSurgRouter } from "../calSurg/calSurg.router";
-import { ExternalRouter } from "../externalService/external.router";
 import { container } from "./container.config";
-import { CandRouter } from "../cand/cand.router";
-import { ProcCptRouter } from "../procCpt/procCpt.router";
-import { DiagnosisRouter } from "../diagnosis/diagnosis.router";
-import { SupervisorRouter } from "../supervisor/supervisor.router";
-import { MainDiagRouter } from "../mainDiag/mainDiag.router";
-import { SubRouter } from "../sub/sub.router";
-import { MailerRouter } from "../mailer/mailer.router";
-import { AuthRouter } from "../auth/auth.router";
-import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
-import { InstituteAdminRouter } from "../instituteAdmin/instituteAdmin.router";
-import { ReportsRouter } from "../reports/reports.router";
-import { LectureRouter } from "../lecture/lecture.router";
-import { JournalRouter } from "../journal/journal.router";
-import { ConfRouter } from "../conf/conf.router";
-import { EventRouter } from "../event/event.router";
+// Using dynamic requires to avoid circular dependency with container.config.ts
 
 export function addRoutes(app: Application) {
-  const hospitalRouter: HospitalRouter =
-    container.get<HospitalRouter>(HospitalRouter);
+  // Using dynamic requires to avoid circular dependency with container.config.ts
+  const { HospitalRouter } = require("../hospital/hospital.router");
+  const hospitalRouter = container.get(HospitalRouter) as any;
 
-  const externalRouter: ExternalRouter =
-    container.get<ExternalRouter>(ExternalRouter);
+  const { ExternalRouter } = require("../externalService/external.router");
+  const externalRouter = container.get(ExternalRouter) as any;
 
-  const arabProcRouter: ArabProcRouter =
-    container.get<ArabProcRouter>(ArabProcRouter);
+  const { ArabProcRouter } = require("../arabProc/arabProc.router");
+  const arabProcRouter = container.get(ArabProcRouter) as any;
 
-  const calSurgRouter: CalSurgRouter =  
-    container.get<CalSurgRouter>(CalSurgRouter);
+  const { CalSurgRouter } = require("../calSurg/calSurg.router");
+  const calSurgRouter = container.get(CalSurgRouter) as any;
 
-  const candRouter: CandRouter = 
-    container.get<CandRouter>(CandRouter);
+  const { CandRouter } = require("../cand/cand.router");
+  const candRouter = container.get(CandRouter) as any;
 
-    const procCptRouter: ProcCptRouter = 
-  container.get<ProcCptRouter>(ProcCptRouter);
+  const { ProcCptRouter } = require("../procCpt/procCpt.router");
+  const procCptRouter = container.get(ProcCptRouter) as any;
 
-  const diagnosisRouter: DiagnosisRouter = 
-  container.get<DiagnosisRouter>(DiagnosisRouter);
+  const { DiagnosisRouter } = require("../diagnosis/diagnosis.router");
+  const diagnosisRouter = container.get(DiagnosisRouter) as any;
 
-  const supervisorRouter: SupervisorRouter = 
-  container.get<SupervisorRouter>(SupervisorRouter);
+  const { SupervisorRouter } = require("../supervisor/supervisor.router");
+  const supervisorRouter = container.get(SupervisorRouter) as any;
 
-  const mainDiagRouter: MainDiagRouter = 
-  container.get<MainDiagRouter>(MainDiagRouter);
+  const { MainDiagRouter } = require("../mainDiag/mainDiag.router");
+  const mainDiagRouter = container.get(MainDiagRouter) as any;
 
-  const subRouter: SubRouter = 
-  container.get<SubRouter>(SubRouter);
+  const { SubRouter } = require("../sub/sub.router");
+  const subRouter = container.get(SubRouter) as any;
 
-  const mailerRouter: MailerRouter =
-    container.get<MailerRouter>(MailerRouter);
+  const { MailerRouter } = require("../mailer/mailer.router");
+  const mailerRouter = container.get(MailerRouter) as any;
 
-  const authRouter: AuthRouter =
-    container.get<AuthRouter>(AuthRouter);
+  const { AuthRouter } = require("../auth/auth.router");
+  const authRouter = container.get(AuthRouter) as any;
 
-  const superAdminRouter: SuperAdminRouter =
-    container.get<SuperAdminRouter>(SuperAdminRouter);
+  const { SuperAdminRouter } = require("../superAdmin/superAdmin.router");
+  const superAdminRouter = container.get(SuperAdminRouter) as any;
 
-  const instituteAdminRouter: InstituteAdminRouter =
-    container.get<InstituteAdminRouter>(InstituteAdminRouter);
+  const { InstituteAdminRouter } = require("../instituteAdmin/instituteAdmin.router");
+  const instituteAdminRouter = container.get(InstituteAdminRouter) as any;
 
-  const reportsRouter: ReportsRouter =
-    container.get<ReportsRouter>(ReportsRouter);
+  const { ReportsRouter } = require("../reports/reports.router");
+  const reportsRouter = container.get(ReportsRouter) as any;
 
-  const lectureRouter: LectureRouter =
-    container.get<LectureRouter>(LectureRouter);
+  const { LectureRouter } = require("../lecture/lecture.router");
+  const lectureRouter = container.get(LectureRouter) as any;
 
-  const journalRouter: JournalRouter =
-    container.get<JournalRouter>(JournalRouter);
+  const { JournalRouter } = require("../journal/journal.router");
+  const journalRouter = container.get(JournalRouter) as any;
 
-  const confRouter: ConfRouter =
-    container.get<ConfRouter>(ConfRouter);
+  const { ConfRouter } = require("../conf/conf.router");
+  const confRouter = container.get(ConfRouter) as any;
 
-  const eventRouter: EventRouter =
-    container.get<EventRouter>(EventRouter);
+  const { EventRouter } = require("../event/event.router");
+  const eventRouter = container.get(EventRouter) as any;
 
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);

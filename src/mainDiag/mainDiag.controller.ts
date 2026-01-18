@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { matchedData } from "express-validator";
 import { inject, injectable } from "inversify";
 import { MainDiagService } from "./mainDiag.service";
-import { IMainDiagInput, IMainDiag, IMainDiagUpdateInput } from "./mainDiag.interface";
+import { IMainDiagInput, IMainDiag, IMainDiagUpdateInput, IMainDiagDoc } from "./mainDiag.interface";
 
 @injectable()
 export class MainDiagController {
@@ -13,7 +13,7 @@ export class MainDiagController {
   public async handlePostMainDiag(
     req: Request, 
     res: Response
-  ) {
+  ): Promise<IMainDiagDoc> | never {
     const validatedReq = matchedData(req) as IMainDiagInput;
     try {
       return await this.mainDiagService.createMainDiag(validatedReq);
@@ -25,7 +25,7 @@ export class MainDiagController {
   public async handleGetAllMainDiags(
     req: Request, 
     res: Response
-  ) {
+  ): Promise<IMainDiagDoc[]> | never {
     try {
       return await this.mainDiagService.getAllMainDiags();
     } catch (err: any) {
@@ -36,7 +36,7 @@ export class MainDiagController {
   public async handleGetMainDiagById(
     req: Request, 
     res: Response
-  ) {
+  ): Promise<IMainDiagDoc | null> | never {
     const validatedReq = matchedData(req) as { id: string };
     try {
       return await this.mainDiagService.getMainDiagById(validatedReq);
@@ -48,7 +48,7 @@ export class MainDiagController {
   public async handleUpdateMainDiag(
     req: Request, 
     res: Response
-  ) {
+  ): Promise<IMainDiagDoc | null> | never {
     const validatedReq = matchedData(req) as IMainDiagUpdateInput;
     // Merge id from params into validatedReq
     validatedReq.id = req.params.id;
@@ -62,7 +62,7 @@ export class MainDiagController {
   public async handleDeleteMainDiag(
     req: Request, 
     res: Response
-  ) {
+  ): Promise<boolean> | never {
     const validatedReq = matchedData(req) as { id: string };
     try {
       return await this.mainDiagService.deleteMainDiag(validatedReq);

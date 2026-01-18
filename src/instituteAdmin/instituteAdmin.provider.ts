@@ -1,7 +1,8 @@
 import { injectable, inject } from "inversify";
 import { IInstituteAdmin, IInstituteAdminDoc } from "./instituteAdmin.interface";
-import { InstituteAdmin } from "./instituteAdmin.schema";
-import { Types } from "mongoose";
+import { AppDataSource } from "../config/database.config";
+import { InstituteAdminEntity } from "./instituteAdmin.mDbSchema";
+import { Repository } from "typeorm";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { CandService } from "../cand/cand.service";
 import { SubService } from "../sub/sub.service";
@@ -17,6 +18,8 @@ import { IArabProcDoc } from "../arabProc/arabProc.interface";
 
 @injectable()
 export class InstituteAdminProvider {
+  private instituteAdminRepository: Repository<InstituteAdminEntity>;
+
   constructor(
     @inject(SupervisorService) private supervisorService: SupervisorService,
     @inject(CandService) private candService: CandService,
@@ -24,11 +27,15 @@ export class InstituteAdminProvider {
     @inject(CalSurgService) private calSurgService: CalSurgService,
     @inject(HospitalService) private hospitalService: HospitalService,
     @inject(ArabProcService) private arabProcService: ArabProcService
-  ) {}
+  ) {
+    this.instituteAdminRepository = AppDataSource.getRepository(InstituteAdminEntity);
+  }
+
   public async createInstituteAdmin(validatedReq: Partial<IInstituteAdmin>): Promise<IInstituteAdminDoc> | never {
     try {
-      const instituteAdmin = new InstituteAdmin(validatedReq);
-      return await instituteAdmin.save();
+      const newInstituteAdmin = this.instituteAdminRepository.create(validatedReq);
+      const savedInstituteAdmin = await this.instituteAdminRepository.save(newInstituteAdmin);
+      return savedInstituteAdmin as unknown as IInstituteAdminDoc;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -36,7 +43,10 @@ export class InstituteAdminProvider {
 
   public async getAllInstituteAdmins(): Promise<IInstituteAdminDoc[]> | never {
     try {
-      return await InstituteAdmin.find().exec();
+      const instituteAdmins = await this.instituteAdminRepository.find({
+        order: { createdAt: "DESC" },
+      });
+      return instituteAdmins as unknown as IInstituteAdminDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -44,10 +54,15 @@ export class InstituteAdminProvider {
 
   public async getInstituteAdminById(id: string): Promise<IInstituteAdminDoc | null> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid institute admin ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid institute admin ID format");
       }
-      return await InstituteAdmin.findById(id).exec();
+      const instituteAdmin = await this.instituteAdminRepository.findOne({
+        where: { id },
+      });
+      return instituteAdmin as unknown as IInstituteAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -55,7 +70,10 @@ export class InstituteAdminProvider {
 
   public async getInstituteAdminByEmail(email: string): Promise<IInstituteAdminDoc | null> | never {
     try {
-      return await InstituteAdmin.findOne({ email }).exec();
+      const instituteAdmin = await this.instituteAdminRepository.findOne({
+        where: { email },
+      });
+      return instituteAdmin as unknown as IInstituteAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -64,10 +82,16 @@ export class InstituteAdminProvider {
   public async updateInstituteAdmin(validatedReq: Partial<IInstituteAdmin> & { id: string }): Promise<IInstituteAdminDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid institute admin ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid institute admin ID format");
       }
-      return await InstituteAdmin.findByIdAndUpdate(id, updateData, { new: true }).exec();
+      await this.instituteAdminRepository.update(id, updateData);
+      const updatedInstituteAdmin = await this.instituteAdminRepository.findOne({
+        where: { id },
+      });
+      return updatedInstituteAdmin as unknown as IInstituteAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -75,11 +99,13 @@ export class InstituteAdminProvider {
 
   public async deleteInstituteAdmin(id: string): Promise<boolean> | never {
     try {
-      if (!Types.ObjectId.isValid(id)) {
-        throw new Error("Invalid institute admin ID");
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid institute admin ID format");
       }
-      const result = await InstituteAdmin.findByIdAndDelete(id).exec();
-      return result !== null;
+      const result = await this.instituteAdminRepository.delete(id);
+      return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -99,8 +125,10 @@ export class InstituteAdminProvider {
     status?: "approved" | "pending" | "rejected"
   ): Promise<ISubDoc[]> | never {
     try {
-      if (!Types.ObjectId.isValid(supervisorId)) {
-        throw new Error("Invalid supervisor ID");
+      // Validate UUID format (supervisor now uses MariaDB UUID)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(supervisorId)) {
+        throw new Error("Invalid supervisor ID format");
       }
 
       // Verify supervisor exists
@@ -130,13 +158,23 @@ export class InstituteAdminProvider {
 
   public async getCandidateSubmissions(candidateId: string): Promise<ISubDoc[]> | never {
     try {
-      if (!Types.ObjectId.isValid(candidateId)) {
-        throw new Error("Invalid candidate ID");
+      // Validate UUID format (candidate now uses MariaDB UUID)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(candidateId)) {
+        throw new Error("Invalid candidate ID format");
       }
 
-      // Verify candidate exists - we'll need to add a method to check this
-      // For now, we'll let the service handle it
-      return await this.subService.getSubsByCandidateId(candidateId);
+      // Convert UUID to ObjectId format for MongoDB compatibility (sub still uses MongoDB)
+      const uuidHex = candidateId.replace(/-/g, '');
+      const mongoObjectId = uuidHex.substring(0, 24);
+
+      // Verify candidate exists
+      const candidate = await this.candService.getCandById(candidateId);
+      if (!candidate) {
+        throw new Error("Candidate not found");
+      }
+
+      return await this.subService.getSubsByCandidateId(mongoObjectId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -147,11 +185,12 @@ export class InstituteAdminProvider {
     submissionId: string
   ): Promise<ISubDoc | null> | never {
     try {
-      // Validate ObjectIds
-      if (!Types.ObjectId.isValid(submissionId)) {
+      // Validate UUID formats
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(submissionId)) {
         throw new Error("Invalid submission ID format");
       }
-      if (!Types.ObjectId.isValid(candidateId)) {
+      if (!uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
       }
 
@@ -161,22 +200,53 @@ export class InstituteAdminProvider {
         return null;
       }
 
-      // Extract candidate ID - handle both populated (object) and unpopulated (ObjectId) cases
+      // Extract candidate ID - handle both populated (object) and unpopulated (ObjectId/UUID) cases
       let submissionCandidateId: string;
       const candidateDoc = submission.candDocId as any;
-      if (candidateDoc && typeof candidateDoc === 'object' && candidateDoc._id) {
-        // Populated document - extract _id
-        submissionCandidateId = candidateDoc._id.toString();
+      if (candidateDoc && typeof candidateDoc === 'object') {
+        // Populated document - check for id (MariaDB) or _id (MongoDB)
+        if (candidateDoc.id) {
+          submissionCandidateId = candidateDoc.id;
+        } else if (candidateDoc._id) {
+          submissionCandidateId = candidateDoc._id.toString();
+        } else {
+          throw new Error("Submission not found or does not belong to the specified candidate");
+        }
       } else if (candidateDoc) {
-        // Unpopulated ObjectId - convert directly
+        // Unpopulated ObjectId/UUID - convert directly
         submissionCandidateId = candidateDoc.toString();
       } else {
         throw new Error("Submission not found or does not belong to the specified candidate");
       }
 
-      // Verify submission belongs to the candidate
-      if (submissionCandidateId !== candidateId) {
-        throw new Error("Submission not found or does not belong to the specified candidate");
+      // Convert candidateId to same format for comparison
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(candidateId)) {
+        // Candidate ID is UUID (MariaDB format)
+        if (!uuidRegex.test(submissionCandidateId)) {
+          // submissionCandidateId is ObjectId, convert to UUID for comparison
+          // We can't reliably convert ObjectId back to UUID, so we compare the UUID substring
+          // Convert UUID to ObjectId format and compare
+          const uuidHex = candidateId.replace(/-/g, '');
+          const mongoObjectId = uuidHex.substring(0, 24);
+          if (submissionCandidateId !== mongoObjectId) {
+            throw new Error("Submission not found or does not belong to the specified candidate");
+          }
+        } else {
+          // Both are UUIDs, compare directly
+          if (submissionCandidateId !== candidateId) {
+            throw new Error("Submission not found or does not belong to the specified candidate");
+          }
+        }
+      } else {
+        // Candidate ID is ObjectId (MongoDB format) - legacy case
+        if (uuidRegex.test(submissionCandidateId)) {
+          const uuidHex = submissionCandidateId.replace(/-/g, '');
+          submissionCandidateId = uuidHex.substring(0, 24);
+        }
+        if (submissionCandidateId !== candidateId) {
+          throw new Error("Submission not found or does not belong to the specified candidate");
+        }
       }
 
       return submission;
@@ -248,7 +318,8 @@ export class InstituteAdminProvider {
 
         const hospital = calSurg.hospital as any;
         const arabProc = calSurg.arabProc as any;
-        const hospitalId = hospital._id.toString();
+        // Handle both id (MariaDB) and _id (MongoDB) formats
+        const hospitalId = (hospital as any).id || (hospital as any)._id?.toString() || (hospital as any)._id;
 
         if (!hospitalMap.has(hospitalId)) {
           hospitalMap.set(hospitalId, {
@@ -269,7 +340,7 @@ export class InstituteAdminProvider {
       // Convert to required format
       const result = Array.from(hospitalMap.values()).map(entry => ({
         hospital: {
-          _id: entry.hospital._id,
+          _id: (entry.hospital as any).id || (entry.hospital as any)._id,
           engName: entry.hospital.engName,
           arabName: entry.hospital.arabName
         },

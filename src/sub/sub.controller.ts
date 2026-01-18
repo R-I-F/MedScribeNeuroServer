@@ -187,4 +187,20 @@ export class SubController {
       throw new Error(err);
     }
   }
+
+  public async handleDeleteSub(
+    req: Request,
+    res: Response
+  ): Promise<{ message: string }> | never {
+    const id = req.params.id;
+    try {
+      const deleted = await this.subProvider.deleteSub(id);
+      if (!deleted) {
+        throw new Error("Submission not found");
+      }
+      return { message: "Submission deleted successfully" };
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

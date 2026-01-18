@@ -1,13 +1,12 @@
 import { checkSchema } from "express-validator";
+import { uuidValidator } from "./uuidValidator.util";
 
 export const getSupervisorSubmissionsValidator = checkSchema({
   supervisorId: {
     in: ["params"],
     notEmpty: true,
     errorMessage: "Supervisor ID is required.",
-    isMongoId: {
-      errorMessage: "Supervisor ID must be a valid MongoDB ObjectId",
-    },
+    custom: uuidValidator,
     trim: true,
   },
   status: {
