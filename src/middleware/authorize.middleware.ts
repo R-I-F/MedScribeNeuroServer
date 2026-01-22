@@ -31,7 +31,8 @@ export const authorize = (...allowedRoles: UserRole[]) => {
       [UserRole.SUPER_ADMIN]: 1,
       [UserRole.INSTITUTE_ADMIN]: 2,
       [UserRole.SUPERVISOR]: 3,
-      [UserRole.CANDIDATE]: 4,
+      [UserRole.CLERK]: 4,
+      [UserRole.CANDIDATE]: 5,
     };
 
     const userRoleLevel = roleHierarchy[userRole];
@@ -58,6 +59,7 @@ export const authorize = (...allowedRoles: UserRole[]) => {
 export const requireSuperAdmin = authorize(UserRole.SUPER_ADMIN);
 export const requireInstituteAdmin = authorize(UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 export const requireSupervisor = authorize(UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
+export const requireClerk = authorize(UserRole.CLERK, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 export const requireCandidate = authorize(UserRole.CANDIDATE, UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 
 // Middleware to require supervisor with validation permissions (canValidate = true)

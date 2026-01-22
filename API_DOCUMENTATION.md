@@ -254,6 +254,9 @@ if (json.status === "success") {
 
 1. [Authentication](#authentication)
 2. [User Management](#user-management)
+   - [Super Admins](#super-admins-superadmin)
+   - [Institute Admins](#institute-admins-instituteadmin)
+   - [Clerks](#clerks-clerk)
 3. [Submissions](#submissions)
 4. [Candidates](#candidates)
 5. [Supervisors](#supervisors)
@@ -541,6 +544,10 @@ Registers a new candidate user. No authentication required.
 
 **Authentication Required:** Yes (all user types)
 
+**Rate Limit:** 
+- Router-level: 50 requests per 15 minutes per user
+- Application-level: Maximum 3 password change tokens per user per hour
+
 Sends an email with a password change link to the authenticated user. The link allows the user to change their password without providing their current password.
 
 **Headers:**
@@ -591,6 +598,10 @@ Cookie: auth_token=<token>
 - Email contains a link with format: `/dashboard/[role]/profile/manage-profile-information/change-password?token={token}`
 - Token expires in 1 hour
 - Works for all user types: candidate, supervisor, superAdmin, instituteAdmin
+- **Rate Limiting**: Two-layer protection:
+  - Router-level: 50 requests per 15 minutes per authenticated user
+  - Application-level: Maximum 3 password change tokens per user per hour (prevents token flooding)
+- If rate limit is exceeded, the request silently fails (no error message to prevent email enumeration)
 
 ---
 
@@ -598,6 +609,8 @@ Cookie: auth_token=<token>
 **PATCH** `/auth/changePassword`
 
 **Authentication Required:** Yes (all user types)
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 Allows authenticated users to change their password using either:
 1. **Current Password Flow**: Provide current password and new password
@@ -741,6 +754,7 @@ OR
 
 **Notes:**
 - User ID and role are automatically extracted from the JWT token
+- **Rate Limiting**: 50 requests per 15 minutes per authenticated user
 - New password must meet the following requirements:
   - Minimum 8 characters
   - At least one uppercase letter
@@ -835,6 +849,10 @@ Logs out the user by clearing authentication cookies.
 
 **Authentication Required:** No
 
+**Rate Limit:** 
+- Router-level: 50 requests per 15 minutes per IP address
+- Application-level: Maximum 3 password reset tokens per user per hour
+
 Allows users to request a password reset link via email. The system searches for the email across all user collections (candidate, supervisor, superAdmin, instituteAdmin).
 
 **Request Body:**
@@ -880,6 +898,10 @@ Allows users to request a password reset link via email. The system searches for
 - Reset link expires in 1 hour
 - Always returns success message to prevent email enumeration attacks
 - Reset link format: `{FRONTEND_URL}/reset-password?token={token}`
+- **Rate Limiting**: Two-layer protection:
+  - Router-level: 50 requests per 15 minutes per IP address (prevents rapid-fire abuse)
+  - Application-level: Maximum 3 password reset tokens per user per hour (prevents token flooding per user)
+- If rate limit is exceeded, the request silently fails (no error message to prevent email enumeration)
 
 ---
 
@@ -887,6 +909,8 @@ Allows users to request a password reset link via email. The system searches for
 **POST** `/auth/resetPassword`
 
 **Authentication Required:** No (uses token from email)
+
+**Rate Limit:** 50 requests per 15 minutes per IP address
 
 Allows users to reset their password using a token received via email from the forgot password flow.
 
@@ -960,6 +984,7 @@ Allows users to reset their password using a token received via email from the f
 - Token is obtained from the password reset email link
 - Token expires after 1 hour
 - Token can only be used once
+- **Rate Limiting**: 50 requests per 15 minutes per IP address (prevents brute-force token attempts)
 - New password must meet the same requirements as change password:
   - Minimum 8 characters
   - At least one uppercase letter
@@ -991,15 +1016,43 @@ Resets all candidate passwords to the default encrypted password (`MEDscrobe01$`
 
 ### Super Admins (`/superAdmin`)
 
-All Super Admin endpoints require authentication as a Super Admin.
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
 
-**Required Headers:**
-```
-Authorization: Bearer <superAdmin_token>
+### Rate Limiting
+
+Active `/superAdmin` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+
+**Note:** POST, PUT, and DELETE endpoints have been disabled/removed for security hardening.
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
 ```
 
-#### Create Super Admin
+---
+
+### Create Super Admin
 **POST** `/superAdmin`
+
+**Status:** ⚠️ **TEMPORARILY DISABLED** (Security hardening)
+
+**Note:** This endpoint has been temporarily disabled to reduce attack surface. Super Admin accounts should be created directly in the database by system administrators.
+
+**Requires:** Super Admin authentication (when enabled)
+
+**Rate Limit:** 50 requests per 15 minutes per user (when enabled)
+
+**Description:**  
+~~Creates a new Super Admin account. Only existing Super Admins can create new Super Admin accounts.~~ **Currently disabled for security reasons.**
 
 **Request Body:**
 ```json
@@ -1029,10 +1082,61 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can create other Super Admin accounts
+- The password is automatically hashed before being stored in the database
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get All Super Admins
+### Get All Super Admins
 **GET** `/superAdmin`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns a list of all Super Admins in the system.
 
 **Response (200 OK):**
 ```json
@@ -1053,10 +1157,63 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can access this endpoint
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get Super Admin by ID
+### Get Super Admin by ID
 **GET** `/superAdmin/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Super Admin UUID (must be a valid UUID format)
+
+**Description:**  
+Returns a specific Super Admin by ID.
 
 **Response (200 OK):**
 ```json
@@ -1075,7 +1232,24 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
-**Response (404 Not Found):**
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "super admin ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
 ```json
 {
   "status": "error",
@@ -1085,52 +1259,59 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can access this endpoint
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the Super Admin with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Update Super Admin
+### Update Super Admin
 **PUT** `/superAdmin/:id`
 
-**Request Body:**
-```json
-{
-  "fullName": "Updated Super Admin",
-  "phoneNum": "+9876543210"
-}
-```
+**Status:** ❌ **REMOVED** (Security hardening)
 
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "superadmin@example.com",
-    "fullName": "Updated Super Admin",
-    "phoneNum": "+9876543210",
-    "approved": true,
-    "role": "superAdmin"
-  }
-}
-```
+**Note:** This endpoint has been removed to reduce attack surface. Super Admin accounts should be updated directly in the database by system administrators.
 
 ---
 
-#### Delete Super Admin
+### Delete Super Admin
 **DELETE** `/superAdmin/:id`
 
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "Super admin deleted successfully"
-  }
-}
-```
+**Status:** ❌ **REMOVED** (Security hardening)
+
+**Note:** This endpoint has been removed to reduce attack surface. Super Admin accounts should be deleted directly in the database by system administrators.
 
 ---
 
@@ -1176,12 +1357,61 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can create Institute Admins
+- The password is automatically hashed before being stored in the database
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get All Institute Admins
+### Get All Institute Admins
 **GET** `/instituteAdmin`
 
-**Requires:** Institute Admin or Super Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns a list of all Institute Admins in the system.
 
 **Response (200 OK):**
 ```json
@@ -1202,12 +1432,63 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get Institute Admin by ID
+### Get Institute Admin by ID
 **GET** `/instituteAdmin/:id`
 
-**Requires:** Institute Admin or Super Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Institute Admin UUID (must be a valid UUID format)
+
+**Description:**  
+Returns a specific Institute Admin by ID.
 
 **Response (200 OK):**
 ```json
@@ -1226,12 +1507,92 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "institute admin ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Institute admin not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the Institute Admin with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Update Institute Admin
+### Update Institute Admin
 **PUT** `/instituteAdmin/:id`
 
-**Requires:** Institute Admin or Super Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Institute Admin UUID (must be a valid UUID format)
+
+**Description:**  
+Updates an Institute Admin's information.
 
 **Request Body:**
 ```json
@@ -1258,12 +1619,93 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "institute admin ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Institute admin not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- If password is provided, it is automatically hashed before being stored
+- Returns 404 if the Institute Admin with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Delete Institute Admin
+### Delete Institute Admin
 **DELETE** `/instituteAdmin/:id`
 
-**Requires:** Institute Admin or Super Admin authentication
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Institute Admin UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes an Institute Admin from the system. Only Super Admins can delete Institute Admins.
 
 **Response (200 OK):**
 ```json
@@ -1277,12 +1719,86 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "institute admin ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Institute admin not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can delete Institute Admins
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the Institute Admin with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get All Supervisors (Dashboard)
+### Get All Supervisors (Dashboard)
 **GET** `/instituteAdmin/supervisors`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns a list of all supervisors in the system for the Institute Admin dashboard.
 
@@ -1327,12 +1843,37 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get Supervisor Submissions (Dashboard)
+### Get Supervisor Submissions (Dashboard)
 **GET** `/instituteAdmin/supervisors/:supervisorId/submissions`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns all submissions supervised by a specific supervisor. This displays the supervisor's dashboard view (same data the supervisor sees).
 
@@ -1459,10 +2000,21 @@ Authorization: Bearer <token>
 
 ---
 
-#### Get All Candidates (Dashboard)
+### Get All Candidates (Dashboard)
 **GET** `/instituteAdmin/candidates`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns a list of all candidates in the system for the Institute Admin dashboard.
 
@@ -1489,12 +2041,57 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get Candidate Submissions (Dashboard)
+### Get Candidate Submissions (Dashboard)
 **GET** `/instituteAdmin/candidates/:candidateId/submissions`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns all submissions for a specific candidate. This displays the candidate's LogBook view (same data the candidate sees).
 
@@ -1628,10 +2225,21 @@ Authorization: Bearer <token>
 
 ---
 
-#### Get Candidate Submission by ID (Dashboard)
+### Get Candidate Submission by ID (Dashboard)
 **GET** `/instituteAdmin/candidates/:candidateId/submissions/:submissionId`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns a specific submission belonging to a candidate. This allows institute admins to view detailed submission information for any candidate.
 
@@ -1784,10 +2392,21 @@ Authorization: Bearer <token>
 
 ---
 
-#### Get Calendar Procedures with Filters (Dashboard)
+### Get Calendar Procedures with Filters (Dashboard)
 **GET** `/instituteAdmin/calendarProcedures`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns all calendar procedures (calSurg) with optional filtering capabilities. Supports filtering by hospital, arabProc (by title or numCode), and timestamp (month/year).
 
@@ -1802,7 +2421,7 @@ Authorization: Bearer <token>
 
 **Note:** Multiple filters can be combined. For example, you can filter by both `hospitalId` and `month` and `year` simultaneously.
 
-**Response (200 OK):**
+**Response (200 OK):****
 ```json
 {
   "status": "success",
@@ -1839,12 +2458,57 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get All Hospitals (Dashboard)
+### Get All Hospitals (Dashboard)
 **GET** `/instituteAdmin/hospitals`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns a list of all hospitals in the system. Used for the hospital filter dropdown in the Calendar Procedures section.
 
@@ -1870,12 +2534,57 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get Arabic Procedures (Dashboard)
+### Get Arabic Procedures (Dashboard)
 **GET** `/instituteAdmin/arabicProcedures`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns a list of all Arabic procedures. Used for the autocomplete/search functionality when filtering calendar procedures by arabProc.
 
@@ -1900,12 +2609,57 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
-#### Get Hospital-Based Analysis Data (Dashboard)
+### Get Hospital-Based Analysis Data (Dashboard)
 **GET** `/instituteAdmin/calendarProcedures/analysis/hospital`
 
-**Requires:** Institute Admin authentication
+**Requires:** Authentication (Institute Admin or Super Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Description:** Returns aggregated analysis data for calendar procedures grouped by hospital. Used to generate the hospital-based analysis chart.
 
@@ -2002,9 +2756,560 @@ Authorization: Bearer <token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Institute Admins and Super Admins
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+### Clerks (`/clerk`)
+
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+
+### Rate Limiting
+
+All `/clerk` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Create Clerk
+**POST** `/clerk`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Creates a new Clerk account. Only Super Admins and Institute Admins can create Clerk accounts.
+
+**Request Body:**
+```json
+{
+  "email": "clerk@example.com",
+  "password": "Clerk123$",
+  "fullName": "Clerk User",
+  "phoneNum": "01000000000",
+  "approved": true
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "clerk@example.com",
+    "fullName": "Clerk User",
+    "phoneNum": "01000000000",
+    "approved": true,
+    "role": "clerk"
+  }
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins and Institute Admins can create Clerk accounts
+- The password is automatically hashed before being stored in the database
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+### Get All Clerks
+**GET** `/clerk`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns a list of all Clerks in the system.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "email": "clerk@example.com",
+      "fullName": "Clerk User",
+      "phoneNum": "+1234567890",
+      "approved": true,
+      "role": "clerk"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins and Institute Admins can access this endpoint
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+### Get Clerk by ID
+**GET** `/clerk/:id`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Clerk UUID (must be a valid UUID format)
+
+**Description:**  
+Returns a specific Clerk by ID.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "clerk@example.com",
+    "fullName": "Clerk User",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "clerk"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "clerk ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Clerk not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins and Institute Admins can access this endpoint
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the Clerk with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+### Update Clerk
+**PUT** `/clerk/:id`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Clerk UUID (must be a valid UUID format)
+
+**Description:**  
+Updates a Clerk's information.
+
+**Request Body:**
+```json
+{
+  "fullName": "Updated Clerk User",
+  "phoneNum": "+9876543210"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "email": "clerk@example.com",
+    "fullName": "Updated Clerk User",
+    "phoneNum": "+9876543210",
+    "approved": true,
+    "role": "clerk"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "clerk ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Clerk not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins and Institute Admins can update Clerk accounts
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- If password is provided, it is automatically hashed before being stored
+- Returns 404 if the Clerk with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+### Delete Clerk
+**DELETE** `/clerk/:id`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Clerk UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes a Clerk from the system. Only Super Admins and Institute Admins can delete Clerk accounts.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Clerk deleted successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "clerk ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Clerk not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins and Institute Admins can delete Clerk accounts
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the Clerk with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
 ## Submissions (`/sub`)
+
+### Rate Limiting
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests, please try again later."
+}
+```
+
+---
 
 ### Create Submissions from External
 **POST** `/sub/postAllFromExternal`
@@ -2012,6 +3317,8 @@ Authorization: Bearer <token>
 Creates submissions from external data source (Google Sheets).
 
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
@@ -2060,6 +3367,8 @@ Updates submission statuses from external data source.
 
 **Requires:** Super Admin authentication
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
@@ -2092,9 +3401,11 @@ Authorization: Bearer <superAdmin_token>
 ### Get Candidate Submission Statistics
 **GET** `/sub/candidate/stats`
 
-**Authentication Required:** Yes (Candidate role)
+**Authentication Required:** Yes (Candidate, Supervisor, Institute Admin, or Super Admin)
 
-Returns statistics about the logged-in candidate's submissions.
+**Rate Limit:** 200 requests per 15 minutes per user
+
+Returns statistics about the logged-in candidate's submissions. Accessible by candidates (for their own data), supervisors, institute admins, and super admins. Clerk role cannot access this endpoint.
 
 **Headers:**
 ```
@@ -2135,9 +3446,11 @@ Cookie: auth_token=<token>
 ### Get Candidate Submissions
 **GET** `/sub/candidate/submissions`
 
-**Authentication Required:** Yes (Candidate role)
+**Authentication Required:** Yes (Candidate, Supervisor, Institute Admin, or Super Admin)
 
-Returns all submissions for the logged-in candidate with all related data populated (diagnosis, procedures, supervisor, etc.). All ObjectId references are populated with their full document data.
+**Rate Limit:** 200 requests per 15 minutes per user
+
+Returns all submissions for the logged-in candidate with all related data populated (diagnosis, procedures, supervisor, etc.). All ObjectId references are populated with their full document data. Accessible by candidates (for their own data), supervisors, institute admins, and super admins. Clerk role cannot access this endpoint.
 
 **Headers:**
 ```
@@ -2273,9 +3586,11 @@ Cookie: auth_token=<token>
 ### Get Single Candidate Submission by ID
 **GET** `/sub/candidate/submissions/:id`
 
-**Authentication Required:** Yes (Candidate role)
+**Authentication Required:** Yes (Candidate, Supervisor, Institute Admin, or Super Admin)
 
-Returns a single submission by ID, verifying that it belongs to the logged-in candidate.
+**Rate Limit:** 200 requests per 15 minutes per user
+
+Returns a single submission by ID, verifying that it belongs to the logged-in candidate. Accessible by candidates (for their own data), supervisors, institute admins, and super admins. Clerk role cannot access this endpoint.
 
 **Headers:**
 ```
@@ -2463,6 +3778,7 @@ OR
 
 **Notes:**
 - User ID and role are automatically extracted from the JWT token
+- **Rate Limiting**: 50 requests per 15 minutes per authenticated user
 - **Current Password Flow**: Requires providing the current password for verification
 - **Token Flow**: Requires providing a token received from the password change email (from `/auth/requestPasswordChangeEmail`)
 - New password must meet the following requirements:
@@ -2483,6 +3799,8 @@ OR
 **GET** `/sub/supervisor/submissions`
 
 **Authentication Required:** Yes (Supervisor role)
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 Returns all submissions assigned to the logged-in supervisor with all related data populated (diagnosis, procedures, candidate, etc.). Optionally filter by submission status.
 
@@ -2629,6 +3947,8 @@ Cookie: auth_token=<token>
 **GET** `/sub/supervisor/submissions/:id`
 
 **Authentication Required:** Yes (Supervisor role)
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 Returns a single submission by ID, verifying that it belongs to the logged-in supervisor.
 
@@ -2796,6 +4116,8 @@ OR
 **GET** `/sub/supervisor/candidates/:candidateId/submissions`
 
 **Authentication Required:** Yes (Supervisor role)
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 Returns submissions for a specific candidate. By default, returns only submissions supervised by the logged-in supervisor. With the `all=true` query parameter, returns ALL submissions for the candidate (requires supervisor-candidate relationship verification).
 
@@ -2965,6 +4287,8 @@ OR (when `all=true` and supervisor has no relationship with candidate):
 **PATCH** `/sub/supervisor/submissions/:id/review`
 
 **Authentication Required:** Yes (Validator Supervisor role only)
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **⚠️ Important:** Only **Validator Supervisors** (`canValidate: true`) can review submissions. Academic Supervisors (`canValidate: false`) will receive a 403 Forbidden error.
 
@@ -3197,9 +4521,13 @@ OR
 ### Generate Surgical Notes using AI
 **POST** `/sub/submissions/:id/generateSurgicalNotes`
 
+**⚠️ STATUS: DISABLED** - This endpoint has been temporarily disabled for security/maintenance reasons.
+
 **Authentication Required:** Yes (Institute Admin or Super Admin role)
 
-**Description:** Generates comprehensive surgical notes for a submission using AI (Google Gemini). The endpoint takes a submission ID, populates all required fields, and uses AI to generate professional surgical notes based on the submission data.
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:** ~~Generates comprehensive surgical notes for a submission using AI (Google Gemini). The endpoint takes a submission ID, populates all required fields, and uses AI to generate professional surgical notes based on the submission data.~~ **This endpoint is currently disabled and will return 404 Not Found.**
 
 **Headers:**
 ```
@@ -3207,9 +4535,21 @@ Authorization: Bearer <token>
 ```
 
 **URL Parameters:**
-- `id` (required): Submission MongoDB ObjectId
+- `id` (required): Submission UUID
 
-**Response (200 OK):**
+**⚠️ Current Response (404 Not Found) - Endpoint Disabled:**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Route not found"
+}
+```
+
+**Note:** This endpoint is currently disabled. Any attempt to access it will return 404 Not Found.
+
+~~**Response (200 OK):**~~ *(Historical - Endpoint Disabled)*
 ```json
 {
   "status": "success",
@@ -3221,7 +4561,7 @@ Authorization: Bearer <token>
 }
 ```
 
-**Error Response (400 Bad Request):**
+~~**Error Response (400 Bad Request):**~~ *(Historical - Endpoint Disabled)*
 ```json
 {
   "status": "error",
@@ -3230,7 +4570,7 @@ Authorization: Bearer <token>
   "error": [
     {
       "type": "field",
-      "msg": "Submission ID must be a valid MongoDB ObjectId",
+      "msg": "Submission ID must be a valid UUID",
       "path": "id",
       "location": "params"
     }
@@ -3238,7 +4578,7 @@ Authorization: Bearer <token>
 }
 ```
 
-**Error Response (404 Not Found):**
+~~**Error Response (404 Not Found):**~~ *(Historical - Endpoint Disabled)*
 ```json
 {
   "status": "error",
@@ -3248,7 +4588,7 @@ Authorization: Bearer <token>
 }
 ```
 
-**Error Response (403 Forbidden):**
+~~**Error Response (403 Forbidden):**~~ *(Historical - Endpoint Disabled)*
 ```json
 {
   "status": "error",
@@ -3258,7 +4598,7 @@ Authorization: Bearer <token>
 }
 ```
 
-**Error Response (500 Internal Server Error):**
+~~**Error Response (500 Internal Server Error):**~~ *(Historical - Endpoint Disabled)*
 ```json
 {
   "status": "error",
@@ -3280,42 +4620,359 @@ OR
 ```
 
 **Notes:**
-- The submission must exist and have all required populated fields:
-  - `candDocId` (candidate)
-  - `procDocId` (procedure with hospital and arabProc)
-  - `supervisorDocId` (supervisor)
-  - `mainDiagDocId` (main diagnosis)
-  - `procCptDocId` (CPT codes)
-  - `icdDocId` (ICD codes)
-- The AI uses Google Gemini API (gemini-2.5-flash model by default)
-- Requires `GEMINI_API_KEY` environment variable to be configured
-- The generated surgical notes are comprehensive and include:
-  - Preoperative and postoperative diagnoses
-  - Procedure performed
-  - Surgeon and assistant information
-  - Detailed procedure description
-  - Findings
-  - Instruments and materials used
-  - Intraoperative events
-  - Postoperative plan
-- Returns 404 if submission doesn't exist
-- Returns 500 if AI service is not configured or API call fails
-- Only Institute Admins and Super Admins can access this endpoint
+- ⚠️ **This endpoint is currently DISABLED** and will return 404 Not Found if accessed
+- The endpoint has been temporarily disabled for security/maintenance reasons
+- ~~The submission must exist and have all required populated fields~~
+- ~~The AI uses Google Gemini API (gemini-2.5-flash model by default)~~
+- ~~Requires `GEMINI_API_KEY` environment variable to be configured~~
+- ~~The generated surgical notes are comprehensive and include:~~
+  - ~~Preoperative and postoperative diagnoses~~
+  - ~~Procedure performed~~
+  - ~~Surgeon and assistant information~~
+  - ~~Detailed procedure description~~
+  - ~~Findings~~
+  - ~~Instruments and materials used~~
+  - ~~Intraoperative events~~
+  - ~~Postoperative plan~~
+- **Current Behavior**: Returns 404 Not Found (route not registered)
+- ~~Only Institute Admins and Super Admins can access this endpoint~~
+
+---
+
+### Delete Submission
+**DELETE** `/sub/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+Deletes a submission from the system. The `id` parameter must be a valid UUID format. Only Super Admins can delete submissions.
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+
+**URL Parameters:**
+- `id` (required): Submission UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Submission deleted successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Submission ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: Invalid or missing token"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Submission not found"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests, please try again later."
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message details"
+}
+```
+
+**Notes:**
+- Only Super Admins can delete submissions
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the submission with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
 
 ---
 
 ## Candidates (`/cand`)
 
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+
+### Rate Limiting
+
+All `/cand` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Get All Candidates
+**GET** `/cand`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns all candidates in the system, ordered by creation date (newest first). This endpoint is accessible to Super Admins and Institute Admins.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "507f1f77bcf86cd799439011",
+      "email": "candidate@example.com",
+      "fullName": "John Doe",
+      "phoneNum": "+1234567890",
+      "regNum": "REG123456",
+      "nationality": "Egyptian",
+      "rank": "professor",
+      "regDeg": "msc",
+      "approved": false,
+      "role": "candidate",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins and Institute Admins can access this endpoint
+- Results are ordered by creation date (newest first)
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+### Get Candidate by ID
+**GET** `/cand/:id`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Candidate UUID (must be a valid UUID format)
+
+**Description:**  
+Returns a specific candidate by ID. This endpoint is accessible to Super Admins and Institute Admins.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "id": "507f1f77bcf86cd799439011",
+    "email": "candidate@example.com",
+    "fullName": "John Doe",
+    "phoneNum": "+1234567890",
+    "regNum": "REG123456",
+    "nationality": "Egyptian",
+    "rank": "professor",
+    "regDeg": "msc",
+    "approved": false,
+    "role": "candidate",
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-01-15T10:00:00.000Z"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Candidate ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Candidate not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins and Institute Admins can access this endpoint
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the candidate with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
 ### Create Candidates from External
 **POST** `/cand/createCandsFromExternal`
 
-Creates candidates from external data source (Google Sheets).
-
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
 ```
 
 **Request Body:**
@@ -3324,6 +4981,9 @@ Authorization: Bearer <superAdmin_token>
   "row": 46
 }
 ```
+
+**Field Requirements:**
+- `row` (optional): Row number to fetch from external source. If omitted, all rows are processed.
 
 **Response (201 Created):**
 ```json
@@ -3348,22 +5008,64 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can create candidates from external sources
+- The `row` parameter is optional; if omitted, all rows from the external source are processed
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
 ### Reset Candidate Password
 **PATCH** `/cand/:id/resetPassword`
 
-Resets a specific candidate's password to the default password (`MEDscrobe01$`).
-
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
 ```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **URL Parameters:**
-- `id` (required): Candidate MongoDB ObjectId
+- `id` (required): Candidate UUID (must be a valid UUID format)
+
+**Description:**  
+Resets a specific candidate's password to the default password (`MEDscrobe01$`). The `id` parameter must be a valid UUID format.
 
 **Response (200 OK):**
 ```json
@@ -3386,7 +5088,7 @@ Authorization: Bearer <superAdmin_token>
   "error": [
     {
       "type": "field",
-      "msg": "Candidate ID must be a valid MongoDB ObjectId",
+      "msg": "Candidate ID is required.",
       "path": "id",
       "location": "params"
     }
@@ -3404,6 +5106,36 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
 **Error Response (500 Internal Server Error):**
 ```json
 {
@@ -3415,10 +5147,110 @@ Authorization: Bearer <superAdmin_token>
 ```
 
 **Notes:**
-- The password is reset to the default password: `MEDscrobe01$`
 - The password is automatically hashed before being stored in the database
 - Only Super Admins can reset candidate passwords
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
 - Returns 404 if the candidate with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+### Delete Candidate
+**DELETE** `/cand/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Candidate UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes a candidate from the system. The `id` parameter must be a valid UUID format. Only Super Admins can delete candidates.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Candidate deleted successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Candidate ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Candidate not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can delete candidates
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the candidate with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
 
 ---
 
@@ -3465,6 +5297,29 @@ Authorization: Bearer <superAdmin_token>
 
 ## Supervisors (`/supervisor`)
 
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+
+### Rate Limiting
+
+All `/supervisor` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
 The Supervisors module manages two types of supervisors:
 
 ### Supervisor Types
@@ -3503,9 +5358,9 @@ interface ISupervisor {
 ### Get Supervised Candidates
 **GET** `/supervisor/candidates`
 
-**Authentication Required:** Yes (Supervisor role)
+**Requires:** Authentication (Supervisor role or higher)
 
-Returns a list of all unique candidates supervised by the logged-in supervisor, including submission statistics for each candidate.
+**Rate Limit:** 200 requests per 15 minutes per user
 
 **Headers:**
 ```
@@ -3515,6 +5370,9 @@ OR
 ```
 Cookie: auth_token=<token>
 ```
+
+**Description:**  
+Returns a list of all unique candidates supervised by the logged-in supervisor, including submission statistics for each candidate.
 
 **Response (200 OK):**
 ```json
@@ -3565,6 +5423,16 @@ Cookie: auth_token=<token>
 }
 ```
 
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
 **Error Response (500 Internal Server Error):**
 ```json
 {
@@ -3581,6 +5449,7 @@ Cookie: auth_token=<token>
 - Each candidate includes submission statistics (total, approved, pending, rejected)
 - Statistics are calculated from all submissions for that candidate-supervisor relationship
 - Returns empty array if supervisor has no submissions
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
 
 ---
 
@@ -3624,12 +5493,61 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can create supervisors
+- The password is automatically hashed before being stored in the database
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
 ### Get All Supervisors
 **GET** `/supervisor`
 
-No authentication required.
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns a list of all supervisors in the system. This endpoint is accessible to Super Admins, Institute Admins, Supervisors, and Candidates.
 
 **Response (200 OK):**
 ```json
@@ -3652,12 +5570,63 @@ No authentication required.
 }
 ```
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Accessible to Super Admins, Institute Admins, Supervisors, and Candidates
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
 ### Get Supervisor by ID
 **GET** `/supervisor/:id`
 
-No authentication required.
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Supervisor UUID (must be a valid UUID format)
+
+**Description:**  
+Returns a specific supervisor by ID. This endpoint is accessible to Super Admins, Institute Admins, Supervisors, and Candidates.
 
 **Response (200 OK):**
 ```json
@@ -3682,7 +5651,24 @@ No authentication required.
 ### Update Supervisor
 **PUT** `/supervisor/:id`
 
-No authentication required.
+**Requires:** Authentication (Super Admin, Institute Admin, or Supervisor)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Supervisor UUID (must be a valid UUID format)
+
+**Description:**  
+Updates a supervisor's information. This endpoint is accessible to Super Admins, Institute Admins, and Supervisors.
 
 **Request Body:**
 ```json
@@ -3729,7 +5715,24 @@ No authentication required.
 ### Delete Supervisor
 **DELETE** `/supervisor/:id`
 
-No authentication required.
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Supervisor UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes a supervisor from the system. Only Super Admins can delete supervisors.
 
 **Response (200 OK):**
 ```json
@@ -3743,19 +5746,89 @@ No authentication required.
 }
 ```
 
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "supervisor ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Supervisor not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can delete supervisors
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the supervisor with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
 ### Reset All Supervisor Passwords
 **POST** `/supervisor/resetPasswords`
 
-Resets all supervisor passwords to a default encrypted password.
-
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
 ```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Resets all supervisor passwords to a default encrypted password. Only Super Admins can execute this operation.
 
 **Request Body:**
 No request body required.
@@ -3789,7 +5862,17 @@ No request body required.
   "status": "error",
   "statusCode": 403,
   "message": "Forbidden",
-  "error": "Forbidden: Super Admin access required"
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
 }
 ```
 
@@ -3808,21 +5891,49 @@ No request body required.
 - The password is hashed using bcryptjs before being stored
 - Only Super Admins can execute this operation
 - Returns the number of supervisors whose passwords were updated
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
 
 ---
 
 ## Calendar Surgery (`/calSurg`)
 
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+
+### Rate Limiting
+
+All `/calSurg` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
 ### Create CalSurg from External
 **POST** `/calSurg/postAllFromExternal`
 
-Creates calendar surgery entries from external data source.
-
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
 ```
 
 **Request Body:**
@@ -3832,6 +5943,9 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Field Requirements:**
+- `row` (optional): Row number to fetch from external source. If omitted, all rows are processed.
+
 **Response (201 Created):**
 ```json
 {
@@ -3840,12 +5954,61 @@ Authorization: Bearer <superAdmin_token>
   "message": "Created",
   "data": [
     {
-      "_id": "507f1f77bcf86cd799439011",
+      "id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-01-15T10:00:00.000Z",
+      "patientName": "John Doe",
+      "patientDob": "1980-05-15T00:00:00.000Z",
+      "gender": "male",
+      "hospital": {
+        "id": "hospital-uuid-123",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة"
+      },
+      "arabProc": {
+        "id": "proc-uuid-456",
+        "title": "مراجعة صمام اوميا",
+        "numCode": "61070",
+        "alphaCode": "VSHN"
+      },
+      "procDate": "2025-01-15T10:00:00.000Z",
       "google_uid": "unique-google-id",
-      "date": "2025-01-15",
-      "time": "10:00"
+      "formLink": "https://example.com/form",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z"
     }
   ]
+}
+```
+
+**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs. Patient names are automatically sanitized.
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
 }
 ```
 
@@ -3854,8 +6017,31 @@ Authorization: Bearer <superAdmin_token>
 ### Get CalSurg by ID
 **GET** `/calSurg/getById`
 
-**Query Parameters:**
-- `id` (required): MongoDB ObjectId
+**Requires:** Authentication (Super Admin, Institute Admin, Clerk, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Request Body:**
+```json
+{
+  "_id": "507f1f77bcf86cd799439011"
+}
+```
+
+**Field Requirements:**
+- `_id` (required): CalSurg UUID (must be a valid UUID format)
+
+**Description:**  
+Returns a specific calendar surgery record by ID. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Clerk, Supervisor, and Candidate).
 
 **Response (200 OK):**
 ```json
@@ -3864,11 +6050,87 @@ Authorization: Bearer <superAdmin_token>
   "statusCode": 200,
   "message": "OK",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
+    "id": "507f1f77bcf86cd799439011",
+    "timeStamp": "2025-01-15T10:00:00.000Z",
+    "patientName": "John Doe",
+    "patientDob": "1980-05-15T00:00:00.000Z",
+    "gender": "male",
+    "hospital": {
+      "id": "hospital-uuid-123",
+      "engName": "Cairo University Hospital",
+      "arabName": "مستشفى جامعة القاهرة"
+    },
+    "arabProc": {
+      "id": "proc-uuid-456",
+      "title": "مراجعة صمام اوميا",
+      "numCode": "61070",
+      "alphaCode": "VSHN"
+    },
+    "procDate": "2025-01-15T10:00:00.000Z",
     "google_uid": "unique-google-id",
-    "date": "2025-01-15",
-    "time": "10:00"
+    "formLink": "https://example.com/form",
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-01-15T10:00:00.000Z"
   }
+}
+```
+
+**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs.
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "_id is required and must be a valid ObjectId string",
+      "path": "_id",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "CalSurg not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
 }
 ```
 
@@ -3877,12 +6139,406 @@ Authorization: Bearer <superAdmin_token>
 ### Get All CalSurg with Filters
 **GET** `/calSurg/getAll`
 
+**Requires:** Authentication (Super Admin, Institute Admin, Clerk, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
 **Query Parameters (all optional):**
-- `startDate`: Start date filter
-- `endDate`: End date filter
-- `month`: Month filter
-- `year`: Year filter
-- `day`: Day filter
+- `startDate` (ISO 8601): Filter by start date (must be within last 2 years, not in future)
+- `endDate` (ISO 8601): Filter by end date (must be within last 2 years, not in future)
+- `month` (YYYY-MM format): Filter by month (must be within last 2 years, not in future)
+- `year` (YYYY format): Filter by year (must be within last 2 years, not in future)
+- `day` (ISO 8601): Filter by specific day (must be within last 2 years, not in future)
+
+**Description:**  
+Returns all calendar surgery records with optional date filtering. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Clerk, Supervisor, and Candidate). Supports filtering by date ranges, month, year, or specific day.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "507f1f77bcf86cd799439011",
+      "timeStamp": "2025-01-15T10:00:00.000Z",
+      "patientName": "John Doe",
+      "patientDob": "1980-05-15T00:00:00.000Z",
+      "gender": "male",
+      "hospital": {
+        "id": "hospital-uuid-123",
+        "engName": "Cairo University Hospital",
+        "arabName": "مستشفى جامعة القاهرة"
+      },
+      "arabProc": {
+        "id": "proc-uuid-456",
+        "title": "مراجعة صمام اوميا",
+        "numCode": "61070",
+        "alphaCode": "VSHN"
+      },
+      "procDate": "2025-01-15T10:00:00.000Z",
+      "google_uid": "unique-google-id",
+      "formLink": "https://example.com/form",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs.
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "startDate cannot be in the future",
+      "path": "startDate",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Update CalSurg
+**PATCH** `/calSurg/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): CalSurg UUID (must be a valid UUID format)
+
+**Request Body (all fields optional):**
+```json
+{
+  "timeStamp": "2025-01-15T10:00:00.000Z",
+  "patientName": "John Doe",
+  "patientDob": "1980-05-15T00:00:00.000Z",
+  "gender": "male",
+  "hospital": "hospital-uuid-123",
+  "arabProc": "proc-uuid-456",
+  "procDate": "2025-01-15T10:00:00.000Z",
+  "google_uid": "unique-google-id",
+  "formLink": "https://example.com/form"
+}
+```
+
+**Field Requirements:**
+- `timeStamp` (optional): Timestamp, ISO 8601 date string
+- `patientName` (optional): Patient name, string, max 200 characters (automatically sanitized)
+- `patientDob` (optional): Patient date of birth, ISO 8601 date string
+- `gender` (optional): Gender, must be either "male" or "female"
+- `hospital` (optional): Hospital UUID, must be a valid UUID format
+- `arabProc` (optional): Arabic procedure UUID, must be a valid UUID format
+- `procDate` (optional): Procedure date, ISO 8601 date string
+- `google_uid` (optional): Google UID, string, max 200 characters
+- `formLink` (optional): Form link URL, must be a valid URL format
+
+**Note:** All fields are optional - you can update any subset of fields. The `patientName` is automatically sanitized.
+
+**Description:**  
+Updates a calendar surgery record in the system. The `id` parameter must be a valid UUID format. Only Super Admins, Institute Admins, and Clerks can update calendar surgery records.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "id": "507f1f77bcf86cd799439011",
+    "timeStamp": "2025-01-15T10:00:00.000Z",
+    "patientName": "John Doe",
+    "patientDob": "1980-05-15T00:00:00.000Z",
+    "gender": "male",
+    "hospital": {
+      "id": "hospital-uuid-123",
+      "engName": "Cairo University Hospital",
+      "arabName": "مستشفى جامعة القاهرة"
+    },
+    "arabProc": {
+      "id": "proc-uuid-456",
+      "title": "مراجعة صمام اوميا",
+      "numCode": "61070",
+      "alphaCode": "VSHN"
+    },
+    "procDate": "2025-01-15T10:00:00.000Z",
+    "google_uid": "unique-google-id",
+    "formLink": "https://example.com/form",
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-01-15T11:00:00.000Z"
+  }
+}
+```
+
+**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs.
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "calSurg ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "CalSurg not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins, Institute Admins, and Clerks can update calendar surgery records
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the calendar surgery record with the specified ID does not exist
+- All fields are optional - you can update any subset of fields
+- The `patientName` is automatically sanitized before saving
+
+---
+
+### Delete CalSurg
+**DELETE** `/calSurg/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): CalSurg UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes a calendar surgery record from the system. The `id` parameter must be a valid UUID format. Only Super Admins, Institute Admins, and Clerks can delete calendar surgery records.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "CalSurg deleted successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "calSurg ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "CalSurg not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins, Institute Admins, and Clerks can delete calendar surgery records
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the calendar surgery record with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+## Diagnosis (`/diagnosis`)
+
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting-1) section below for details.
+
+### Rate Limiting
+
+All `/diagnosis` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Get All Diagnoses
+**GET** `/diagnosis`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns all diagnoses in the system, ordered by creation date (newest first). This endpoint is protected and requires authentication as a Super Admin or Institute Admin.
 
 **Response (200 OK):**
 ```json
@@ -3893,20 +6549,71 @@ Authorization: Bearer <superAdmin_token>
   "data": [
     {
       "_id": "507f1f77bcf86cd799439011",
-      "google_uid": "unique-google-id",
-      "date": "2025-01-15",
-      "time": "10:00"
+      "icdCode": "G93.1",
+      "icdName": "anoxic brain damage",
+      "neuroLogName": ["anoxic brain damage"],
+      "createdAt": "2025-12-01T14:00:00.000Z",
+      "updatedAt": "2025-12-01T14:00:00.000Z"
+    },
+    {
+      "_id": "507f1f77bcf86cd799439012",
+      "icdCode": "G93.2",
+      "icdName": "benign intracranial hypertension",
+      "neuroLogName": ["benign intracranial hypertension"],
+      "createdAt": "2025-12-01T14:00:00.000Z",
+      "updatedAt": "2025-12-01T14:00:00.000Z"
     }
   ]
 }
 ```
 
----
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
 
-## Diagnosis (`/diagnosis`)
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
 
 ### Create Bulk Diagnoses
 **POST** `/diagnosis/postBulk`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Request Body:**
 ```json
@@ -4006,9 +6713,363 @@ Authorization: Bearer <superAdmin_token>
 
 **Note:** The `neuroLogName` array values are automatically converted to lowercase.
 
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Update Diagnosis
+**PATCH** `/diagnosis/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Diagnosis UUID (must be a valid UUID format)
+
+**Request Body (all fields optional):**
+```json
+{
+  "icdCode": "G93.1",
+  "icdName": "Anoxic brain damage",
+  "neuroLogName": ["Anoxic Brain Damage"]
+}
+```
+
+**Field Requirements:**
+- `icdCode` (optional): ICD code, string (will be normalized to uppercase)
+- `icdName` (optional): ICD name, string (will be normalized to lowercase)
+- `neuroLogName` (optional): Array of neuro log names, string array (will be normalized to lowercase)
+
+**Note:** 
+- All fields are optional - you can update any subset of fields
+- The `neuroLogName` array values are automatically converted to lowercase
+- The `icdCode` is automatically converted to uppercase
+- The `icdName` is automatically converted to lowercase
+- Duplicate checks are performed if `icdCode` or `icdName` are being updated
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "icdCode": "G93.1",
+    "icdName": "anoxic brain damage",
+    "neuroLogName": ["anoxic brain damage"],
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T15:00:00.000Z"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Diagnosis ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (400 Bad Request - Duplicate):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": "Diagnosis with ICD code 'G93.1' already exists"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Diagnosis not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can update diagnoses
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the diagnosis with the specified ID does not exist
+- If updating `icdCode` or `icdName`, the system checks for duplicates and prevents conflicts
+- All string fields are automatically normalized (uppercase for `icdCode`, lowercase for `icdName` and `neuroLogName`)
+
+---
+
+### Delete Diagnosis
+**DELETE** `/diagnosis/:id`
+
+**Requires:** Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Diagnosis UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes a diagnosis from the system. The `id` parameter must be a valid UUID format.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Diagnosis deleted successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Diagnosis ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Diagnosis not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can delete diagnoses
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the diagnosis with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting-1) above)
+
 ---
 
 ## Procedure CPT (`/procCpt`)
+
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting) section below for details.
+
+### Rate Limiting
+
+All `/procCpt` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Get All Procedure CPT Codes
+**GET** `/procCpt`
+
+**Requires:** Authentication (Super Admin or Institute Admin)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns all procedure CPT codes in the system, ordered by creation date (newest first). This endpoint is protected and requires authentication as a Super Admin or Institute Admin.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "507f1f77bcf86cd799439011",
+      "numCode": "61783",
+      "alphaCode": "A",
+      "title": "Craniotomy for tumor resection",
+      "description": "Procedure description",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
 
 ### Create ProcCpt from External
 **POST** `/procCpt/postAllFromExternal`
@@ -4016,6 +7077,8 @@ Authorization: Bearer <superAdmin_token>
 Creates procedure CPT codes from external data source.
 
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
@@ -4056,6 +7119,8 @@ Creates or updates a procedure CPT code. If a procedure with the same `numCode` 
 
 **Requires:** Super Admin authentication
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
@@ -4095,18 +7160,156 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Delete Procedure CPT Code
+**DELETE** `/procCpt/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): ProcCpt UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes a procedure CPT code from the system. The `id` parameter must be a valid UUID format.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "ProcCpt deleted successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "ProcCpt ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "ProcCpt not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can delete procedure CPT codes
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the procedure CPT code with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting) above)
+
 ---
 
 ## Main Diagnosis (`/mainDiag`)
+
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+
+### Rate Limiting
+
+All `/mainDiag` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
 
 ### Create Main Diagnosis
 **POST** `/mainDiag`
 
 **Requires:** Super Admin authentication
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
 ```
 
 **Request Body:**
@@ -4118,6 +7321,11 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Field Requirements:**
+- `title` (required): Main diagnosis title, string, max 200 characters
+- `procsArray` (optional): Array of procedure numCodes (strings)
+- `diagnosis` (optional): Array of diagnosis icdCodes (strings)
+
 **Response (201 Created):**
 ```json
 {
@@ -4125,20 +7333,82 @@ Authorization: Bearer <superAdmin_token>
   "statusCode": 201,
   "message": "Created",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
+    "id": "507f1f77bcf86cd799439011",
     "title": "cns tumors",
-    "procs": ["507f1f77bcf86cd799439012", "507f1f77bcf86cd799439013"],
-    "diagnosis": ["507f1f77bcf86cd799439014", "507f1f77bcf86cd799439015"]
+    "procs": [
+      {
+        "id": "507f1f77bcf86cd799439012",
+        "numCode": "61783",
+        "alphaCode": "A",
+        "title": "Procedure Title",
+        "description": "Procedure description"
+      }
+    ],
+    "diagnosis": [
+      {
+        "id": "507f1f77bcf86cd799439014",
+        "icdCode": "G93.1",
+        "icdName": "Anoxic brain damage"
+      }
+    ],
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T14:00:00.000Z"
   }
 }
 ```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs. The `title` is automatically converted to lowercase.
 
 ---
 
 ### Get All Main Diagnoses
 **GET** `/mainDiag`
 
-No authentication required.
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns all main diagnoses in the system. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
 
 **Response (200 OK):**
 ```json
@@ -4148,11 +7418,11 @@ No authentication required.
   "message": "OK",
   "data": [
     {
-      "_id": "507f1f77bcf86cd799439011",
+      "id": "507f1f77bcf86cd799439011",
       "title": "cns tumors",
       "procs": [
         {
-          "_id": "507f1f77bcf86cd799439012",
+          "id": "507f1f77bcf86cd799439012",
           "numCode": "61783",
           "alphaCode": "A",
           "title": "Procedure Title",
@@ -4161,24 +7431,73 @@ No authentication required.
       ],
       "diagnosis": [
         {
-          "_id": "507f1f77bcf86cd799439014",
+          "id": "507f1f77bcf86cd799439014",
           "icdCode": "G93.1",
           "icdName": "Anoxic brain damage"
         }
-      ]
+      ],
+      "createdAt": "2025-12-01T14:00:00.000Z",
+      "updatedAt": "2025-12-01T14:00:00.000Z"
     }
   ]
 }
 ```
 
-**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just ObjectIds.
+**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs.
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
 
 ---
 
 ### Get Main Diagnosis by ID
 **GET** `/mainDiag/:id`
 
-No authentication required.
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
+
+**Description:**  
+Returns a specific main diagnosis by ID. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
 
 **Response (200 OK):**
 ```json
@@ -4187,11 +7506,11 @@ No authentication required.
   "statusCode": 200,
   "message": "OK",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
+    "id": "507f1f77bcf86cd799439011",
     "title": "cns tumors",
     "procs": [
       {
-        "_id": "507f1f77bcf86cd799439012",
+        "id": "507f1f77bcf86cd799439012",
         "numCode": "61783",
         "alphaCode": "A",
         "title": "Procedure Title",
@@ -4200,21 +7519,96 @@ No authentication required.
     ],
     "diagnosis": [
       {
-        "_id": "507f1f77bcf86cd799439014",
+        "id": "507f1f77bcf86cd799439014",
         "icdCode": "G93.1",
         "icdName": "Anoxic brain damage"
       }
-    ]
+    ],
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T14:00:00.000Z"
   }
 }
 ```
 
-**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just ObjectIds.
+**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs.
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "mainDiag ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "MainDiag not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
 
 ---
 
 ### Update Main Diagnosis
 **PUT** `/mainDiag/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
 
 **Request Body:**
 ```json
@@ -4230,7 +7624,7 @@ No authentication required.
 - `procs` (optional): Array of procedure numCodes (strings) to append to existing procedures. Duplicates are automatically avoided.
 - `diagnosis` (optional): Array of diagnosis icdCodes (strings) to append to existing diagnoses. Duplicates are automatically avoided.
 
-**Note:** The `procs` and `diagnosis` arrays are appended to existing values, not replaced. If a procedure or diagnosis already exists, it won't be duplicated.
+**Note:** The `procs` and `diagnosis` arrays are appended to existing values, not replaced. If a procedure or diagnosis already exists, it won't be duplicated. The `title` is automatically converted to lowercase.
 
 **Response (200 OK):**
 ```json
@@ -4239,11 +7633,11 @@ No authentication required.
   "statusCode": 200,
   "message": "OK",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
+    "id": "507f1f77bcf86cd799439011",
     "title": "updated title",
     "procs": [
       {
-        "_id": "507f1f77bcf86cd799439012",
+        "id": "507f1f77bcf86cd799439012",
         "numCode": "61783",
         "alphaCode": "A",
         "title": "Procedure Title",
@@ -4252,21 +7646,99 @@ No authentication required.
     ],
     "diagnosis": [
       {
-        "_id": "507f1f77bcf86cd799439014",
+        "id": "507f1f77bcf86cd799439014",
         "icdCode": "G93.1",
         "icdName": "Anoxic brain damage"
       }
-    ]
+    ],
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T15:00:00.000Z"
   }
 }
 ```
 
 **Note:** The `procs` and `diagnosis` fields are populated with full document data in the response.
 
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "mainDiag ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "MainDiag not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
 ---
 
 ### Delete Main Diagnosis
 **DELETE** `/mainDiag/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes a main diagnosis from the system. The `id` parameter must be a valid UUID format.
 
 **Response (200 OK):**
 ```json
@@ -4280,14 +7752,114 @@ No authentication required.
 }
 ```
 
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "mainDiag ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "MainDiag not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can delete main diagnoses
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the main diagnosis with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
 ---
 
 ## Arabic Procedures (`/arabProc`)
 
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting) section below for details.
+
+### Rate Limiting
+
+All `/arabProc` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
 ### Get All Arab Procedures
 **GET** `/arabProc/getAllArabProcs`
 
-No authentication required.
+**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns all Arabic procedures in the system. This endpoint is protected and requires authentication as a Super Admin, Institute Admin, or Clerk.
 
 **Response (200 OK):**
 ```json
@@ -4307,12 +7879,24 @@ No authentication required.
 }
 ```
 
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
 ---
 
 ### Create Arab Procedure
 **POST** `/arabProc/createArabProc`
 
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
@@ -4351,12 +7935,24 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
 ---
 
 ### Create Arab Procedure from External
 **POST** `/arabProc/createArabProcFromExternal`
 
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
@@ -4388,18 +7984,356 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
 ---
 
-## Hospitals (`/hospital`)
-
-### Create Hospital
-**POST** `/hospital/create`
+### Delete Arab Procedure
+**DELETE** `/arabProc/:id`
 
 **Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
 Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): ArabProc UUID (must be a valid UUID format)
+
+**Description:**  
+Deletes an Arabic procedure from the system. The `id` parameter must be a valid UUID format.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "ArabProc deleted successfully"
+  }
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "ArabProc ID is required.",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "ArabProc not found"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Notes:**
+- Only Super Admins can delete Arabic procedures
+- The `id` parameter is validated to ensure it's a valid UUID format before processing
+- Returns 404 if the procedure with the specified ID does not exist
+- All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting) above)
+
+---
+
+## Hospitals (`/hospital`)
+
+All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+
+### Rate Limiting
+
+All `/hospital` endpoints are protected with user-based rate limiting:
+
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Authentication
+
+- **GET endpoints**: Require authentication (accessible to all authenticated users: candidates, clerks, supervisors, institute admins, super admins)
+- **POST/DELETE endpoints**: Require Super Admin authentication
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+---
+
+### Get All Hospitals
+
+**GET** `/hospital`
+
+**Requires:** Authentication (all authenticated users)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Description:**  
+Returns all hospitals in the system, ordered by creation date (newest first). Accessible to all authenticated users (candidates, clerks, supervisors, institute admins, and super admins).
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "arabName": "مستشفى جامعة القاهرة",
+      "engName": "Cairo University Hospital",
+      "location": {
+        "long": 31.2001,
+        "lat": 30.0444
+      },
+      "createdAt": "2025-12-01T14:00:00.000Z",
+      "updatedAt": "2025-12-01T14:00:00.000Z"
+    },
+    {
+      "_id": "507f1f77bcf86cd799439012",
+      "arabName": "مستشفى آخر",
+      "engName": "Another Hospital",
+      "location": {
+        "long": 31.2002,
+        "lat": 30.0445
+      },
+      "createdAt": "2025-12-01T13:00:00.000Z",
+      "updatedAt": "2025-12-01T13:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `_id` (string, required): Hospital UUID
+- `arabName` (string, required): Arabic hospital name
+- `engName` (string, required): English hospital name
+- `location` (object, optional): Hospital coordinates
+  - `long` (number, optional): Longitude (-180 to 180)
+  - `lat` (number, optional): Latitude (-90 to 90)
+- `createdAt` (string, optional): ISO 8601 timestamp
+- `updatedAt` (string, optional): ISO 8601 timestamp
+
+**Error Responses:**
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message"
+}
+```
+
+---
+
+### Get Hospital by ID
+
+**GET** `/hospital/:id`
+
+**Requires:** Authentication (all authenticated users)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Description:**  
+Returns a specific hospital by ID. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Hospital UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "arabName": "مستشفى جامعة القاهرة",
+    "engName": "Cairo University Hospital",
+    "location": {
+      "long": 31.2001,
+      "lat": 30.0444
+    },
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T14:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+**Error Response (400 Bad Request - Validation Errors):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Hospital ID must be a valid UUID (or ObjectId for backward compatibility)",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Hospital not found"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message"
+}
+```
+
+---
+
+### Create Hospital
+
+**POST** `/hospital/create`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<superAdmin_token>
 ```
 
 **Request Body:**
@@ -4441,12 +8375,211 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Responses:**
+
+**Error Response (400 Bad Request - Validation Errors):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "hospital name is required in arabic.",
+      "path": "arabName",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message"
+}
+```
+
+---
+
+### Delete Hospital
+
+**DELETE** `/hospital/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <superAdmin_token>
+```
+OR
+```
+Cookie: auth_token=<superAdmin_token>
+```
+
+**URL Parameters:**
+- `id` (required): Hospital UUID (must be valid UUID format)
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Hospital deleted successfully"
+  }
+}
+```
+
+**Error Responses:**
+
+**Error Response (400 Bad Request - Validation Errors):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Hospital ID must be a valid UUID (or ObjectId for backward compatibility)",
+      "path": "id",
+      "location": "params"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Hospital not found"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Error message"
+}
+```
+
+**Notes:**
+- Only Super Admins can create and delete hospitals
+- All endpoints are protected with user-based rate limiting
+- Hospital IDs must be valid UUIDs (or ObjectIds for backward compatibility with legacy data)
+
 ---
 
 ## Mailer (`/mailer`)
 
+### Rate Limiting
+- **POST endpoint**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
 ### Send Email
 **POST** `/mailer/send`
+
+**Authentication Required:** Yes (Institute Admin or Super Admin)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+Allows Institute Admins and Super Admins to send emails through the system. The email can be sent as plain text, HTML, or both.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
 
 **Request Body:**
 ```json
@@ -4459,7 +8592,17 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
-**Note:** At least one of `text` or `html` must be provided. `from` is optional.
+**Request Body Fields:**
+- `to` (required): Recipient email address (must be a valid email format)
+- `subject` (required): Email subject line (must be a non-empty string)
+- `text` (optional): Plain text email content (must be a string when provided)
+- `html` (optional): HTML email content (must be a string when provided)
+- `from` (optional): Sender email address (must be a valid email format when provided). If not provided, uses the default system email address.
+
+**Validation Rules:**
+- At least one of `text` or `html` must be provided (cannot be empty strings)
+- All email addresses (`to` and optional `from`) must be valid email formats
+- Subject must be a non-empty string
 
 **Response (200 OK):**
 ```json
@@ -4468,10 +8611,93 @@ Authorization: Bearer <superAdmin_token>
   "statusCode": 200,
   "message": "OK",
   "data": {
-    "message": "Email sent successfully to recipient@example.com"
+    "to": "recipient@example.com"
   }
 }
 ```
+
+**Error Response (400 Bad Request - Validation Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "'to' must be a valid email address",
+      "path": "to",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**Error Response (400 Bad Request - Missing Content):**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "Provide at least one of 'text' or 'html' in the request body.",
+      "path": "",
+      "location": "body"
+    }
+  ]
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**Error Response (403 Forbidden):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**Error Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**Error Response (500 Internal Server Error):**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to send email"
+}
+```
+
+**Notes:**
+- Only Institute Admins and Super Admins can send emails
+- Rate limiting: 50 requests per 15 minutes per authenticated user
+- At least one of `text` or `html` must be provided (cannot both be empty)
+- If `from` is not provided, the system uses the default email address from environment variables
+- Email addresses are validated for proper format
+- Subject is required and must be a non-empty string
+- All validation errors are returned in a standardized format
 
 ---
 
@@ -4483,11 +8709,29 @@ Authorization: Bearer <superAdmin_token>
 
 The Lectures module provides access to lecture data for Institute Admins to use when creating events.
 
+### Rate Limiting
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests, please try again later."
+}
+```
+
+---
+
 ### Authentication
 
-- **Requires:** Institute Admin authentication for `GET /lecture` endpoint
-- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
-- **Note:** POST, PATCH, DELETE, and GET by ID endpoints require Super Admin authentication
+- **Requires:** Supervisor authentication for `GET /lecture` and `GET /lecture/:id` endpoints
+- Higher roles (Institute Admin, Super Admin) are also allowed via `requireSupervisor`
+- **Note:** POST, PATCH, DELETE endpoints require Super Admin authentication
 
 **Headers:**
 ```
@@ -4498,14 +8742,18 @@ OR
 Cookie: auth_token=<token>
 ```
 
+---
+
 ### Get All Lectures
 
 **GET** `/lecture`
 
-**Requires:** Institute Admin authentication
+**Requires:** Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 **Description:**  
-Returns all lectures available in the system. This endpoint is used by Institute Admins to select lectures when creating events.
+Returns all lectures available in the system. This endpoint is accessible to supervisors and higher roles.
 
 **Response (200 OK):**
 ```json
@@ -4538,20 +8786,285 @@ Returns all lectures available in the system. This endpoint is used by Institute
 
 **Error Responses:**
 - `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `instituteAdmin` or `superAdmin` role
+- `403 Forbidden`: User does not have `supervisor`, `instituteAdmin`, or `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
 - `500 Internal Server Error`: Server error
+
+---
+
+### Get Lecture by ID
+
+**GET** `/lecture/:id`
+
+**Requires:** Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Description:**  
+Returns a specific lecture by ID. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Lecture UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "lectureTitle": "1.2.1: Introduction to Neurosurgery",
+    "google_uid": "lecture-001",
+    "mainTopic": "neurosurgery basics",
+    "level": "msc",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `supervisor`, `instituteAdmin`, or `superAdmin` role
+- `404 Not Found`: Lecture not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Create Lecture
+
+**POST** `/lecture`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Creates a new lecture in the system.
+
+**Request Body:**
+```json
+{
+  "lectureTitle": "1.2.1: Introduction to Neurosurgery",
+  "google_uid": "lecture-001",
+  "mainTopic": "neurosurgery basics",
+  "level": "msc"
+}
+```
+
+**Field Requirements:**
+- `lectureTitle` (required): Title of the lecture
+- `google_uid` (required): Google Sheets unique identifier
+- `mainTopic` (required): Main topic of the lecture
+- `level` (required): Level of the lecture - must be `"msc"` or `"md"`
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "lectureTitle": "1.2.1: Introduction to Neurosurgery",
+    "google_uid": "lecture-001",
+    "mainTopic": "neurosurgery basics",
+    "level": "msc",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation errors (missing required fields, invalid level value)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Update Lecture
+
+**PATCH** `/lecture/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Updates an existing lecture. The `id` parameter must be a valid UUID format. All fields in the request body are optional.
+
+**URL Parameters:**
+- `id` (required): Lecture UUID
+
+**Request Body:**
+```json
+{
+  "lectureTitle": "1.2.1: Introduction to Neurosurgery (Updated)",
+  "google_uid": "lecture-001-updated",
+  "mainTopic": "neurosurgery basics updated",
+  "level": "md"
+}
+```
+
+**Field Requirements:**
+- `lectureTitle` (optional): Title of the lecture
+- `google_uid` (optional): Google Sheets unique identifier
+- `mainTopic` (optional): Main topic of the lecture
+- `level` (optional): Level of the lecture - must be `"msc"` or `"md"` if provided
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "lectureTitle": "1.2.1: Introduction to Neurosurgery (Updated)",
+    "google_uid": "lecture-001-updated",
+    "mainTopic": "neurosurgery basics updated",
+    "level": "md",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-15T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format or invalid level value
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `404 Not Found`: Lecture not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Delete Lecture
+
+**DELETE** `/lecture/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Deletes a lecture from the system. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Lecture UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Lecture deleted successfully"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `404 Not Found`: Lecture not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Bulk Create Lectures from External
+
+**POST** `/lecture/postBulk`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Bulk creates lectures from external data source (Google Sheets). The level (msc/md) is automatically detected from the data.
+
+**Request Body:**
+```json
+{
+  "spreadsheetName": "Lectures Spreadsheet",
+  "sheetName": "Sheet1",
+  "row": 1,
+  "mainTopic": "neurosurgery basics"
+}
+```
+
+**Field Requirements:**
+- `spreadsheetName` (optional): Name of the Google Spreadsheet
+- `sheetName` (optional): Name of the sheet within the spreadsheet
+- `row` (optional): Row number to start from (must be a positive integer, minimum 1)
+- `mainTopic` (required): Main topic for the lectures
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439011",
+      "lectureTitle": "1.2.1: Introduction to Neurosurgery",
+      "google_uid": "lecture-001",
+      "mainTopic": "neurosurgery basics",
+      "level": "msc",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation errors (missing mainTopic, invalid row number)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error or external data source error
 
 ---
 
 ## Journals (`/journal`)
 
-The Journals module provides access to journal data for Institute Admins to use when creating events.
+The Journals module provides access to journal data for candidates and higher roles to use when creating events.
+
+### Rate Limiting
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests, please try again later."
+}
+```
+
+---
 
 ### Authentication
 
-- **Requires:** Institute Admin authentication for `GET /journal` endpoint
-- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
-- **Note:** POST, PATCH, DELETE, and GET by ID endpoints require Super Admin authentication
+- **Requires:** Candidate authentication for `GET /journal` and `GET /journal/:id` endpoints
+- Higher roles (Supervisor, Institute Admin, Super Admin) are also allowed via `requireCandidate`
+- **Note:** POST, PATCH, DELETE endpoints require Super Admin authentication
 
 **Headers:**
 ```
@@ -4562,14 +9075,18 @@ OR
 Cookie: auth_token=<token>
 ```
 
+---
+
 ### Get All Journals
 
 **GET** `/journal`
 
-**Requires:** Institute Admin authentication
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 **Description:**  
-Returns all journals available in the system. This endpoint is used by Institute Admins to select journals when creating events.
+Returns all journals available in the system. This endpoint is accessible to candidates and higher roles.
 
 **Response (200 OK):**
 ```json
@@ -4600,20 +9117,276 @@ Returns all journals available in the system. This endpoint is used by Institute
 
 **Error Responses:**
 - `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `instituteAdmin` or `superAdmin` role
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `instituteAdmin`, or `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
 - `500 Internal Server Error`: Server error
+
+---
+
+### Get Journal by ID
+
+**GET** `/journal/:id`
+
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Description:**  
+Returns a specific journal by ID. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Journal UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439021",
+    "journalTitle": "Neurosurgery Journal - Volume 1",
+    "pdfLink": "https://example.com/journal1.pdf",
+    "google_uid": "journal-001",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `instituteAdmin`, or `superAdmin` role
+- `404 Not Found`: Journal not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Create Journal
+
+**POST** `/journal`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Creates a new journal in the system.
+
+**Request Body:**
+```json
+{
+  "journalTitle": "Neurosurgery Journal - Volume 1",
+  "pdfLink": "https://example.com/journal1.pdf",
+  "google_uid": "journal-001"
+}
+```
+
+**Field Requirements:**
+- `journalTitle` (required): Title of the journal
+- `pdfLink` (required): Link to the journal PDF (must be a valid URL)
+- `google_uid` (required): Google Sheets unique identifier
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439021",
+    "journalTitle": "Neurosurgery Journal - Volume 1",
+    "pdfLink": "https://example.com/journal1.pdf",
+    "google_uid": "journal-001",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation errors (missing required fields, invalid URL format)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Update Journal
+
+**PATCH** `/journal/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Updates an existing journal. The `id` parameter must be a valid UUID format. All fields in the request body are optional.
+
+**URL Parameters:**
+- `id` (required): Journal UUID
+
+**Request Body:**
+```json
+{
+  "journalTitle": "Neurosurgery Journal - Volume 1 (Updated)",
+  "pdfLink": "https://example.com/journal1-updated.pdf",
+  "google_uid": "journal-001-updated"
+}
+```
+
+**Field Requirements:**
+- `journalTitle` (optional): Title of the journal
+- `pdfLink` (optional): Link to the journal PDF (must be a valid URL if provided)
+- `google_uid` (optional): Google Sheets unique identifier
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439021",
+    "journalTitle": "Neurosurgery Journal - Volume 1 (Updated)",
+    "pdfLink": "https://example.com/journal1-updated.pdf",
+    "google_uid": "journal-001-updated",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-15T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format or invalid URL format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `404 Not Found`: Journal not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Delete Journal
+
+**DELETE** `/journal/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Deletes a journal from the system. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Journal UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Journal deleted successfully"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `404 Not Found`: Journal not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Bulk Create Journals from External
+
+**POST** `/journal/postBulk`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Bulk creates journals from external data source (Google Sheets).
+
+**Request Body:**
+```json
+{
+  "spreadsheetName": "Journals Spreadsheet",
+  "sheetName": "Sheet1",
+  "row": 1
+}
+```
+
+**Field Requirements:**
+- `spreadsheetName` (optional): Name of the Google Spreadsheet
+- `sheetName` (optional): Name of the sheet within the spreadsheet
+- `row` (optional): Row number to start from (must be a positive integer, minimum 1)
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": [
+    {
+      "_id": "507f1f77bcf86cd799439021",
+      "journalTitle": "Neurosurgery Journal - Volume 1",
+      "pdfLink": "https://example.com/journal1.pdf",
+      "google_uid": "journal-001",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation errors (invalid row number)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error or external data source error
 
 ---
 
 ## Conferences (`/conf`)
 
-The Conferences module provides access to conference data for Institute Admins to use when creating events.
+The Conferences module provides access to conference data for candidates and higher roles to use when creating events.
+
+### Rate Limiting
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests, please try again later."
+}
+```
+
+---
 
 ### Authentication
 
-- **Requires:** Institute Admin authentication for `GET /conf` endpoint
-- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
-- **Note:** POST, PATCH, DELETE, and GET by ID endpoints require Super Admin authentication
+- **Requires:** Candidate authentication for `GET /conf` and `GET /conf/:id` endpoints
+- Higher roles (Supervisor, Institute Admin, Super Admin) are also allowed via `requireCandidate`
+- **Note:** POST endpoint requires Institute Admin, Supervisor, Clerk, or Super Admin authentication
+- **Note:** PATCH and DELETE endpoints require Super Admin authentication
 
 **Headers:**
 ```
@@ -4624,14 +9397,18 @@ OR
 Cookie: auth_token=<token>
 ```
 
+---
+
 ### Get All Conferences
 
 **GET** `/conf`
 
-**Requires:** Institute Admin authentication
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 **Description:**  
-Returns all conferences available in the system. This endpoint is used by Institute Admins to select conferences when creating events.
+Returns all conferences available in the system. This endpoint is accessible to candidates and higher roles.
 
 **Response (200 OK):**
 ```json
@@ -4664,7 +9441,202 @@ Returns all conferences available in the system. This endpoint is used by Instit
 
 **Error Responses:**
 - `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `instituteAdmin` or `superAdmin` role
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `instituteAdmin`, or `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Get Conference by ID
+
+**GET** `/conf/:id`
+
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Description:**  
+Returns a specific conference by ID. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Conference UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439031",
+    "confTitle": "Annual Neurosurgery Conference 2024",
+    "google_uid": "conf-001",
+    "presenter": {
+      "_id": "6905e9dc719e11e810a0453c",
+      "fullName": "Dr. John Supervisor",
+      "email": "supervisor@example.com"
+    },
+    "date": "2024-06-15T00:00:00.000Z",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `instituteAdmin`, or `superAdmin` role
+- `404 Not Found`: Conference not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Create Conference
+
+**POST** `/conf`
+
+**Requires:** Institute Admin, Supervisor, Clerk, or Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Creates a new conference in the system.
+
+**Request Body:**
+```json
+{
+  "confTitle": "Annual Neurosurgery Conference 2024",
+  "google_uid": "conf-001",
+  "presenter": "6905e9dc719e11e810a0453c",
+  "date": "2024-06-15T00:00:00.000Z"
+}
+```
+
+**Field Requirements:**
+- `confTitle` (required): Title of the conference
+- `google_uid` (required): Google Sheets unique identifier
+- `presenter` (required): Supervisor UUID (must be a valid UUID format)
+- `date` (required): Date of the conference (must be a valid ISO 8601 date)
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "_id": "507f1f77bcf86cd799439031",
+    "confTitle": "Annual Neurosurgery Conference 2024",
+    "google_uid": "conf-001",
+    "presenter": "6905e9dc719e11e810a0453c",
+    "date": "2024-06-15T00:00:00.000Z",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation errors (missing required fields, invalid UUID format, invalid date format)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `instituteAdmin`, `supervisor`, `clerk`, or `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Update Conference
+
+**PATCH** `/conf/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Updates an existing conference. The `id` parameter must be a valid UUID format. All fields in the request body are optional.
+
+**URL Parameters:**
+- `id` (required): Conference UUID
+
+**Request Body:**
+```json
+{
+  "confTitle": "Annual Neurosurgery Conference 2024 (Updated)",
+  "google_uid": "conf-001-updated",
+  "presenter": "6905e9dc719e11e810a0453d",
+  "date": "2024-07-15T00:00:00.000Z"
+}
+```
+
+**Field Requirements:**
+- `confTitle` (optional): Title of the conference
+- `google_uid` (optional): Google Sheets unique identifier
+- `presenter` (optional): Supervisor UUID (must be a valid UUID format if provided)
+- `date` (optional): Date of the conference (must be a valid ISO 8601 date if provided)
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "_id": "507f1f77bcf86cd799439031",
+    "confTitle": "Annual Neurosurgery Conference 2024 (Updated)",
+    "google_uid": "conf-001-updated",
+    "presenter": "6905e9dc719e11e810a0453d",
+    "date": "2024-07-15T00:00:00.000Z",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-15T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format or invalid date format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `404 Not Found`: Conference not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Delete Conference
+
+**DELETE** `/conf/:id`
+
+**Requires:** Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:**  
+Deletes a conference from the system. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Conference UUID
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "message": "Conf deleted successfully"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `superAdmin` role
+- `404 Not Found`: Conference not found
+- `429 Too Many Requests`: Rate limit exceeded
 - `500 Internal Server Error`: Server error
 
 ---
@@ -4675,10 +9647,31 @@ The Events module allows **Institute Admins** to schedule lectures, journals, an
 
 **📋 Frontend Implementation Guide:** For comprehensive frontend requirements and implementation details, see `FRONTEND_EVENTS_CALENDAR_REQUIREMENTS.md`.
 
+### Rate Limiting
+- **GET endpoints**: 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests, please try again later."
+}
+```
+
+---
+
 ### Authentication
 
-- **Requires:** Institute Admin authentication for all `/event` endpoints  
-- Higher roles (Super Admin) are also allowed via `requireInstituteAdmin`
+- **Requires:** Authentication varies by endpoint:
+  - **GET endpoints** (`GET /event`, `GET /event/:id`): Candidate, Supervisor, Clerk, Institute Admin, or Super Admin
+  - **POST/PATCH/DELETE endpoints**: Clerk, Institute Admin, or Super Admin (varies by specific endpoint)
+  - **Attendance management endpoints**: Conditional authorization based on role and event presenter
+- Higher roles can access lower privilege endpoints by default (hierarchical access)
 
 **Headers:**
 ```
@@ -4788,7 +9781,9 @@ The `status` field tracks the event lifecycle:
 
 **POST** `/event`
 
-**Requires:** Institute Admin authentication
+**Requires:** Clerk, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Request Body (Lecture Event Example):**
 ```json
@@ -4868,7 +9863,9 @@ The `status` field tracks the event lifecycle:
 
 **GET** `/event`
 
-**Requires:** Institute Admin authentication
+**Requires:** Candidate, Supervisor, Clerk, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 **Description:**  
 Returns all events with populated references:
@@ -4970,15 +9967,40 @@ Returns all events with populated references:
 **Response (200 OK):**
 Same structure as a single item in the `GET /event` response.
 
-**Error (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Event not found"
-}
-```
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `clerk`, `instituteAdmin`, or `superAdmin` role
+- `404 Not Found`: Event not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
+
+---
+
+### Get Event by ID
+
+**GET** `/event/:id`
+
+**Requires:** Candidate, Supervisor, Clerk, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Description:**  
+Returns a specific event by ID with populated references. The `id` parameter must be a valid UUID format.
+
+**URL Parameters:**
+- `id` (required): Event UUID
+
+**Response (200 OK):**
+Same structure as a single item in the `GET /event` response.
+
+**Error Responses:**
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `clerk`, `instituteAdmin`, or `superAdmin` role
+- `404 Not Found`: Event not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
 
 ---
 
@@ -4991,6 +10013,8 @@ The following endpoints allow managing candidate attendance for events with poin
 **POST** `/event/:eventId/attendance/:candidateId`
 
 **Requires:** Authentication (varies by role)
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Authorization:**
 - **Institute Admin**: Can add any candidate to any event
@@ -5044,6 +10068,8 @@ Returns the updated event with the new attendance record.
 
 **Requires:** Authentication (varies by role)
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Authorization:**
 - **Institute Admin**: Can remove any candidate from any event
 - **Supervisor (Presenter)**: Can remove candidates from events where they are the presenter (lecture/conf only)
@@ -5067,6 +10093,8 @@ Returns the updated event with the candidate removed from attendance.
 **PATCH** `/event/:eventId/attendance/:candidateId/flag`
 
 **Requires:** Authentication (varies by role)
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Authorization:**
 - **Institute Admin**: Can flag any candidate in any event
@@ -5125,6 +10153,8 @@ Returns the updated event with the flagged attendance record.
 
 **Requires:** Authentication (varies by role)
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Authorization:**
 - **Institute Admin**: Can unflag any candidate in any event
 - **Supervisor (Presenter)**: Can unflag candidates in events where they are the presenter (lecture/conf only)
@@ -5153,7 +10183,9 @@ Returns the updated event with the unflagged attendance record.
 
 **GET** `/event/candidate/points`
 
-**Requires:** Candidate authentication
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 **Description:**
 Returns the total academic points for the logged-in candidate across all events. This endpoint automatically uses the candidate's ID from the JWT token, so candidates can easily view their own points on their dashboard.
@@ -5203,19 +10235,15 @@ Cookie: auth_token=<token>
 }
 ```
 
-**Error Response (500 Internal Server Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Error message details"
-}
-```
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token, or no candidate ID found in token
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `instituteAdmin`, or `superAdmin` role
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
 
 **Notes:**
 - The candidate ID is automatically extracted from the JWT token
-- Only candidates can access this endpoint (requires `requireCandidate` middleware)
+- Candidates, Supervisors, Institute Admins, and Super Admins can access this endpoint
 - Returns 0 if the candidate has no event attendance records
 - Points are calculated from all events where the candidate is in the attendance list
 
@@ -5225,7 +10253,9 @@ Cookie: auth_token=<token>
 
 **GET** `/event/candidate/:candidateId/points`
 
-**Requires:** Authentication (any authenticated user can view points)
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 200 requests per 15 minutes per user
 
 **Description:**
 Returns the total points for a specific candidate across all events. This endpoint allows viewing any candidate's points by providing their ID. Points are calculated as:
@@ -5248,8 +10278,12 @@ Returns the total points for a specific candidate across all events. This endpoi
 ```
 
 **Error Responses:**
-- `400 Bad Request`: Invalid candidate ID
+- `400 Bad Request`: Invalid UUID format
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User does not have `candidate`, `supervisor`, `instituteAdmin`, or `superAdmin` role
 - `404 Not Found`: Candidate not found
+- `429 Too Many Requests`: Rate limit exceeded
+- `500 Internal Server Error`: Server error
 
 ---
 
@@ -5257,7 +10291,9 @@ Returns the total points for a specific candidate across all events. This endpoi
 
 **POST** `/event/bulk-import-attendance`
 
-**Requires:** Institute Admin authentication
+**Requires:** Institute Admin or Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Description:**
 Bulk imports candidate attendance from an external Google Sheet. The endpoint:
@@ -5335,7 +10371,9 @@ No request body required. The endpoint automatically fetches data from the confi
 
 **PATCH** `/event/:id`
 
-**Requires:** Institute Admin authentication
+**Requires:** Clerk, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **URL Parameters:**
 - `id`: Event MongoDB ObjectId
@@ -5488,7 +10526,9 @@ Backend re-validates:
 
 **DELETE** `/event/:id`
 
-**Requires:** Institute Admin authentication
+**Requires:** Clerk, Institute Admin, or Super Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **URL Parameters:**
 - `id`: Event MongoDB ObjectId
@@ -5615,6 +10655,21 @@ Validation errors:
 
 All PDF report endpoints require **Institute Admin authentication** via JWT token in Authorization header or httpOnly cookie.
 
+### Rate Limiting
+- **All endpoints**: 50 requests per 15 minutes per user
+
+Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
 ### Response Format
 PDF endpoints return:
 - **Content-Type**: `application/pdf`
@@ -5635,11 +10690,17 @@ All PDF reports include MedScribe branding in the header:
 
 **Requires:** Institute Admin authentication
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Description:** Generates a PDF report showing submission count analysis for all supervisors, excluding any supervisor with the name "Tester_Supervisor" (case-insensitive matching).
 
 **Query Parameters (optional):**
-- `startDate` (ISO 8601): Filter submissions by start date
-- `endDate` (ISO 8601): Filter submissions by end date
+- `startDate` (ISO 8601): Filter submissions by start date. Must be a valid ISO 8601 date format.
+- `endDate` (ISO 8601): Filter submissions by end date. Must be a valid ISO 8601 date format.
+
+**Validation Rules:**
+- If both `startDate` and `endDate` are provided, `endDate` must be greater than or equal to `startDate`
+- Date format must be ISO 8601 (e.g., `2024-01-01T00:00:00.000Z`)
 
 **PDF Content:**
 1. **Report Header** with MedScribe branding
@@ -5658,9 +10719,80 @@ All PDF reports include MedScribe branding in the header:
 - Filename format: `supervisors-submission-count-<timestamp>.pdf`
 
 **Error Responses:**
-- **401 Unauthorized**: Missing or invalid JWT token
-- **403 Forbidden**: User is not an Institute Admin
-- **500 Internal Server Error**: PDF generation failed
+
+**400 Bad Request - Validation Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "startDate must be a valid ISO 8601 date",
+      "path": "startDate",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**400 Bad Request - Date Range Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "endDate must be greater than or equal to startDate",
+      "path": "",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**401 Unauthorized:**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**429 Too Many Requests:**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to generate PDF report: <error message>"
+}
+```
 
 ---
 
@@ -5669,11 +10801,17 @@ All PDF reports include MedScribe branding in the header:
 
 **Requires:** Institute Admin authentication
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Description:** Generates a PDF report showing submission count analysis for all candidates, excluding any candidate with email or fullName containing "tester" (case-insensitive).
 
 **Query Parameters (optional):**
-- `startDate` (ISO 8601): Filter submissions by start date
-- `endDate` (ISO 8601): Filter submissions by end date
+- `startDate` (ISO 8601): Filter submissions by start date. Must be a valid ISO 8601 date format.
+- `endDate` (ISO 8601): Filter submissions by end date. Must be a valid ISO 8601 date format.
+
+**Validation Rules:**
+- If both `startDate` and `endDate` are provided, `endDate` must be greater than or equal to `startDate`
+- Date format must be ISO 8601 (e.g., `2024-01-01T00:00:00.000Z`)
 
 **PDF Content:**
 1. **Report Header** with MedScribe branding
@@ -5692,9 +10830,80 @@ All PDF reports include MedScribe branding in the header:
 - Filename format: `candidates-submission-count-<timestamp>.pdf`
 
 **Error Responses:**
-- **401 Unauthorized**: Missing or invalid JWT token
-- **403 Forbidden**: User is not an Institute Admin
-- **500 Internal Server Error**: PDF generation failed
+
+**400 Bad Request - Validation Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "startDate must be a valid ISO 8601 date",
+      "path": "startDate",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**400 Bad Request - Date Range Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "endDate must be greater than or equal to startDate",
+      "path": "",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**401 Unauthorized:**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**429 Too Many Requests:**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to generate PDF report: <error message>"
+}
+```
 
 ---
 
@@ -5703,15 +10912,25 @@ All PDF reports include MedScribe branding in the header:
 
 **Requires:** Institute Admin authentication
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Description:** Generates a PDF report showing hospital-based procedure analysis for calendar procedures. The report algorithmically determines which hospitals have procedures and generates sections for each.
 
 **Query Parameters (optional):**
-- `hospitalId` (MongoDB ObjectId): Filter by specific hospital
-- `month` (1-12): Filter by month
-- `year` (e.g., 2025): Filter by year
-- `startDate` (ISO 8601): Filter by start date
-- `endDate` (ISO 8601): Filter by end date
-- `groupBy` (`title` | `alphaCode`): Group procedures by title or alphaCode. Default: `title`
+- `hospitalId` (UUID): Filter by specific hospital. Must be a valid UUID format.
+- `month` (integer, 1-12): Filter by month. Must be an integer between 1 and 12.
+- `year` (integer, 2000-2100): Filter by year. Must be an integer between 2000 and 2100.
+- `startDate` (ISO 8601): Filter by start date. Must be a valid ISO 8601 date format.
+- `endDate` (ISO 8601): Filter by end date. Must be a valid ISO 8601 date format.
+- `groupBy` (`title` | `alphaCode`): Group procedures by title or alphaCode. Default: `title`. Must be either "title" or "alphaCode".
+
+**Validation Rules:**
+- `hospitalId` must be a valid UUID format
+- `month` must be an integer between 1 and 12
+- `year` must be an integer between 2000 and 2100
+- Date format must be ISO 8601 (e.g., `2024-01-01T00:00:00.000Z`)
+- If both `startDate` and `endDate` are provided, `endDate` must be greater than or equal to `startDate`
+- `groupBy` must be either "title" or "alphaCode"
 
 **PDF Content:**
 1. **Report Header** with MedScribe branding
@@ -5738,14 +10957,103 @@ All PDF reports include MedScribe branding in the header:
 - Filename format: `calendar-procedures-hospital-analysis-<timestamp>.pdf`
 
 **Error Responses:**
-- **401 Unauthorized**: Missing or invalid JWT token
-- **403 Forbidden**: User is not an Institute Admin
-- **500 Internal Server Error**: PDF generation failed
+
+**400 Bad Request - Validation Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "hospitalId must be a valid UUID",
+      "path": "hospitalId",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**400 Bad Request - Invalid Month/Year:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "month must be an integer between 1 and 12",
+      "path": "month",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**400 Bad Request - Invalid groupBy:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "groupBy must be either 'title' or 'alphaCode'",
+      "path": "groupBy",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**401 Unauthorized:**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**429 Too Many Requests:**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to generate PDF report: <error message>"
+}
+```
 
 **Notes:**
 - Hospital matching is flexible (case-insensitive, handles variations in naming)
 - If no procedures found, returns a PDF with a message indicating no data available
 - The comparison between total procedures and total submissions is clearly stated
+- All query parameters are validated before processing
 
 ---
 
@@ -5754,11 +11062,17 @@ All PDF reports include MedScribe branding in the header:
 
 **Requires:** Institute Admin authentication
 
+**Rate Limit:** 50 requests per 15 minutes per user
+
 **Description:** Generates a PDF report containing **all events with `status = "canceled"`**, including key details (date/time, type, resource title + google UID, presenter, location, attendance count). Supports optional date filtering on `event.dateTime`.
 
 **Query Parameters (optional):**
-- `startDate` (ISO 8601): Include events with `dateTime >= startDate`
-- `endDate` (ISO 8601): Include events with `dateTime <= endDate`
+- `startDate` (ISO 8601): Include events with `dateTime >= startDate`. Must be a valid ISO 8601 date format.
+- `endDate` (ISO 8601): Include events with `dateTime <= endDate`. Must be a valid ISO 8601 date format.
+
+**Validation Rules:**
+- Date format must be ISO 8601 (e.g., `2024-01-01T00:00:00.000Z`)
+- If both `startDate` and `endDate` are provided, `endDate` must be greater than or equal to `startDate`
 
 **PDF Content:**
 1. **Detailed list only** (no summary/table):
@@ -5774,10 +11088,80 @@ All PDF reports include MedScribe branding in the header:
 - Filename format: `canceled-events-<timestamp>.pdf`
 
 **Error Responses:**
-- **400 Bad Request**: Invalid `startDate/endDate` (must be ISO 8601) or `endDate < startDate`
-- **401 Unauthorized**: Missing or invalid JWT token
-- **403 Forbidden**: User is not an Institute Admin
-- **500 Internal Server Error**: PDF generation failed
+
+**400 Bad Request - Validation Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "startDate must be a valid ISO 8601 date",
+      "path": "startDate",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**400 Bad Request - Date Range Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 400,
+  "message": "Bad Request",
+  "error": [
+    {
+      "type": "field",
+      "msg": "endDate must be greater than or equal to startDate",
+      "path": "",
+      "location": "query"
+    }
+  ]
+}
+```
+
+**401 Unauthorized:**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**429 Too Many Requests:**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to generate PDF report: <error message>"
+}
+```
 
 ---
 
@@ -5793,7 +11177,8 @@ All PDF reports include MedScribe branding in the header:
 | `/auth/forgotPassword` | No | - |
 | `/auth/resetPassword` | No | - |
 | `/superAdmin/*` | Yes | Super Admin |
-| `/instituteAdmin/*` | Yes | Super Admin (create) / Institute Admin or Super Admin (others) |
+| `/instituteAdmin/*` | Yes | Super Admin (POST /, DELETE /:id) / Institute Admin or Super Admin (GET /, GET /:id, PUT /:id, dashboard endpoints) |
+| `/clerk/*` | Yes | Super Admin or Institute Admin (all endpoints) |
 | `/instituteAdmin/supervisors` | Yes | Institute Admin or Super Admin |
 | `/instituteAdmin/supervisors/:supervisorId/submissions` | Yes | Institute Admin or Super Admin |
 | `/instituteAdmin/candidates` | Yes | Institute Admin or Super Admin |
@@ -5809,31 +11194,56 @@ All PDF reports include MedScribe branding in the header:
 | `/instituteAdmin/reports/events/canceled/pdf` | Yes | Institute Admin |
 | `/instituteAdmin/candidates/:candidateId/submissions` | Yes | Institute Admin |
 | `/instituteAdmin/candidates/:candidateId/submissions/:submissionId` | Yes | Institute Admin |
-| `/event/*` | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) / Candidate (GET /candidate/points) |
-| `/lecture` (GET) | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) |
-| `/lecture/*` (POST, PATCH, DELETE, GET by ID) | Yes | Super Admin only |
-| `/journal` (GET) | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) |
-| `/journal/*` (POST, PATCH, DELETE, GET by ID) | Yes | Super Admin only |
-| `/conf` (GET) | Yes | Institute Admin or Super Admin (via `requireInstituteAdmin`) |
-| `/conf/*` (POST, PATCH, DELETE, GET by ID) | Yes | Super Admin only |
-| `/supervisor/*` | Partial | Super Admin (POST, POST /resetPasswords) / Supervisor (GET /candidates) / No (GET, PUT, DELETE) |
-| `/sub/*` | Partial | Super Admin (POST /postAllFromExternal, PATCH /updateStatusFromExternal) / Candidate (GET /candidate/stats, GET /candidate/submissions, GET /candidate/submissions/:id) / Supervisor (GET /supervisor/submissions, GET /supervisor/submissions/:id, GET /supervisor/candidates/:candidateId/submissions, PATCH /supervisor/submissions/:id/review) / Institute Admin (POST /submissions/:id/generateSurgicalNotes) / No (others) |
-| `/sub/candidate/stats` | Yes | Candidate |
-| `/sub/candidate/submissions` | Yes | Candidate |
+| `/event` (GET) | Yes | Candidate, Supervisor, Clerk, Institute Admin, or Super Admin |
+| `/event/:id` (GET) | Yes | Candidate, Supervisor, Clerk, Institute Admin, or Super Admin |
+| `/event` (POST) | Yes | Clerk, Institute Admin, or Super Admin |
+| `/event/:id` (PATCH) | Yes | Clerk, Institute Admin, or Super Admin |
+| `/event/:id` (DELETE) | Yes | Clerk, Institute Admin, or Super Admin |
+| `/event/bulk-import-attendance` (POST) | Yes | Institute Admin or Super Admin |
+| `/event/candidate/points` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
+| `/event/candidate/:candidateId/points` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
+| `/event/:eventId/attendance/:candidateId` (POST) | Yes | Conditional (Candidate self, Institute Admin, Super Admin, Supervisor if presenter) |
+| `/event/:eventId/attendance/:candidateId` (DELETE) | Yes | Conditional (Institute Admin, Super Admin, Supervisor if presenter) |
+| `/event/:eventId/attendance/:candidateId/flag` (PATCH) | Yes | Conditional (Institute Admin, Super Admin, Supervisor if presenter) |
+| `/event/:eventId/attendance/:candidateId/unflag` (PATCH) | Yes | Conditional (Institute Admin, Super Admin, Supervisor if presenter) |
+| `/lecture` (GET) | Yes | Supervisor, Institute Admin, or Super Admin (via `requireSupervisor`) |
+| `/lecture/:id` (GET) | Yes | Supervisor, Institute Admin, or Super Admin (via `requireSupervisor`) |
+| `/lecture` (POST) | Yes | Super Admin only |
+| `/lecture/:id` (PATCH) | Yes | Super Admin only |
+| `/lecture/:id` (DELETE) | Yes | Super Admin only |
+| `/lecture/postBulk` (POST) | Yes | Super Admin only |
+| `/journal` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
+| `/journal/:id` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
+| `/journal` (POST) | Yes | Super Admin only |
+| `/journal/:id` (PATCH) | Yes | Super Admin only |
+| `/journal/:id` (DELETE) | Yes | Super Admin only |
+| `/journal/postBulk` (POST) | Yes | Super Admin only |
+| `/conf` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
+| `/conf/:id` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
+| `/conf` (POST) | Yes | Institute Admin, Supervisor, Clerk, or Super Admin |
+| `/conf/:id` (PATCH) | Yes | Super Admin only |
+| `/conf/:id` (DELETE) | Yes | Super Admin only |
+| `/supervisor/*` | Yes | Super Admin (POST /, POST /resetPasswords, DELETE /:id) / Super Admin, Institute Admin, Supervisor, Candidate (GET /, GET /:id) / Super Admin, Institute Admin, Supervisor (PUT /:id) / Supervisor (GET /candidates) |
+| `/sub/*` | Yes | Super Admin (POST /postAllFromExternal, PATCH /updateStatusFromExternal, DELETE /:id) / Candidate, Supervisor, Institute Admin, Super Admin (GET /candidate/stats, GET /candidate/submissions, GET /candidate/submissions/:id) / Supervisor (GET /supervisor/submissions, GET /supervisor/submissions/:id, GET /supervisor/candidates/:candidateId/submissions, PATCH /supervisor/submissions/:id/review) |
+| `/sub/candidate/stats` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
+| `/sub/candidate/submissions` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
+| `/sub/candidate/submissions/:id` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
 | `/sub/supervisor/submissions` | Yes | Supervisor |
 | `/sub/supervisor/submissions/:id` | Yes | Supervisor |
 | `/sub/supervisor/submissions/:id/review` | Yes | Validator Supervisor only (canValidate: true) |
 | `/sub/supervisor/candidates/:candidateId/submissions` | Yes | Supervisor |
-| `/sub/submissions/:id/generateSurgicalNotes` | Yes | Institute Admin or Super Admin |
+| `/sub/submissions/:id/generateSurgicalNotes` | ⚠️ DISABLED | ~~Institute Admin or Super Admin~~ (Endpoint disabled) |
+| `/sub/:id` (DELETE) | Yes | Super Admin |
 | `/supervisor/candidates` | Yes | Supervisor |
-| `/cand/*` | Partial | Super Admin (POST /createCandsFromExternal, PATCH /:id/resetPassword) / No (others) |
-| `/calSurg/*` | Partial | Super Admin (POST /postAllFromExternal) / No (GET) |
-| `/diagnosis/*` | Partial | Super Admin (POST /post) / No (POST /postBulk, GET) |
-| `/procCpt/*` | Partial | Super Admin (POST /postAllFromExternal, POST /upsert) / No (GET) |
-| `/mainDiag/*` | Partial | Super Admin (POST) / No (GET, PUT, DELETE) |
-| `/arabProc/*` | Partial | Super Admin (POST /createArabProc, POST /createArabProcFromExternal) / No (GET) |
+| `/cand/*` | Partial | Super Admin or Institute Admin (GET /, GET /:id) / Super Admin (POST /createCandsFromExternal, PATCH /:id/resetPassword, DELETE /:id) |
+| `/calSurg/*` | Partial | Super Admin, Institute Admin, Clerk, Supervisor, or Candidate (GET /getById, GET /getAll) / Super Admin, Institute Admin, or Clerk (PATCH /:id, DELETE /:id) / Super Admin (POST /postAllFromExternal) |
+| `/diagnosis/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postBulk, POST /post, PATCH /:id, DELETE /:id) |
+| `/procCpt/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postAllFromExternal, POST /upsert, DELETE /:id) |
+| `/mainDiag/*` | Partial | Super Admin, Institute Admin, Supervisor, or Candidate (GET /, GET /:id) / Super Admin (POST, PUT /:id, DELETE /:id) |
+| `/arabProc/*` | Partial | Super Admin, Institute Admin, or Clerk (GET /getAllArabProcs) / Super Admin (POST /createArabProc, POST /createArabProcFromExternal, DELETE /:id) |
 | `/hospital/*` | Partial | Super Admin (POST /create) / No (GET, PUT, DELETE) |
-| `/mailer/*` | No | - |
+| `/mailer/*` | Yes | Institute Admin or Super Admin |
+| `/mailer/send` | Yes | Institute Admin or Super Admin |
 | `/external/*` | No | - |
 
 ---

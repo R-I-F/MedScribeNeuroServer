@@ -50,17 +50,6 @@ export class PasswordResetService {
     }
   }
 
-  public async countTokensByEmail(email: string, timeWindowMs: number): Promise<number> | never {
-    try {
-      // This method is not fully implemented as it requires finding user by email first
-      // The provider layer handles this by finding the user first, then counting tokens
-      // For now, return 0 as placeholder
-      return 0;
-    } catch (error: any) {
-      throw new Error(error.message);
-    }
-  }
-
   public async countTokensByUserId(userId: string, timeWindowMs: number): Promise<number> | never {
     try {
       const cutoffTime = new Date(Date.now() - timeWindowMs);

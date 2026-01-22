@@ -3,10 +3,13 @@ import { inject, injectable } from "inversify";
 import { ProcCptController } from "./procCpt.controller";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
 import { upsertProcCptValidator } from "../validators/upsertProcCpt.validator";
+import { deleteProcCptValidator } from "../validators/deleteProcCpt.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import { UserRole } from "../types/role.types";
 
 injectable()
 export class ProcCptRouter {
@@ -21,8 +24,31 @@ export class ProcCptRouter {
   }
 
   private async initRoutes() {
+    // Custom authorization for GET: allows superAdmin and instituteAdmin
+    const requireSuperAdminOrInstituteAdmin = authorize(
+      UserRole.SUPER_ADMIN,
+      UserRole.INSTITUTE_ADMIN
+    );
+
+    // GET endpoint - Get all procedure codes
+    this.router.get(
+      "/",
+      userBasedRateLimiter,
+      extractJWT,
+      requireSuperAdminOrInstituteAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          const allProcCpts = await this.procCptController.handleGetAllProcCpts(req, res);
+          res.status(StatusCodes.OK).json(allProcCpts);
+        } catch (err: any) {
+          throw new Error(err);
+        }
+      }
+    );
+
     this.router.post(
       "/postAllFromExternal",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createFromExternalValidator,
@@ -43,6 +69,7 @@ export class ProcCptRouter {
 
     this.router.post(
       "/upsert",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       upsertProcCptValidator,
@@ -63,18 +90,25 @@ export class ProcCptRouter {
 
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
+      deleteProcCptValidator,
       async (req: Request, res: Response) => {
-        try {
-          const resp = await this.procCptController.handleDeleteProcCpt(req, res);
-          res.status(StatusCodes.OK).json(resp);
-        } catch (err: any) {
-          if (err.message.includes("not found")) {
-            res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
-          } else {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.procCptController.handleDeleteProcCpt(req, res);
+            res.status(StatusCodes.OK).json(resp);
+          } catch (err: any) {
+            if (err.message.includes("not found")) {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
           }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }
     );

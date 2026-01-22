@@ -98,11 +98,12 @@ import { EventRouter } from "../event/event.router";
 import { EventService } from "../event/event.service";
 import { EventProvider } from "../event/event.provider";
 
-export const container: Container = new Container();
+import { ClerkController } from "../clerk/clerk.controller";
+import { ClerkRouter } from "../clerk/clerk.router";
+import { ClerkService } from "../clerk/clerk.service";
+import { ClerkProvider } from "../clerk/clerk.provider";
 
-// #region agent log
-fetch('http://127.0.0.1:7242/ingest/db12905f-f51f-4e05-87f7-a5e4d0693c3e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'container.config.ts:102',message:'Checking HospitalRouter import',data:{hospitalRouterType:typeof HospitalRouter,hospitalRouterIsUndefined:HospitalRouter===undefined,hospitalRouterIsFunction:typeof HospitalRouter==='function',hospitalRouterName:HospitalRouter?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-// #endregion
+export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
 
@@ -197,6 +198,11 @@ container.bind(EventController).toSelf().inTransientScope();
 container.bind(EventRouter).toSelf().inTransientScope();
 container.bind(EventService).toSelf().inTransientScope();
 container.bind(EventProvider).toSelf().inTransientScope();
+
+container.bind(ClerkController).toSelf().inTransientScope();
+container.bind(ClerkRouter).toSelf().inTransientScope();
+container.bind(ClerkService).toSelf().inTransientScope();
+container.bind(ClerkProvider).toSelf().inTransientScope();
 
 container.bind(LectureController).toSelf().inTransientScope();
 container.bind(LectureRouter).toSelf().inTransientScope();

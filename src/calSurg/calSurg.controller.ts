@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { inject, injectable } from "inversify";
 import { CalSurgProvider } from "./calSurg.provider";
 import { matchedData } from "express-validator";
-import { ICalSurgDoc } from "./calSurg.interface";
+import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
 
 @injectable()
 export class CalSurgController {
@@ -51,6 +51,17 @@ export class CalSurgController {
         const calSurgs = await this.calSurgProvider.getAllCalSurg();
         return calSurgs;
       }
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleUpdateCalSurg(req: Request, res: Response): Promise<ICalSurgDoc> | never {
+    try {
+      const id = req.params.id;
+      const validatedReq = matchedData(req) as Partial<ICalSurg>;
+      const updatedCalSurg = await this.calSurgProvider.updateCalSurg(id, validatedReq);
+      return updatedCalSurg;
     } catch (err: any) {
       throw new Error(err);
     }

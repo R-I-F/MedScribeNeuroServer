@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { DiagnosisService } from "./diagnosis.service";
-import { IDiagnosis, IDiagnosisDoc } from "./diagnosis.interface";
+import { IDiagnosis, IDiagnosisDoc, IDiagnosisUpdateInput } from "./diagnosis.interface";
 import { UtilService } from "../utils/utils.service";
 
 @injectable()
@@ -9,6 +9,18 @@ export class DiagnosisProvider {
     @inject(DiagnosisService) private diagnosisService: DiagnosisService,
     @inject(UtilService) private utilService: UtilService
   ) {}
+
+  /**
+   * Retrieves all diagnoses from the database
+   * @returns Promise<IDiagnosisDoc[]>
+   */
+  public async getAllDiagnoses(): Promise<IDiagnosisDoc[]> {
+    try {
+      return await this.diagnosisService.getAllDiagnoses();
+    } catch (error: any) {
+      throw new Error(`Failed to retrieve diagnoses: ${error.message}`);
+    }
+  }
 
   /**
    * Processes and validates diagnosis data before creating a single diagnosis
@@ -147,6 +159,65 @@ export class DiagnosisProvider {
   }
 
   /**
+   * Updates a diagnosis by ID
+   * @param validatedReq - Validated update request with id and optional fields
+   * @returns Promise<IDiagnosisDoc | null>
+   */
+  public async updateDiagnosis(validatedReq: IDiagnosisUpdateInput): Promise<IDiagnosisDoc | null> {
+    try {
+      const { id, ...updateData } = validatedReq;
+
+      // Build update fields object with business logic transformations
+      const updateFields: Partial<IDiagnosis> = {};
+
+      if (updateData.icdCode !== undefined) {
+        updateFields.icdCode = updateData.icdCode.trim().toUpperCase(); // Normalize ICD code
+      }
+
+      if (updateData.icdName !== undefined) {
+        updateFields.icdName = this.utilService.stringToLowerCaseTrim(updateData.icdName); // Sanitize name
+      }
+
+      if (updateData.neuroLogName !== undefined) {
+        updateFields.neuroLogName = updateData.neuroLogName.map(name => 
+          this.utilService.stringToLowerCaseTrim(name)
+        ); // Sanitize array
+      }
+
+      // Check for duplicates if icdCode or icdName is being updated
+      if (updateFields.icdCode || updateFields.icdName) {
+        // Get current diagnosis to check what's changing
+        const currentDiagnosis = await this.diagnosisService.getDiagnosisById(id);
+        if (!currentDiagnosis) {
+          throw new Error("Diagnosis not found");
+        }
+
+        // Check for duplicates with new values
+        const checkIcdCode = updateFields.icdCode || currentDiagnosis.icdCode;
+        const checkIcdName = updateFields.icdName || currentDiagnosis.icdName;
+        
+        const existingDiagnosis = await this.diagnosisService.findExistingDiagnosis(
+          checkIcdCode,
+          checkIcdName
+        );
+
+        if (existingDiagnosis && existingDiagnosis.id !== id) {
+          if (updateFields.icdCode && existingDiagnosis.icdCode === checkIcdCode) {
+            throw new Error(`Diagnosis with ICD code '${checkIcdCode}' already exists`);
+          }
+          if (updateFields.icdName && existingDiagnosis.icdName === checkIcdName) {
+            throw new Error(`Diagnosis with ICD name '${checkIcdName}' already exists`);
+          }
+        }
+      }
+
+      return await this.diagnosisService.updateDiagnosis(id, updateFields);
+    } catch (error: any) {
+      throw new Error(`Failed to update diagnosis: ${error.message}`);
+    }
+  }
+
+  /**
    * Deletes a diagnosis by ID
    * @param id - Diagnosis ID to delete
    * @returns Promise<boolean>
@@ -162,7 +233,6 @@ export class DiagnosisProvider {
   /**
    * Additional provider methods can be added here as needed
    * Examples:
-   * - updateDiagnosis()
    * - getDiagnosisById()
    * - searchDiagnoses()
    */

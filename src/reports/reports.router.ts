@@ -2,10 +2,14 @@ import { injectable, inject } from "inversify";
 import express, { Router, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { ReportsController } from "./reports.controller";
-import { extractJWT } from "../middleware/extractJWT";
+import extractJWT from "../middleware/extractJWT";
 import { requireInstituteAdmin } from "../middleware/authorize.middleware";
 import { validationResult } from "express-validator";
 import { getCanceledEventsPdfValidator } from "../validators/getCanceledEventsPdf.validator";
+import { getSupervisorsSubmissionCountValidator } from "../validators/getSupervisorsSubmissionCount.validator";
+import { getCandidatesSubmissionCountValidator } from "../validators/getCandidatesSubmissionCount.validator";
+import { getHospitalAnalysisReportValidator } from "../validators/getHospitalAnalysisReport.validator";
+import { userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class ReportsRouter {
@@ -20,9 +24,21 @@ export class ReportsRouter {
     // Supervisors Submission Count Report
     this.router.get(
       "/supervisors/submission-count",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireInstituteAdmin,
+      getSupervisorsSubmissionCountValidator,
       async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json({
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array()
+          });
+        }
+
         try {
           const pdfBuffer = await this.reportsController.handleGetSupervisorsSubmissionCountReport(req, res);
           
@@ -36,12 +52,25 @@ export class ReportsRouter {
         } catch (err: any) {
           console.error("PDF Generation Error:", err);
           if (err.message.includes("Unauthorized")) {
-            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+            res.status(StatusCodes.UNAUTHORIZED).json({
+              status: "error",
+              statusCode: StatusCodes.UNAUTHORIZED,
+              message: "Unauthorized",
+              error: err.message
+            });
           } else if (err.message.includes("Forbidden")) {
-            res.status(StatusCodes.FORBIDDEN).json({ error: err.message });
+            res.status(StatusCodes.FORBIDDEN).json({
+              status: "error",
+              statusCode: StatusCodes.FORBIDDEN,
+              message: "Forbidden",
+              error: err.message
+            });
           } else {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-              error: `Failed to generate PDF report: ${err.message || err}` 
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+              status: "error",
+              statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+              message: "Internal Server Error",
+              error: `Failed to generate PDF report: ${err.message || err}`
             });
           }
         }
@@ -51,9 +80,21 @@ export class ReportsRouter {
     // Candidates Submission Count Report
     this.router.get(
       "/candidates/submission-count",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireInstituteAdmin,
+      getCandidatesSubmissionCountValidator,
       async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json({
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array()
+          });
+        }
+
         try {
           const pdfBuffer = await this.reportsController.handleGetCandidatesSubmissionCountReport(req, res);
           
@@ -67,12 +108,25 @@ export class ReportsRouter {
         } catch (err: any) {
           console.error("PDF Generation Error:", err);
           if (err.message.includes("Unauthorized")) {
-            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+            res.status(StatusCodes.UNAUTHORIZED).json({
+              status: "error",
+              statusCode: StatusCodes.UNAUTHORIZED,
+              message: "Unauthorized",
+              error: err.message
+            });
           } else if (err.message.includes("Forbidden")) {
-            res.status(StatusCodes.FORBIDDEN).json({ error: err.message });
+            res.status(StatusCodes.FORBIDDEN).json({
+              status: "error",
+              statusCode: StatusCodes.FORBIDDEN,
+              message: "Forbidden",
+              error: err.message
+            });
           } else {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-              error: `Failed to generate PDF report: ${err.message || err}` 
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+              status: "error",
+              statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+              message: "Internal Server Error",
+              error: `Failed to generate PDF report: ${err.message || err}`
             });
           }
         }
@@ -82,9 +136,21 @@ export class ReportsRouter {
     // Calendar Procedures Hospital Analysis Report
     this.router.get(
       "/calendar-procedures/hospital-analysis",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireInstituteAdmin,
+      getHospitalAnalysisReportValidator,
       async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json({
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array()
+          });
+        }
+
         try {
           const pdfBuffer = await this.reportsController.handleGetHospitalAnalysisReport(req, res);
           
@@ -98,12 +164,25 @@ export class ReportsRouter {
         } catch (err: any) {
           console.error("PDF Generation Error:", err);
           if (err.message.includes("Unauthorized")) {
-            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+            res.status(StatusCodes.UNAUTHORIZED).json({
+              status: "error",
+              statusCode: StatusCodes.UNAUTHORIZED,
+              message: "Unauthorized",
+              error: err.message
+            });
           } else if (err.message.includes("Forbidden")) {
-            res.status(StatusCodes.FORBIDDEN).json({ error: err.message });
+            res.status(StatusCodes.FORBIDDEN).json({
+              status: "error",
+              statusCode: StatusCodes.FORBIDDEN,
+              message: "Forbidden",
+              error: err.message
+            });
           } else {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-              error: `Failed to generate PDF report: ${err.message || err}` 
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+              status: "error",
+              statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+              message: "Internal Server Error",
+              error: `Failed to generate PDF report: ${err.message || err}`
             });
           }
         }
@@ -113,13 +192,19 @@ export class ReportsRouter {
     // Canceled Events PDF Report
     this.router.get(
       "/events/canceled/pdf",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireInstituteAdmin,
       getCanceledEventsPdfValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
         if (!result.isEmpty()) {
-          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          return res.status(StatusCodes.BAD_REQUEST).json({
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array()
+          });
         }
 
         try {
@@ -135,12 +220,25 @@ export class ReportsRouter {
         } catch (err: any) {
           console.error("PDF Generation Error:", err);
           if (err.message.includes("Unauthorized")) {
-            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+            res.status(StatusCodes.UNAUTHORIZED).json({
+              status: "error",
+              statusCode: StatusCodes.UNAUTHORIZED,
+              message: "Unauthorized",
+              error: err.message
+            });
           } else if (err.message.includes("Forbidden")) {
-            res.status(StatusCodes.FORBIDDEN).json({ error: err.message });
+            res.status(StatusCodes.FORBIDDEN).json({
+              status: "error",
+              statusCode: StatusCodes.FORBIDDEN,
+              message: "Forbidden",
+              error: err.message
+            });
           } else {
             res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-              error: `Failed to generate PDF report: ${err.message || err}`,
+              status: "error",
+              statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+              message: "Internal Server Error",
+              error: `Failed to generate PDF report: ${err.message || err}`
             });
           }
         }

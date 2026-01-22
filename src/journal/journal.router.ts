@@ -9,7 +9,8 @@ import { createBulkJournalsFromExternalValidator } from "../validators/createBul
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireInstituteAdmin } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, requireCandidate } from "../middleware/authorize.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class JournalRouter {
@@ -25,6 +26,7 @@ export class JournalRouter {
     // Create journal
     this.router.post(
       "/",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createJournalValidator,
@@ -46,8 +48,9 @@ export class JournalRouter {
     // Get all journals
     this.router.get(
       "/",
+      userBasedRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireCandidate,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.journalController.handleGetAllJournals(req, res);
@@ -61,8 +64,9 @@ export class JournalRouter {
     // Get journal by ID
     this.router.get(
       "/:id",
+      userBasedRateLimiter,
       extractJWT,
-      requireSuperAdmin,
+      requireCandidate,
       getJournalByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -86,6 +90,7 @@ export class JournalRouter {
     // Update journal
     this.router.patch(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       updateJournalValidator,
@@ -111,6 +116,7 @@ export class JournalRouter {
     // Delete journal
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       deleteJournalValidator,
@@ -136,6 +142,7 @@ export class JournalRouter {
     // Bulk create journals from external
     this.router.post(
       "/postBulk",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createBulkJournalsFromExternalValidator,

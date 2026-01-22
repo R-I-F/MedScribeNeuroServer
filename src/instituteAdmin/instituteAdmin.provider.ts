@@ -19,6 +19,7 @@ import { IArabProcDoc } from "../arabProc/arabProc.interface";
 @injectable()
 export class InstituteAdminProvider {
   private instituteAdminRepository: Repository<InstituteAdminEntity>;
+  private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   constructor(
     @inject(SupervisorService) private supervisorService: SupervisorService,
@@ -56,7 +57,7 @@ export class InstituteAdminProvider {
     try {
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(id)) {
+      if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid institute admin ID format");
       }
       const instituteAdmin = await this.instituteAdminRepository.findOne({
@@ -84,7 +85,7 @@ export class InstituteAdminProvider {
       const { id, ...updateData } = validatedReq;
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(id)) {
+      if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid institute admin ID format");
       }
       await this.instituteAdminRepository.update(id, updateData);
@@ -101,7 +102,7 @@ export class InstituteAdminProvider {
     try {
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(id)) {
+      if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid institute admin ID format");
       }
       const result = await this.instituteAdminRepository.delete(id);
@@ -126,8 +127,7 @@ export class InstituteAdminProvider {
   ): Promise<ISubDoc[]> | never {
     try {
       // Validate UUID format (supervisor now uses MariaDB UUID)
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(supervisorId)) {
+      if (!this.uuidRegex.test(supervisorId)) {
         throw new Error("Invalid supervisor ID format");
       }
 
@@ -159,8 +159,7 @@ export class InstituteAdminProvider {
   public async getCandidateSubmissions(candidateId: string): Promise<ISubDoc[]> | never {
     try {
       // Validate UUID format (candidate now uses MariaDB UUID)
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(candidateId)) {
+      if (!this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
       }
 
@@ -186,11 +185,10 @@ export class InstituteAdminProvider {
   ): Promise<ISubDoc | null> | never {
     try {
       // Validate UUID formats
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(submissionId)) {
+      if (!this.uuidRegex.test(submissionId)) {
         throw new Error("Invalid submission ID format");
       }
-      if (!uuidRegex.test(candidateId)) {
+      if (!this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
       }
 
@@ -220,10 +218,9 @@ export class InstituteAdminProvider {
       }
 
       // Convert candidateId to same format for comparison
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(candidateId)) {
+      if (this.uuidRegex.test(candidateId)) {
         // Candidate ID is UUID (MariaDB format)
-        if (!uuidRegex.test(submissionCandidateId)) {
+        if (!this.uuidRegex.test(submissionCandidateId)) {
           // submissionCandidateId is ObjectId, convert to UUID for comparison
           // We can't reliably convert ObjectId back to UUID, so we compare the UUID substring
           // Convert UUID to ObjectId format and compare
@@ -240,7 +237,7 @@ export class InstituteAdminProvider {
         }
       } else {
         // Candidate ID is ObjectId (MongoDB format) - legacy case
-        if (uuidRegex.test(submissionCandidateId)) {
+        if (this.uuidRegex.test(submissionCandidateId)) {
           const uuidHex = submissionCandidateId.replace(/-/g, '');
           submissionCandidateId = uuidHex.substring(0, 24);
         }

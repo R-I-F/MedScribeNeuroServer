@@ -8,7 +8,8 @@ import { deleteMainDiagValidator } from "../validators/deleteMainDiag.validator"
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, requireCandidate } from "../middleware/authorize.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class MainDiagRouter {
@@ -24,6 +25,7 @@ export class MainDiagRouter {
     // Create mainDiag
     this.router.post(
       "/",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createMainDiagValidator,
@@ -43,8 +45,12 @@ export class MainDiagRouter {
     );
 
     // Get all mainDiags
+    // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/",
+      userBasedRateLimiter,
+      extractJWT,
+      requireCandidate,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.mainDiagController.handleGetAllMainDiags(req, res);
@@ -56,8 +62,12 @@ export class MainDiagRouter {
     );
 
     // Get mainDiag by ID
+    // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/:id",
+      userBasedRateLimiter,
+      extractJWT,
+      requireCandidate,
       getMainDiagByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -81,6 +91,9 @@ export class MainDiagRouter {
     // Update mainDiag
     this.router.put(
       "/:id",
+      userBasedStrictRateLimiter,
+      extractJWT,
+      requireSuperAdmin,
       updateMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -104,6 +117,9 @@ export class MainDiagRouter {
     // Delete mainDiag
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
+      extractJWT,
+      requireSuperAdmin,
       deleteMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

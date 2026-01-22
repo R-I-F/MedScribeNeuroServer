@@ -273,6 +273,54 @@ export class CalSurgService {
     }
   }
 
+  public async updateCalSurg(id: string, updateData: Partial<ICalSurg>): Promise<ICalSurgDoc> | never {
+    try {
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid calSurg ID format");
+      }
+
+      // Check if calSurg exists
+      const existingCalSurg = await this.calSurgRepository.findOne({
+        where: { id },
+      });
+
+      if (!existingCalSurg) {
+        throw new Error(`CalSurg with id ${id} not found`);
+      }
+
+      // Map interface fields to entity fields
+      const entityUpdateData: any = {};
+      if (updateData.timeStamp !== undefined) entityUpdateData.timeStamp = updateData.timeStamp;
+      if (updateData.patientName !== undefined) entityUpdateData.patientName = updateData.patientName;
+      if (updateData.patientDob !== undefined) entityUpdateData.patientDob = updateData.patientDob;
+      if (updateData.gender !== undefined) entityUpdateData.gender = updateData.gender;
+      if (updateData.hospital !== undefined) entityUpdateData.hospitalId = updateData.hospital;
+      if (updateData.arabProc !== undefined) entityUpdateData.arabProcId = updateData.arabProc;
+      if (updateData.procDate !== undefined) entityUpdateData.procDate = updateData.procDate;
+      if (updateData.google_uid !== undefined) entityUpdateData.google_uid = updateData.google_uid;
+      if (updateData.formLink !== undefined) entityUpdateData.formLink = updateData.formLink;
+
+      // Update the entity
+      await this.calSurgRepository.update(id, entityUpdateData);
+
+      // Load with relations for return
+      const updatedCalSurg = await this.calSurgRepository.findOne({
+        where: { id },
+        relations: ["hospital", "arabProc"],
+      });
+
+      if (!updatedCalSurg) {
+        throw new Error(`CalSurg with id ${id} not found after update`);
+      }
+
+      return updatedCalSurg as unknown as ICalSurgDoc;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async deleteCalSurg(id: string): Promise<boolean> | never {
     try {
       const result = await this.calSurgRepository.delete(id);

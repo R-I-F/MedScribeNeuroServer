@@ -32,6 +32,7 @@ const dbConfig: DataSourceOptions = {
     __dirname + "/../event/event.mDbSchema.ts", // Added for Events
     __dirname + "/../event/eventAttendance.mDbSchema.ts", // Added for Event Attendance
     __dirname + "/../passwordReset/passwordReset.mDbSchema.ts", // Added for Password Reset Tokens
+    __dirname + "/../clerk/clerk.mDbSchema.ts", // Added for Clerks
   ],
   migrations: [
     __dirname + "/../migrations/*.ts",

@@ -23,11 +23,34 @@ export class HospitalController {
     }
   }
 
+  public async handleGetAllHospitals(
+    req: Request,
+    res: Response
+  ): Promise<IHospitalDoc[]> | never {
+    try {
+      return await this.hospitalService.getAllHospitals();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetHospitalById(
+    req: Request,
+    res: Response
+  ): Promise<IHospitalDoc | null> | never {
+    try {
+      const { id } = matchedData(req) as { id: string };
+      return await this.hospitalService.getHospitalById(id);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async handleDeleteHospital(
     req: Request,
     res: Response
   ): Promise<{ message: string }> | never {
-    const id = req.params.id;
+    const { id } = matchedData(req) as { id: string };
     try {
       const deleted = await this.hospitalService.deleteHospital(id);
       if (!deleted) {

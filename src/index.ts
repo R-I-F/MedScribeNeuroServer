@@ -8,9 +8,14 @@ import { addRoutes } from "./config/routes.config";
 import { responseFormatter } from "./middleware/responseFormatter";
 import { initializeDatabase, validateDatabaseConfig } from "./config/database.config";
 
+
 const app: Express = express();
 dotenv.config();
 const port = process.env.PORT;
+
+// Trust proxy - required for proper IP address handling (especially IPv6)
+// This ensures req.ip is properly normalized and prevents IPv6 bypass issues in rate limiting
+app.set('trust proxy', true);
 
 // CORS configuration
 // When credentials: true, origin cannot be "*" - must be specific origin

@@ -8,6 +8,7 @@ import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { requireCandidate, requireSuperAdmin, requireSupervisor, requireInstituteAdmin, requireValidatorSupervisor } from "../middleware/authorize.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 @injectable()
 export class SubRouter {
 
@@ -23,6 +24,7 @@ export class SubRouter {
   private async initRoutes(){
     this.router.post(
       "/postAllFromExternal",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createFromExternalValidator,
@@ -43,6 +45,7 @@ export class SubRouter {
     )
     this.router.patch(
       "/updateStatusFromExternal",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createFromExternalValidator,
@@ -65,6 +68,7 @@ export class SubRouter {
     // Get candidate submission statistics (requires authentication)
     this.router.get(
       "/candidate/stats",
+      userBasedRateLimiter,
       extractJWT,
       requireCandidate,
       async (req: Request, res: Response) => {
@@ -84,6 +88,7 @@ export class SubRouter {
     // Get single candidate submission by ID (requires candidate authentication)
     this.router.get(
       "/candidate/submissions/:id",
+      userBasedRateLimiter,
       extractJWT,
       requireCandidate,
       getSubmissionByIdValidator,
@@ -111,6 +116,7 @@ export class SubRouter {
     // Get all candidate submissions with populated data (requires authentication)
     this.router.get(
       "/candidate/submissions",
+      userBasedRateLimiter,
       extractJWT,
       requireCandidate,
       async (req: Request, res: Response) => {
@@ -130,6 +136,7 @@ export class SubRouter {
     // Get supervisor submissions (requires supervisor authentication)
     this.router.get(
       "/supervisor/submissions",
+      userBasedRateLimiter,
       extractJWT,
       requireSupervisor,
       async (req: Request, res: Response) => {
@@ -149,6 +156,7 @@ export class SubRouter {
     // Get single supervisor submission by ID (requires supervisor authentication)
     this.router.get(
       "/supervisor/submissions/:id",
+      userBasedRateLimiter,
       extractJWT,
       requireSupervisor,
       getSubmissionByIdValidator,
@@ -176,6 +184,7 @@ export class SubRouter {
     // Get candidate submissions by supervisor (requires supervisor authentication)
     this.router.get(
       "/supervisor/candidates/:candidateId/submissions",
+      userBasedRateLimiter,
       extractJWT,
       requireSupervisor,
       async (req: Request, res: Response) => {
@@ -197,6 +206,7 @@ export class SubRouter {
     // Academic supervisors (canValidate=false) can only participate in events
     this.router.patch(
       "/supervisor/submissions/:id/review",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSupervisor, // First check if user is supervisor
       requireValidatorSupervisor, // Then check if supervisor can validate
@@ -222,9 +232,12 @@ export class SubRouter {
       }
     )
 
-    // Generate surgical notes using AI - accessible only to institute admins
+    // DISABLED: Generate surgical notes using AI - accessible only to institute admins
+    // Temporarily disabled for security/maintenance reasons
+    /*
     this.router.post(
       "/submissions/:id/generateSurgicalNotes",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireInstituteAdmin,
       getSubmissionByIdValidator,
@@ -248,21 +261,29 @@ export class SubRouter {
         }
       }
     )
+    */
 
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
+      getSubmissionByIdValidator,
       async (req: Request, res: Response) => {
-        try {
-          const resp = await this.subController.handleDeleteSub(req, res);
-          res.status(StatusCodes.OK).json(resp);
-        } catch (err: any) {
-          if (err.message.includes("not found")) {
-            res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
-          } else {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.subController.handleDeleteSub(req, res);
+            res.status(StatusCodes.OK).json(resp);
+          } catch (err: any) {
+            if (err.message.includes("not found")) {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
           }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }
     )

@@ -5,8 +5,11 @@ import { StatusCodes } from "http-status-codes";
 import { createArabProcValidator } from "../validators/createArabProc.validators";
 import { validationResult } from "express-validator";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
+import { deleteArabProcValidator } from "../validators/deleteArabProc.validator";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import { UserRole } from "../types/role.types";
 
 @injectable()
 export class ArabProcRouter {
@@ -19,17 +22,31 @@ export class ArabProcRouter {
   }
 
   private initRoutes() {
-    this.router.get("/getAllArabProcs", async (req: Request, res: Response) => {
-      try {
-        const allArabProcs =
-          await this.arabProcController.handleGetAllArabProcs(req, res);
-        res.status(StatusCodes.OK).json(allArabProcs);
-      } catch (err: any) {
-        throw new Error(err);
+    // Custom authorization for GET: allows superAdmin, instituteAdmin, and clerk
+    const requireSuperAdminOrInstituteAdminOrClerk = authorize(
+      UserRole.SUPER_ADMIN,
+      UserRole.INSTITUTE_ADMIN,
+      UserRole.CLERK
+    );
+
+    this.router.get(
+      "/getAllArabProcs",
+      userBasedRateLimiter,
+      extractJWT,
+      requireSuperAdminOrInstituteAdminOrClerk,
+      async (req: Request, res: Response) => {
+        try {
+          const allArabProcs =
+            await this.arabProcController.handleGetAllArabProcs(req, res);
+          res.status(StatusCodes.OK).json(allArabProcs);
+        } catch (err: any) {
+          throw new Error(err);
+        }
       }
-    });
+    );
     this.router.post(
       "/createArabProc",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createArabProcValidator,
@@ -49,6 +66,7 @@ export class ArabProcRouter {
 
     this.router.post(
       "/createArabProcFromExternal",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createFromExternalValidator,
@@ -73,18 +91,25 @@ export class ArabProcRouter {
 
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
+      deleteArabProcValidator,
       async (req: Request, res: Response) => {
-        try {
-          const resp = await this.arabProcController.handleDeleteArabProc(req, res);
-          res.status(StatusCodes.OK).json(resp);
-        } catch (err: any) {
-          if (err.message.includes("not found")) {
-            res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
-          } else {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.arabProcController.handleDeleteArabProc(req, res);
+            res.status(StatusCodes.OK).json(resp);
+          } catch (err: any) {
+            if (err.message.includes("not found")) {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
           }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }
     );

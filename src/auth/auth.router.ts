@@ -14,6 +14,7 @@ import IAuth, { IRegisterCandPayload } from "./auth.interface";
 import { setAuthCookies, clearAuthCookies } from "../utils/cookie.utils";
 import { AuthTokenService } from "./authToken.service";
 import { PasswordResetController } from "../passwordReset/passwordReset.controller";
+import { userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class AuthRouter {
@@ -209,6 +210,42 @@ export class AuthRouter {
       }
     );
     this.router.post(
+      "/loginClerk",
+      loginValidator,
+      async (req: Request, res: Response, next: NextFunction) => {
+        const result = validationResult(req);
+        if(result.isEmpty()){
+          try {
+            const payload = matchedData(req, {
+              locations: ["body"],
+            }) as IAuth;
+            const resp = await this.authController.login({ ...payload, role: "clerk" as any });
+            
+            // Log successful login with request details
+            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: clerk, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            
+            // Set httpOnly cookies
+            setAuthCookies(res, resp.token, resp.refreshToken);
+            
+            // Return user, role, and token (token included for testing purposes only)
+            res.status(StatusCodes.OK).json({
+              user: resp.user,
+              role: resp.role,
+              token: resp.token  // TEMPORARY: For testing token generation
+            });
+          } catch(err: any){
+            // Log failed login attempt with request details
+            const email = (req.body as IAuth)?.email || "unknown";
+            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: clerk, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          }
+        }
+        else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+    this.router.post(
       "/resetCandPass",
       async (req: Request, res: Response) => {
         try {
@@ -313,6 +350,7 @@ export class AuthRouter {
     // Request password change email endpoint (requires authentication)
     this.router.post(
       "/requestPasswordChangeEmail",
+      userBasedStrictRateLimiter,
       extractJWT,
       async (req: Request, res: Response) => {
         try {
@@ -320,10 +358,18 @@ export class AuthRouter {
           res.status(StatusCodes.OK).json(response);
         } catch (err: any) {
           if (err.message.includes("Unauthorized")) {
-            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+            res.status(StatusCodes.UNAUTHORIZED).json({
+              status: "error",
+              statusCode: StatusCodes.UNAUTHORIZED,
+              message: "Unauthorized",
+              error: err.message
+            });
           } else {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-              error: err?.message ?? "Failed to send password change email" 
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+              status: "error",
+              statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+              message: "Internal Server Error",
+              error: err?.message ?? "Failed to send password change email"
             });
           }
         }
@@ -333,6 +379,7 @@ export class AuthRouter {
     // Change password endpoint (requires authentication)
     this.router.patch(
       "/changePassword",
+      userBasedStrictRateLimiter,
       extractJWT,
       changePasswordValidator,
       async (req: Request, res: Response) => {
@@ -343,26 +390,51 @@ export class AuthRouter {
             res.status(StatusCodes.OK).json(response);
           } catch (err: any) {
             if (err.message.includes("Unauthorized")) {
-              res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+              res.status(StatusCodes.UNAUTHORIZED).json({
+                status: "error",
+                statusCode: StatusCodes.UNAUTHORIZED,
+                message: "Unauthorized",
+                error: err.message
+              });
             } else if (err.message.includes("incorrect") || err.message.includes("different") || err.message.includes("Token does not belong")) {
-              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+              res.status(StatusCodes.BAD_REQUEST).json({
+                status: "error",
+                statusCode: StatusCodes.BAD_REQUEST,
+                message: "Bad Request",
+                error: err.message
+              });
             } else if (err.message.includes("Invalid") || err.message.includes("expired") || err.message.includes("already been used")) {
-              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+              res.status(StatusCodes.BAD_REQUEST).json({
+                status: "error",
+                statusCode: StatusCodes.BAD_REQUEST,
+                message: "Bad Request",
+                error: err.message
+              });
             } else {
-              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-                error: err?.message ?? "Failed to change password" 
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                status: "error",
+                statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+                message: "Internal Server Error",
+                error: err?.message ?? "Failed to change password"
               });
             }
           }
         } else {
-          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array()
+          });
         }
       }
     );
 
     // Forgot password endpoint (no authentication required)
+    // Uses strict IP-based rate limiting to prevent abuse
     this.router.post(
       "/forgotPassword",
+      strictRateLimiter,
       forgotPasswordValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -373,18 +445,30 @@ export class AuthRouter {
           } catch (err: any) {
             // Always return success to prevent email enumeration
             res.status(StatusCodes.OK).json({
-              message: "If an account with that email exists, a password reset link has been sent"
+              status: "success",
+              statusCode: StatusCodes.OK,
+              message: "OK",
+              data: {
+                message: "If an account with that email exists, a password reset link has been sent"
+              }
             });
           }
         } else {
-          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array()
+          });
         }
       }
     );
 
     // Reset password endpoint (no authentication required, uses token)
+    // Uses strict IP-based rate limiting to prevent abuse
     this.router.post(
       "/resetPassword",
+      strictRateLimiter,
       resetPasswordValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -394,15 +478,28 @@ export class AuthRouter {
             res.status(StatusCodes.OK).json(response);
           } catch (err: any) {
             if (err.message.includes("Invalid") || err.message.includes("expired") || err.message.includes("already been used")) {
-              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+              res.status(StatusCodes.BAD_REQUEST).json({
+                status: "error",
+                statusCode: StatusCodes.BAD_REQUEST,
+                message: "Bad Request",
+                error: err.message
+              });
             } else {
-              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-                error: err?.message ?? "Failed to reset password" 
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                status: "error",
+                statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+                message: "Internal Server Error",
+                error: err?.message ?? "Failed to reset password"
               });
             }
           }
         } else {
-          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          res.status(StatusCodes.BAD_REQUEST).json({
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array()
+          });
         }
       }
     );

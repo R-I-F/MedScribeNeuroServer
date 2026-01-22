@@ -8,7 +8,9 @@ import { deleteConfValidator } from "../validators/deleteConf.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireInstituteAdmin } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { UserRole } from "../types/role.types";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class ConfRouter {
@@ -24,8 +26,9 @@ export class ConfRouter {
     // Create conf
     this.router.post(
       "/",
+      userBasedStrictRateLimiter,
       extractJWT,
-      requireSuperAdmin,
+      authorize(UserRole.INSTITUTE_ADMIN, UserRole.SUPERVISOR, UserRole.CLERK, UserRole.SUPER_ADMIN),
       createConfValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -45,8 +48,9 @@ export class ConfRouter {
     // Get all confs
     this.router.get(
       "/",
+      userBasedRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireCandidate,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.confController.handleGetAllConfs(req, res);
@@ -60,8 +64,9 @@ export class ConfRouter {
     // Get conf by ID
     this.router.get(
       "/:id",
+      userBasedRateLimiter,
       extractJWT,
-      requireSuperAdmin,
+      requireCandidate,
       getConfByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -85,6 +90,7 @@ export class ConfRouter {
     // Update conf
     this.router.patch(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       updateConfValidator,
@@ -110,6 +116,7 @@ export class ConfRouter {
     // Delete conf
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       deleteConfValidator,

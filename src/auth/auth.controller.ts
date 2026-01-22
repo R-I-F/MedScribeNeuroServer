@@ -4,6 +4,7 @@ import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
 import { InstituteAdminService } from "../instituteAdmin/instituteAdmin.service";
+import { ClerkService } from "../clerk/clerk.service";
 import { AuthTokenService } from "./authToken.service";
 import { ICandDoc } from "../cand/cand.interface";
 import { JwtPayload } from "../middleware/authorize.middleware";
@@ -17,6 +18,7 @@ export class AuthController {
     @inject(SupervisorService) private supervisorService: SupervisorService,
     @inject(SuperAdminService) private superAdminService: SuperAdminService,
     @inject(InstituteAdminService) private instituteAdminService: InstituteAdminService,
+    @inject(ClerkService) private clerkService: ClerkService,
     @inject(AuthTokenService) private authTokenService: AuthTokenService
   ){}
 
@@ -86,6 +88,10 @@ export class AuthController {
             user = await this.instituteAdminService.getInstituteAdminByEmail(email);
             userRole = UserRole.INSTITUTE_ADMIN;
             break;
+          case UserRole.CLERK:
+            user = await this.clerkService.getClerkByEmail(email);
+            userRole = UserRole.CLERK;
+            break;
           default:
             throw new Error("Invalid role specified");
         }
@@ -103,13 +109,18 @@ export class AuthController {
             if (user) {
               userRole = UserRole.SUPER_ADMIN;
             } else {
-              user = await this.instituteAdminService.getInstituteAdminByEmail(email);
+            user = await this.instituteAdminService.getInstituteAdminByEmail(email);
+            if (user) {
+              userRole = UserRole.INSTITUTE_ADMIN;
+            } else {
+              user = await this.clerkService.getClerkByEmail(email);
               if (user) {
-                userRole = UserRole.INSTITUTE_ADMIN;
+                userRole = UserRole.CLERK;
               }
             }
           }
         }
+      }
       }
 
       if(!user || !userRole){

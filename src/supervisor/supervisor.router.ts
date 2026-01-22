@@ -8,7 +8,9 @@ import { deleteSupervisorValidator } from "../validators/deleteSupervisor.valida
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireSupervisor } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, requireSupervisor, requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { UserRole } from "../types/role.types";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class SupervisorRouter {
@@ -21,9 +23,21 @@ export class SupervisorRouter {
   }
 
   public async initRoutes() {
+    // Custom authorization for GET: allows superAdmin, instituteAdmin, supervisors, candidates
+    const requireSuperAdminOrInstituteAdminOrSupervisorOrCandidate = requireCandidate; // Hierarchical: allows all roles
+
+    // Custom authorization for PUT: allows superAdmin, instituteAdmin, supervisor
+    const requireSuperAdminOrInstituteAdminOrSupervisor = authorize(
+      UserRole.SUPER_ADMIN,
+      UserRole.INSTITUTE_ADMIN,
+      UserRole.SUPERVISOR
+    );
+
     // Create supervisor
+    // Accessible to: superAdmin only
     this.router.post(
       "/",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createSupervisorValidator,
@@ -43,8 +57,12 @@ export class SupervisorRouter {
     );
 
     // Get all supervisors
+    // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/",
+      userBasedRateLimiter,
+      extractJWT,
+      requireSuperAdminOrInstituteAdminOrSupervisorOrCandidate,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.supervisorController.handleGetAllSupervisors(req, res);
@@ -57,8 +75,10 @@ export class SupervisorRouter {
 
     // Get supervised candidates (requires supervisor authentication)
     // IMPORTANT: This route must come before /:id to avoid route conflicts
+    // Accessible to: supervisors (and higher roles)
     this.router.get(
       "/candidates",
+      userBasedRateLimiter,
       extractJWT,
       requireSupervisor,
       async (req: Request, res: Response) => {
@@ -76,8 +96,12 @@ export class SupervisorRouter {
     );
 
     // Get supervisor by ID
+    // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/:id",
+      userBasedRateLimiter,
+      extractJWT,
+      requireSuperAdminOrInstituteAdminOrSupervisorOrCandidate,
       getSupervisorByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -99,8 +123,12 @@ export class SupervisorRouter {
     );
 
     // Update supervisor
+    // Accessible to: superAdmin, instituteAdmin, supervisor
     this.router.put(
       "/:id",
+      userBasedStrictRateLimiter,
+      extractJWT,
+      requireSuperAdminOrInstituteAdminOrSupervisor,
       updateSupervisorValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -122,8 +150,12 @@ export class SupervisorRouter {
     );
 
     // Delete supervisor
+    // Accessible to: superAdmin only
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
+      extractJWT,
+      requireSuperAdmin,
       deleteSupervisorValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -145,8 +177,10 @@ export class SupervisorRouter {
     );
 
     // Reset all supervisor passwords
+    // Accessible to: superAdmin only
     this.router.post(
       "/resetPasswords",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       async (req: Request, res: Response) => {

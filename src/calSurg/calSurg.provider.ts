@@ -343,6 +343,33 @@ export class CalSurgProvider {
   }
 
   /**
+   * Updates a calSurg by ID
+   * @param id - CalSurg ID to update
+   * @param updateData - Partial calSurg data to update
+   * @returns Promise<ICalSurgDoc>
+   */
+  public async updateCalSurg(id: string, updateData: Partial<ICalSurg>): Promise<ICalSurgDoc> {
+    try {
+      // Business logic: Validate ID format
+      this.validateObjectId(id);
+
+      // Business logic: Process update data (sanitize patient name if provided)
+      const processedUpdateData: Partial<ICalSurg> = { ...updateData };
+      if (updateData.patientName !== undefined) {
+        processedUpdateData.patientName = this.utilService.sanitizeName(updateData.patientName);
+      }
+
+      // Call service to update calSurg
+      const updatedCalSurg = await this.calSurgService.updateCalSurg(id, processedUpdateData);
+
+      return updatedCalSurg;
+    } catch (error: any) {
+      // Handle business logic errors
+      throw new Error(`Failed to update calSurg: ${error.message}`);
+    }
+  }
+
+  /**
    * Deletes a calSurg by ID
    * @param id - CalSurg ID to delete
    * @returns Promise<boolean>
@@ -358,7 +385,6 @@ export class CalSurgProvider {
   /**
    * Additional provider methods can be added here as needed
    * Examples:
-   * - updateCalSurg()
    * - searchCalSurgs()
    * - validateCalSurgData()
    */

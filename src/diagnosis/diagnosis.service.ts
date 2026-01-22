@@ -68,6 +68,38 @@ export class DiagnosisService {
     }
   }
 
+  public async getDiagnosisById(id: string): Promise<IDiagnosisDoc | null> | never {
+    try {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid diagnosis ID format");
+      }
+      const diagnosis = await this.diagnosisRepository.findOne({
+        where: { id },
+      });
+      return diagnosis as unknown as IDiagnosisDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async updateDiagnosis(id: string, updateData: Partial<IDiagnosis>): Promise<IDiagnosisDoc | null> | never {
+    try {
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid diagnosis ID format");
+      }
+      await this.diagnosisRepository.update(id, updateData);
+      const updatedDiagnosis = await this.diagnosisRepository.findOne({
+        where: { id },
+      });
+      return updatedDiagnosis as unknown as IDiagnosisDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async deleteDiagnosis(id: string): Promise<boolean> | never {
     try {
       const result = await this.diagnosisRepository.delete(id);

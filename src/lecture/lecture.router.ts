@@ -9,7 +9,8 @@ import { createBulkLecturesFromExternalValidator } from "../validators/createBul
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireInstituteAdmin } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, requireSupervisor } from "../middleware/authorize.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class LectureRouter {
@@ -25,6 +26,7 @@ export class LectureRouter {
     // Create lecture
     this.router.post(
       "/",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createLectureValidator,
@@ -46,8 +48,9 @@ export class LectureRouter {
     // Get all lectures
     this.router.get(
       "/",
+      userBasedRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireSupervisor,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.lectureController.handleGetAllLectures(req, res);
@@ -61,8 +64,9 @@ export class LectureRouter {
     // Get lecture by ID
     this.router.get(
       "/:id",
+      userBasedRateLimiter,
       extractJWT,
-      requireSuperAdmin,
+      requireSupervisor,
       getLectureByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -86,6 +90,7 @@ export class LectureRouter {
     // Update lecture
     this.router.patch(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       updateLectureValidator,
@@ -111,6 +116,7 @@ export class LectureRouter {
     // Delete lecture
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       deleteLectureValidator,
@@ -136,6 +142,7 @@ export class LectureRouter {
     // Bulk create lectures from external (auto-detect level: msc/md)
     this.router.post(
       "/postBulk",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireSuperAdmin,
       createBulkLecturesFromExternalValidator,

@@ -5,6 +5,9 @@ import { StatusCodes } from "http-status-codes";
 import { MailerController } from "./mailer.controller";
 import { SendMailPayload } from "./mailer.interface";
 import { sendMailValidator } from "../validators/sendMail.validator";
+import extractJWT from "../middleware/extractJWT";
+import { requireInstituteAdmin } from "../middleware/authorize.middleware";
+import { userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class MailerRouter {
@@ -20,22 +23,18 @@ export class MailerRouter {
   private initRoutes() {
     this.router.post(
       "/send",
+      userBasedStrictRateLimiter,
+      extractJWT,
+      requireInstituteAdmin,
       sendMailValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
         if (!result.isEmpty()) {
-          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
-        }
-
-        const { text, html } = req.body ?? {};
-
-        if (
-          (typeof text !== "string" || text.trim().length === 0) &&
-          (typeof html !== "string" || html.trim().length === 0)
-        ) {
-          console.warn("[MailerRouter] Missing text/html payload", req.body);
           return res.status(StatusCodes.BAD_REQUEST).json({
-            message: "Provide at least one of 'text' or 'html' in the request body.",
+            status: "error",
+            statusCode: StatusCodes.BAD_REQUEST,
+            message: "Bad Request",
+            error: result.array(),
           });
         }
 
@@ -45,13 +44,19 @@ export class MailerRouter {
             includeOptionals: true,
           }) as SendMailPayload;
           const { to } = await this.mailerController.handleSendMail(validatedPayload);
-          return res
-            .status(StatusCodes.OK)
-            .json({ message: `Email sent successfully to ${to}` });
+          return res.status(StatusCodes.OK).json({
+            status: "success",
+            statusCode: StatusCodes.OK,
+            message: `Email sent successfully to ${to}`,
+            data: { to },
+          });
         } catch (error: any) {
           console.error("[MailerRouter] Failed to send email", error);
           return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-            message: error?.message ?? "Failed to send email",
+            status: "error",
+            statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+            message: "Internal Server Error",
+            error: error?.message ?? "Failed to send email",
           });
         }
       }

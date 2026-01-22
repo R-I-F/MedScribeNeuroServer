@@ -13,7 +13,14 @@ import { getCandidateTotalPointsValidator } from "../validators/getCandidateTota
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireInstituteAdmin, requireSupervisor, requireCandidate } from "../middleware/authorize.middleware";
+import { requireInstituteAdmin, requireSupervisor, requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { UserRole } from "../types/role.types";
+import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+
+// Middleware for clerk or institute admin or super admin
+const requireClerkOrInstituteAdmin = authorize(UserRole.CLERK, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
+// Middleware for candidate, supervisor, clerk, institute admin, or super admin
+const requireCandidateOrSupervisorOrClerkOrInstituteAdmin = authorize(UserRole.CANDIDATE, UserRole.SUPERVISOR, UserRole.CLERK, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 import { EventService } from "./event.service";
 
 @injectable()
@@ -31,8 +38,9 @@ export class EventRouter {
     // Create event
     this.router.post(
       "/",
+      userBasedStrictRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireClerkOrInstituteAdmin,
       createEventValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -54,8 +62,9 @@ export class EventRouter {
     // Get all events
     this.router.get(
       "/",
+      userBasedRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireCandidateOrSupervisorOrClerkOrInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.eventController.handleGetAllEvents(req, res);
@@ -73,6 +82,7 @@ export class EventRouter {
     // Institute Admin only
     this.router.post(
       "/bulk-import-attendance",
+      userBasedStrictRateLimiter,
       extractJWT,
       requireInstituteAdmin,
       async (req: Request, res: Response) => {
@@ -90,6 +100,7 @@ export class EventRouter {
     // Candidate only - uses their own ID from JWT token
     this.router.get(
       "/candidate/points",
+      userBasedRateLimiter,
       extractJWT,
       requireCandidate,
       async (req: Request, res: Response) => {
@@ -111,7 +122,9 @@ export class EventRouter {
     // Anyone authenticated can view points (for transparency)
     this.router.get(
       "/candidate/:candidateId/points",
+      userBasedRateLimiter,
       extractJWT,
+      requireCandidate,
       getCandidateTotalPointsValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -131,8 +144,9 @@ export class EventRouter {
     // Get event by ID
     this.router.get(
       "/:id",
+      userBasedRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireCandidateOrSupervisorOrClerkOrInstituteAdmin,
       getEventByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -160,8 +174,9 @@ export class EventRouter {
     // Update event
     this.router.patch(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireClerkOrInstituteAdmin,
       updateEventValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -189,8 +204,9 @@ export class EventRouter {
     // Delete event
     this.router.delete(
       "/:id",
+      userBasedStrictRateLimiter,
       extractJWT,
-      requireInstituteAdmin,
+      requireClerkOrInstituteAdmin,
       deleteEventValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -223,6 +239,7 @@ export class EventRouter {
     // Candidate: can add themselves to any event
     this.router.post(
       "/:eventId/attendance/:candidateId",
+      userBasedStrictRateLimiter,
       extractJWT,
       addAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {
@@ -287,6 +304,7 @@ export class EventRouter {
     // Supervisor: can remove from events where they are the presenter
     this.router.delete(
       "/:eventId/attendance/:candidateId",
+      userBasedStrictRateLimiter,
       extractJWT,
       removeAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {
@@ -343,6 +361,7 @@ export class EventRouter {
     // Supervisor: can flag in events where they are the presenter
     this.router.patch(
       "/:eventId/attendance/:candidateId/flag",
+      userBasedStrictRateLimiter,
       extractJWT,
       flagAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {
@@ -399,6 +418,7 @@ export class EventRouter {
     // Supervisor: can unflag in events where they are the presenter
     this.router.patch(
       "/:eventId/attendance/:candidateId/unflag",
+      userBasedStrictRateLimiter,
       extractJWT,
       unflagAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {

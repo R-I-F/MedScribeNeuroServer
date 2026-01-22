@@ -33,6 +33,15 @@ export class HospitalService {
     }
   }
 
+  public async getHospitalById(id: string): Promise<IHospitalDoc | null> | never {
+    try {
+      const hospital = await this.hospitalRepository.findOne({ where: { id } });
+      return hospital as unknown as IHospitalDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async deleteHospital(id: string): Promise<boolean> | never {
     try {
       const result = await this.hospitalRepository.delete(id);

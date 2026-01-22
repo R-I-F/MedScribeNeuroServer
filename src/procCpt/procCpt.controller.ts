@@ -10,6 +10,14 @@ export class ProcCptController {
     @inject(ProcCptService) private procCptService: ProcCptService
   ) {}
 
+  public async handleGetAllProcCpts(req: Request, res: Response): Promise<IProcCptDoc[]> | never {
+    try {
+      return await this.procCptService.getAllProcCpts();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async handlePostProcCptFromExternal(req: Request, res: Response): Promise<IProcCptDoc[] | any> | never {
     try {
       const validatedReq = matchedData(req) as Partial<any>;

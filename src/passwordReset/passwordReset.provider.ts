@@ -146,6 +146,15 @@ export class PasswordResetProvider {
         return;
       }
 
+      // Check application-level rate limit (3 tokens per hour per user)
+      // This provides defense in depth beyond router-level rate limiting
+      const isWithinRateLimit = await this.checkRateLimit(email);
+      if (!isWithinRateLimit) {
+        // Don't reveal rate limit exceeded (security: don't reveal user exists)
+        // Return silently to prevent email enumeration
+        return;
+      }
+
       const { user, role } = userData;
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
       const userId = user.id || (user._id ? user._id.toString() : null);

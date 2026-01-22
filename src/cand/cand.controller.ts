@@ -44,6 +44,34 @@ export class CandController {
     }
   }
 
+  public async handleGetAllCands(
+    req: Request,
+    res: Response
+  ): Promise<ICandDoc[]> | never {
+    try {
+      const candidates = await this.candService.getAllCandidates();
+      return candidates;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCandById(
+    req: Request,
+    res: Response
+  ): Promise<ICandDoc> | never {
+    const id = req.params.id;
+    try {
+      const candidate = await this.candService.getCandById(id);
+      if (!candidate) {
+        throw new Error("Candidate not found");
+      }
+      return candidate;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async handleDeleteCand(
     req: Request,
     res: Response
