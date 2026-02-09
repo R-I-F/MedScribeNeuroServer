@@ -1,17 +1,57 @@
 import { injectable } from "inversify";
+import FormData from "form-data";
+import Mailgun from "mailgun.js";
 import nodemailer, { Transporter } from "nodemailer";
 import { MailerEnvKeys, SendMailParams } from "./mailer.interface";
 
+const MAILGUN_EU_API = "https://api.eu.mailgun.net";
+
 @injectable()
 export class MailerService {
-  private readonly transporter: Transporter;
+  private transporter: Transporter | null = null;
 
   constructor() {
-    this.ensureEnvVars(["EMAIL_PASS", "EMAIL_USER", "EMAIL_SERVER", "EMAIL_SMTP_PORT"]);
+    // Lazy init: do not create transporter or touch env at startup so PaaS (e.g. Railway)
+    // does not hit SMTP timeouts or missing env and SIGTERM.
+  }
 
+  private useMailgunApi(): boolean {
+    return !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
+  }
+
+  private getMailgunClient() {
+    const mailgun = new Mailgun(FormData);
+    return mailgun.client({
+      username: "api",
+      key: process.env.MAILGUN_API_KEY!,
+      url: process.env.MAILGUN_API_BASE || MAILGUN_EU_API,
+    });
+  }
+
+  private async sendViaMailgunApi({ from, to, subject, text, html }: SendMailParams): Promise<{ messageId?: string }> {
+    const domain = process.env.MAILGUN_DOMAIN;
+    if (!domain) throw new Error("MAILGUN_DOMAIN is required for Mailgun API.");
+    const fromAddress = from ?? process.env.EMAIL_USER ?? `noreply@${domain}`;
+    const mg = this.getMailgunClient();
+    const messageData: { from: string; to: string[]; subject: string; text?: string; html?: string } = {
+      from: fromAddress,
+      to: [to],
+      subject,
+    };
+    if (text) messageData.text = text;
+    if (html) messageData.html = html;
+    if (!text && !html) messageData.text = "";
+
+    const data = await mg.messages.create(domain, messageData);
+    const id = (data as { id?: string })?.id;
+    return { messageId: id };
+  }
+
+  private getTransporter(): Transporter {
+    if (this.transporter) return this.transporter;
+    this.ensureEnvVars(["EMAIL_PASS", "EMAIL_USER", "EMAIL_SERVER", "EMAIL_SMTP_PORT"]);
     const smtpPort = this.parsePort(process.env.EMAIL_SMTP_PORT);
     const secure = smtpPort === 465;
-
     this.transporter = nodemailer.createTransport({
       host: process.env.EMAIL_SERVER,
       port: smtpPort,
@@ -21,20 +61,22 @@ export class MailerService {
         pass: process.env.EMAIL_PASS,
       },
     });
-    // No transporter.verify() at startup: SMTP is often blocked on PaaS (e.g. Railway),
-    // causing connection timeout and SIGTERM. App starts without verifying; send will
-    // still fail until you use Mailgun HTTP API if SMTP is blocked.
+    return this.transporter;
   }
 
-  public async sendMail({ from, to, subject, text, html }: SendMailParams) {
+  public async sendMail(params: SendMailParams) {
+    const { from, to, subject, text, html } = params;
     const fromAddress = from ?? process.env.EMAIL_USER;
-
-    if (!fromAddress) {
+    if (!fromAddress && !this.useMailgunApi()) {
       throw new Error("Missing 'from' address for email.");
     }
 
-    return this.transporter.sendMail({
-      from: fromAddress,
+    if (this.useMailgunApi()) {
+      return this.sendViaMailgunApi({ from: fromAddress ?? undefined, to, subject, text, html });
+    }
+
+    return this.getTransporter().sendMail({
+      from: fromAddress!,
       to,
       subject,
       text,

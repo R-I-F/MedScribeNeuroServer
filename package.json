@@ -23,6 +23,8 @@
   "description": "",
   "dependencies": {
     "@google/genai": "^1.33.0",
+    "form-data": "^4.0.1",
+    "mailgun.js": "^11.1.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/pdfkit": "^0.17.4",
