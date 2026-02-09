@@ -1,6 +1,6 @@
 import { injectable } from "inversify";
 import FormData from "form-data";
-import Mailgun from "mailgun.js";
+import Mailgun, { MailgunMessageData } from "mailgun.js";
 import nodemailer, { Transporter } from "nodemailer";
 import { MailerEnvKeys, SendMailParams } from "./mailer.interface";
 
@@ -33,14 +33,13 @@ export class MailerService {
     if (!domain) throw new Error("MAILGUN_DOMAIN is required for Mailgun API.");
     const fromAddress = from ?? process.env.EMAIL_USER ?? `noreply@${domain}`;
     const mg = this.getMailgunClient();
-    const messageData: { from: string; to: string[]; subject: string; text?: string; html?: string } = {
+    const messageData: MailgunMessageData = {
       from: fromAddress,
       to: [to],
       subject,
+      text: text ?? "",
+      html,
     };
-    if (text) messageData.text = text;
-    if (html) messageData.html = html;
-    if (!text && !html) messageData.text = "";
 
     const data = await mg.messages.create(domain, messageData);
     const id = (data as { id?: string })?.id;
