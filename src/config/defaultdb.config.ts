@@ -3,6 +3,7 @@ import { DataSource, DataSourceOptions } from "typeorm";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
+import { InstitutionEntity } from "../institution/institution.mDbSchema";
 
 dotenv.config();
 
@@ -32,7 +33,7 @@ function getDefaultDbConfig(): DataSourceOptions {
     database: process.env.SQL_DB_NAME_DEFAULT || "defaultdb",
     synchronize: false,
     logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-    entities: [__dirname + "/../institution/institution.mDbSchema.ts"],
+    entities: [InstitutionEntity],
     migrations: [__dirname + "/../migrations/1735000060000-CreateInstitutionsTable.ts"],
     subscribers: [],
     connectTimeout: 10000,
