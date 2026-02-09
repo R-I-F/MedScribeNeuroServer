@@ -103,6 +103,13 @@ import { ClerkRouter } from "../clerk/clerk.router";
 import { ClerkService } from "../clerk/clerk.service";
 import { ClerkProvider } from "../clerk/clerk.provider";
 
+import { InstitutionController } from "../institution/institution.controller";
+import { InstitutionRouter } from "../institution/institution.router";
+
+import { ActivityTimelineController } from "../activityTimeline/activityTimeline.controller";
+import { ActivityTimelineRouter } from "../activityTimeline/activityTimeline.router";
+import { ActivityTimelineProvider } from "../activityTimeline/activityTimeline.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -208,3 +215,10 @@ container.bind(LectureController).toSelf().inTransientScope();
 container.bind(LectureRouter).toSelf().inTransientScope();
 container.bind(LectureService).toSelf().inTransientScope();
 container.bind(LectureProvider).toSelf().inTransientScope();
+
+container.bind(InstitutionController).toSelf().inTransientScope();
+container.bind(InstitutionRouter).toSelf().inTransientScope();
+
+container.bind(ActivityTimelineProvider).toSelf().inTransientScope();
+container.bind(ActivityTimelineController).toSelf().inTransientScope();
+container.bind(ActivityTimelineRouter).toSelf().inTransientScope();

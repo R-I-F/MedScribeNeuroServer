@@ -1,9 +1,11 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { ArabProcService } from "./arabProc.service";
 import { Request, Response } from "express";
 import { matchedData } from "express-validator";
 import { IArabProc, IArabProcDoc } from "./arabProc.interface";
 import { IExternalRow } from "./interfaces/IExternalRow.interface";
+import { AppDataSource } from "../config/database.config";
 
 @injectable()
 export class ArabProcController {
@@ -12,8 +14,9 @@ export class ArabProcController {
   ) {}
 
   public async handleGetAllArabProcs(req: Request, res: Response): Promise<IArabProcDoc[]> | never {
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
-      return await this.arabProcService.getAllArabProcs();
+      return await this.arabProcService.getAllArabProcs(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -24,8 +27,9 @@ export class ArabProcController {
     res: Response
   ): Promise<IArabProcDoc> | never {
     const validatedReq: IArabProc = matchedData(req) as IArabProc;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
-      return await this.arabProcService.createArabProc(validatedReq);
+      return await this.arabProcService.createArabProc(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -36,9 +40,11 @@ export class ArabProcController {
     res: Response
   ): Promise<IArabProcDoc[]> | never {
     const validatedReq: Partial<IExternalRow> = matchedData(req) as Partial<IExternalRow>;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
       return await this.arabProcService.createArabProcsFromExternal(
-        validatedReq
+        validatedReq,
+        dataSource
       );
     } catch (err: any) {
       throw new Error(err);
@@ -50,8 +56,9 @@ export class ArabProcController {
     res: Response
   ): Promise<{ message: string }> | never {
     const id = req.params.id;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
-      const deleted = await this.arabProcService.deleteArabProc(id);
+      const deleted = await this.arabProcService.deleteArabProc(id, dataSource);
       if (!deleted) {
         throw new Error("ArabProc not found");
       }

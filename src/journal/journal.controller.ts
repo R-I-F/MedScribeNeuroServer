@@ -16,7 +16,11 @@ export class JournalController {
   ) {
     const validatedReq = matchedData(req) as IJournalInput;
     try {
-      return await this.journalProvider.createJournal(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.journalProvider.createJournal(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -27,7 +31,12 @@ export class JournalController {
     res: Response
   ) {
     try {
-      return await this.journalProvider.getAllJournals();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const list = await this.journalProvider.getAllJournals(dataSource);
+      return list.map(({ createdAt, updatedAt, google_uid, ...rest }) => rest);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -41,7 +50,11 @@ export class JournalController {
     // Ensure id is extracted from params
     validatedReq.id = req.params.id;
     try {
-      return await this.journalProvider.getJournalById(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.journalProvider.getJournalById(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -55,7 +68,11 @@ export class JournalController {
     // Merge id from params into validatedReq
     validatedReq.id = req.params.id;
     try {
-      return await this.journalProvider.updateJournal(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.journalProvider.updateJournal(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -69,7 +86,11 @@ export class JournalController {
     // Ensure id is extracted from params
     validatedReq.id = req.params.id;
     try {
-      return await this.journalProvider.deleteJournal(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.journalProvider.deleteJournal(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -85,7 +106,11 @@ export class JournalController {
       row?: number; 
     };
     try {
-      return await this.journalProvider.createJournalsFromExternal(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.journalProvider.createJournalsFromExternal(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

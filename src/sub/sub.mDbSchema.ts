@@ -14,12 +14,15 @@ export class SubmissionEntity {
   @Column({ type: "datetime" })
   timeStamp!: Date;
 
-  @Column({ type: "char", length: 36 })
-  candDocId!: string;
+  @Column({ type: "enum", enum: ["candidate", "supervisor"], default: "candidate" })
+  submissionType!: "candidate" | "supervisor";
 
-  @ManyToOne(() => CandidateEntity, { onDelete: "RESTRICT" })
+  @Column({ type: "char", length: 36, nullable: true })
+  candDocId!: string | null;
+
+  @ManyToOne(() => CandidateEntity, { onDelete: "RESTRICT", nullable: true })
   @JoinColumn({ name: "candDocId" })
-  candidate!: CandidateEntity;
+  candidate!: CandidateEntity | null;
 
   @Column({ type: "char", length: 36 })
   procDocId!: string;
@@ -53,10 +56,10 @@ export class SubmissionEntity {
   @Column({ type: "text", nullable: true })
   preOpClinCond?: string;
 
-  @Column({ type: "varchar", length: 100 })
+  @Column({ type: "varchar", length: 1000 })
   insUsed!: string;
 
-  @Column({ type: "varchar", length: 100 })
+  @Column({ type: "varchar", length: 1000 })
   consUsed!: string;
 
   @Column({ type: "text", nullable: true })
@@ -69,11 +72,20 @@ export class SubmissionEntity {
   @JoinColumn({ name: "mainDiagDocId" })
   mainDiag!: MainDiagEntity;
 
-  @Column({ type: "varchar", length: 255, unique: true })
-  subGoogleUid!: string;
+  @Column({ type: "varchar", length: 255, unique: true, nullable: true })
+  subGoogleUid!: string | null;
 
   @Column({ type: "enum", enum: ["approved", "pending", "rejected"], default: "pending" })
   subStatus!: "approved" | "pending" | "rejected";
+
+  @Column({ type: "text", nullable: true })
+  review?: string | null;
+
+  @Column({ type: "datetime", nullable: true })
+  reviewedAt?: Date | null;
+
+  @Column({ type: "char", length: 36, nullable: true })
+  reviewedBy?: string | null;
 
   @ManyToMany(() => ProcCptEntity)
   @JoinTable({

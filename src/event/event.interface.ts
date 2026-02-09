@@ -98,4 +98,33 @@ export interface IUnflagAttendanceInput {
   candidateId: string;
 }
 
+/** GET /event/candidate/points response: event-level points and totals */
+export type TEventTypePublic = "lecture" | "journal" | "conference";
+
+export interface IEventPointsPresenter {
+  presenterId: string;
+  name: string;
+  role: "candidate" | "supervisor";
+  rank?: string;
+  position?: string;
+}
+
+export interface IEventPointsEvent {
+  id: string;
+  title: string;
+}
+
+export interface IEventPointsItem {
+  eventId: string;
+  type: TEventTypePublic;
+  presenter: IEventPointsPresenter;
+  event: IEventPointsEvent;
+  points: number;
+}
+
+export interface ICandidateEventPointsResponse {
+  events: IEventPointsItem[];
+  totalPoints: number;
+}
+
 

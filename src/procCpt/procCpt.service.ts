@@ -1,26 +1,23 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
 import { ExternalService } from "../externalService/external.service";
 import { IProcCpt, IProcCptDoc } from "./procCpt.interface";
 import { UtilService } from "../utils/utils.service";
-import { AppDataSource } from "../config/database.config";
 import { ProcCptEntity } from "./procCpt.mDbSchema";
 import { Repository, In } from "typeorm";
 
 @injectable()
 export class ProcCptService {
-  private procCptRepository: Repository<ProcCptEntity>;
-
   constructor(
     @inject(ExternalService) private externalService: ExternalService,
     @inject(UtilService) private utilService: UtilService
-  ) {
-    this.procCptRepository = AppDataSource.getRepository(ProcCptEntity);
-  }
+  ) {}
 
-  public async getAllProcCpts(): Promise<IProcCptDoc[]> | never {
+  public async getAllProcCpts(dataSource: DataSource): Promise<IProcCptDoc[]> | never {
     try {
-      const allProcCpts = await this.procCptRepository.find({
+      const procCptRepository = dataSource.getRepository(ProcCptEntity);
+      const allProcCpts = await procCptRepository.find({
         order: { createdAt: "DESC" },
       });
       return allProcCpts as unknown as IProcCptDoc[];
@@ -29,9 +26,10 @@ export class ProcCptService {
     }
   }
 
-  public async findByNumCode(data: Pick<IProcCpt, "numCode">): Promise<IProcCptDoc | null> | never {
+  public async findByNumCode(data: Pick<IProcCpt, "numCode">, dataSource: DataSource): Promise<IProcCptDoc | null> | never {
     try {
-      const foundProcCpt = await this.procCptRepository.findOne({
+      const procCptRepository = dataSource.getRepository(ProcCptEntity);
+      const foundProcCpt = await procCptRepository.findOne({
         where: { numCode: data.numCode },
       });
       if (foundProcCpt) {
@@ -43,9 +41,10 @@ export class ProcCptService {
     }
   }
 
-  public async findByNumCodes(numCodes: string[]): Promise<IProcCptDoc[]> | never {
+  public async findByNumCodes(numCodes: string[], dataSource: DataSource): Promise<IProcCptDoc[]> | never {
     try {
-      const foundProcCpts = await this.procCptRepository.find({
+      const procCptRepository = dataSource.getRepository(ProcCptEntity);
+      const foundProcCpts = await procCptRepository.find({
         where: { numCode: In(numCodes) },
       });
       return foundProcCpts as unknown as IProcCptDoc[];
@@ -54,30 +53,32 @@ export class ProcCptService {
     }
   }
 
-  public async createProcCpt(procCptData: IProcCpt): Promise<IProcCptDoc> | never {
+  public async createProcCpt(procCptData: IProcCpt, dataSource: DataSource): Promise<IProcCptDoc> | never {
     try {
-      const newProcCpt = this.procCptRepository.create(procCptData);
-      const savedProcCpt = await this.procCptRepository.save(newProcCpt);
+      const procCptRepository = dataSource.getRepository(ProcCptEntity);
+      const newProcCpt = procCptRepository.create(procCptData);
+      const savedProcCpt = await procCptRepository.save(newProcCpt);
       return savedProcCpt as unknown as IProcCptDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async upsertProcCpt(procCptData: IProcCpt): Promise<IProcCptDoc> | never {
+  public async upsertProcCpt(procCptData: IProcCpt, dataSource: DataSource): Promise<IProcCptDoc> | never {
     try {
+      const procCptRepository = dataSource.getRepository(ProcCptEntity);
       // Check if ProcCpt exists by numCode
-      const existingProcCpt = await this.findByNumCode({ numCode: procCptData.numCode });
+      const existingProcCpt = await this.findByNumCode({ numCode: procCptData.numCode }, dataSource);
       
       if (existingProcCpt) {
         // Update existing record
-        this.procCptRepository.merge(existingProcCpt as any, procCptData);
-        const updatedProcCpt = await this.procCptRepository.save(existingProcCpt as any);
+        procCptRepository.merge(existingProcCpt as any, procCptData);
+        const updatedProcCpt = await procCptRepository.save(existingProcCpt as any);
         return updatedProcCpt as unknown as IProcCptDoc;
       } else {
         // Create new record
-        const newProcCpt = this.procCptRepository.create(procCptData);
-        const savedProcCpt = await this.procCptRepository.save(newProcCpt);
+        const newProcCpt = procCptRepository.create(procCptData);
+        const savedProcCpt = await procCptRepository.save(newProcCpt);
         return savedProcCpt as unknown as IProcCptDoc;
       }
     } catch (err: any) {
@@ -85,17 +86,18 @@ export class ProcCptService {
     }
   }
 
-  public async createBulkProcCpt(procCptData: IProcCpt[]): Promise<IProcCptDoc[]> | never {
+  public async createBulkProcCpt(procCptData: IProcCpt[], dataSource: DataSource): Promise<IProcCptDoc[]> | never {
     try {
-      const newProcCpts = this.procCptRepository.create(procCptData);
-      const savedProcCpts = await this.procCptRepository.save(newProcCpts);
+      const procCptRepository = dataSource.getRepository(ProcCptEntity);
+      const newProcCpts = procCptRepository.create(procCptData);
+      const savedProcCpts = await procCptRepository.save(newProcCpts);
       return savedProcCpts as unknown as IProcCptDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async createProcCptFromExternal(validatedReq: Partial<IExternalRow>): Promise<IProcCptDoc[] | any> | never {
+  public async createProcCptFromExternal(validatedReq: Partial<IExternalRow>, dataSource: DataSource): Promise<IProcCptDoc[] | any> | never {
     try {
       let apiString;
       if (validatedReq.row) {
@@ -126,7 +128,7 @@ export class ProcCptService {
           };
           items.push(normalizedItem);
         }
-        const newProcCptArr = await this.createBulkProcCpt(items);
+        const newProcCptArr = await this.createBulkProcCpt(items, dataSource);
         return newProcCptArr;
       } else {
         return externalData;
@@ -136,9 +138,10 @@ export class ProcCptService {
     }
   }
 
-  public async deleteProcCpt(id: string): Promise<boolean> | never {
+  public async deleteProcCpt(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
-      const result = await this.procCptRepository.delete(id);
+      const procCptRepository = dataSource.getRepository(ProcCptEntity);
+      const result = await procCptRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);

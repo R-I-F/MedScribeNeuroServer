@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { ProcCptService } from "./procCpt.service";
 import { matchedData } from "express-validator";
 import { IProcCpt, IProcCptDoc } from "./procCpt.interface";
+import { AppDataSource } from "../config/database.config";
 
 @injectable()
 export class ProcCptController {
@@ -11,17 +13,19 @@ export class ProcCptController {
   ) {}
 
   public async handleGetAllProcCpts(req: Request, res: Response): Promise<IProcCptDoc[]> | never {
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
-      return await this.procCptService.getAllProcCpts();
+      return await this.procCptService.getAllProcCpts(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
   public async handlePostProcCptFromExternal(req: Request, res: Response): Promise<IProcCptDoc[] | any> | never {
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
       const validatedReq = matchedData(req) as Partial<any>;
-      const newProcCpts = await this.procCptService.createProcCptFromExternal(validatedReq);
+      const newProcCpts = await this.procCptService.createProcCptFromExternal(validatedReq, dataSource);
       return newProcCpts;
     } catch (err: any) {
       throw new Error(err);
@@ -29,9 +33,10 @@ export class ProcCptController {
   }
 
   public async handleUpsertProcCpt(req: Request, res: Response): Promise<IProcCptDoc> | never {
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
       const validatedReq = matchedData(req) as IProcCpt;
-      const result = await this.procCptService.upsertProcCpt(validatedReq);
+      const result = await this.procCptService.upsertProcCpt(validatedReq, dataSource);
       return result;
     } catch (err: any) {
       throw new Error(err);
@@ -43,8 +48,9 @@ export class ProcCptController {
     res: Response
   ): Promise<{ message: string }> | never {
     const id = req.params.id;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {
-      const deleted = await this.procCptService.deleteProcCpt(id);
+      const deleted = await this.procCptService.deleteProcCpt(id, dataSource);
       if (!deleted) {
         throw new Error("ProcCpt not found");
       }

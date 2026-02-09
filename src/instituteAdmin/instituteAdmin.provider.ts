@@ -1,6 +1,6 @@
 import { injectable, inject } from "inversify";
+import { DataSource } from "typeorm";
 import { IInstituteAdmin, IInstituteAdminDoc } from "./instituteAdmin.interface";
-import { AppDataSource } from "../config/database.config";
 import { InstituteAdminEntity } from "./instituteAdmin.mDbSchema";
 import { Repository } from "typeorm";
 import { SupervisorService } from "../supervisor/supervisor.service";
@@ -18,7 +18,6 @@ import { IArabProcDoc } from "../arabProc/arabProc.interface";
 
 @injectable()
 export class InstituteAdminProvider {
-  private instituteAdminRepository: Repository<InstituteAdminEntity>;
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   constructor(
@@ -28,23 +27,23 @@ export class InstituteAdminProvider {
     @inject(CalSurgService) private calSurgService: CalSurgService,
     @inject(HospitalService) private hospitalService: HospitalService,
     @inject(ArabProcService) private arabProcService: ArabProcService
-  ) {
-    this.instituteAdminRepository = AppDataSource.getRepository(InstituteAdminEntity);
-  }
+  ) {}
 
-  public async createInstituteAdmin(validatedReq: Partial<IInstituteAdmin>): Promise<IInstituteAdminDoc> | never {
+  public async createInstituteAdmin(validatedReq: Partial<IInstituteAdmin>, dataSource: DataSource): Promise<IInstituteAdminDoc> | never {
     try {
-      const newInstituteAdmin = this.instituteAdminRepository.create(validatedReq);
-      const savedInstituteAdmin = await this.instituteAdminRepository.save(newInstituteAdmin);
+      const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
+      const newInstituteAdmin = instituteAdminRepository.create(validatedReq);
+      const savedInstituteAdmin = await instituteAdminRepository.save(newInstituteAdmin);
       return savedInstituteAdmin as unknown as IInstituteAdminDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllInstituteAdmins(): Promise<IInstituteAdminDoc[]> | never {
+  public async getAllInstituteAdmins(dataSource: DataSource): Promise<IInstituteAdminDoc[]> | never {
     try {
-      const instituteAdmins = await this.instituteAdminRepository.find({
+      const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
+      const instituteAdmins = await instituteAdminRepository.find({
         order: { createdAt: "DESC" },
       });
       return instituteAdmins as unknown as IInstituteAdminDoc[];
@@ -53,14 +52,15 @@ export class InstituteAdminProvider {
     }
   }
 
-  public async getInstituteAdminById(id: string): Promise<IInstituteAdminDoc | null> | never {
+  public async getInstituteAdminById(id: string, dataSource: DataSource): Promise<IInstituteAdminDoc | null> | never {
     try {
+      const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid institute admin ID format");
       }
-      const instituteAdmin = await this.instituteAdminRepository.findOne({
+      const instituteAdmin = await instituteAdminRepository.findOne({
         where: { id },
       });
       return instituteAdmin as unknown as IInstituteAdminDoc | null;
@@ -69,9 +69,10 @@ export class InstituteAdminProvider {
     }
   }
 
-  public async getInstituteAdminByEmail(email: string): Promise<IInstituteAdminDoc | null> | never {
+  public async getInstituteAdminByEmail(email: string, dataSource: DataSource): Promise<IInstituteAdminDoc | null> | never {
     try {
-      const instituteAdmin = await this.instituteAdminRepository.findOne({
+      const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
+      const instituteAdmin = await instituteAdminRepository.findOne({
         where: { email },
       });
       return instituteAdmin as unknown as IInstituteAdminDoc | null;
@@ -80,16 +81,17 @@ export class InstituteAdminProvider {
     }
   }
 
-  public async updateInstituteAdmin(validatedReq: Partial<IInstituteAdmin> & { id: string }): Promise<IInstituteAdminDoc | null> | never {
+  public async updateInstituteAdmin(validatedReq: Partial<IInstituteAdmin> & { id: string }, dataSource: DataSource): Promise<IInstituteAdminDoc | null> | never {
     try {
+      const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
       const { id, ...updateData } = validatedReq;
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid institute admin ID format");
       }
-      await this.instituteAdminRepository.update(id, updateData);
-      const updatedInstituteAdmin = await this.instituteAdminRepository.findOne({
+      await instituteAdminRepository.update(id, updateData);
+      const updatedInstituteAdmin = await instituteAdminRepository.findOne({
         where: { id },
       });
       return updatedInstituteAdmin as unknown as IInstituteAdminDoc | null;
@@ -98,14 +100,15 @@ export class InstituteAdminProvider {
     }
   }
 
-  public async deleteInstituteAdmin(id: string): Promise<boolean> | never {
+  public async deleteInstituteAdmin(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
+      const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid institute admin ID format");
       }
-      const result = await this.instituteAdminRepository.delete(id);
+      const result = await instituteAdminRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
@@ -113,9 +116,9 @@ export class InstituteAdminProvider {
   }
 
   // Dashboard endpoints business logic
-  public async getAllSupervisors(): Promise<ISupervisorDoc[]> | never {
+  public async getAllSupervisors(dataSource: DataSource): Promise<ISupervisorDoc[]> | never {
     try {
-      return await this.supervisorService.getAllSupervisors();
+      return await this.supervisorService.getAllSupervisors(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -123,7 +126,8 @@ export class InstituteAdminProvider {
 
   public async getSupervisorSubmissions(
     supervisorId: string,
-    status?: "approved" | "pending" | "rejected"
+    status: "approved" | "pending" | "rejected" | undefined,
+    dataSource: DataSource
   ): Promise<ISubDoc[]> | never {
     try {
       // Validate UUID format (supervisor now uses MariaDB UUID)
@@ -132,48 +136,44 @@ export class InstituteAdminProvider {
       }
 
       // Verify supervisor exists
-      const supervisor = await this.supervisorService.getSupervisorById({ id: supervisorId });
+      const supervisor = await this.supervisorService.getSupervisorById({ id: supervisorId }, dataSource);
       if (!supervisor) {
         throw new Error("Supervisor not found");
       }
 
       // Get submissions with optional status filter
       if (status) {
-        return await this.subService.getSubsBySupervisorIdAndStatus(supervisorId, status);
+        return await this.subService.getSubsBySupervisorIdAndStatus(supervisorId, status, dataSource);
       } else {
-        return await this.subService.getSubsBySupervisorId(supervisorId);
+        return await this.subService.getSubsBySupervisorId(supervisorId, dataSource);
       }
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllCandidates(): Promise<ICandDoc[]> | never {
+  public async getAllCandidates(dataSource: DataSource): Promise<ICandDoc[]> | never {
     try {
-      return await this.candService.getAllCandidates();
+      return await this.candService.getAllCandidates(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCandidateSubmissions(candidateId: string): Promise<ISubDoc[]> | never {
+  public async getCandidateSubmissions(candidateId: string, dataSource: DataSource): Promise<ISubDoc[]> | never {
     try {
       // Validate UUID format (candidate now uses MariaDB UUID)
       if (!this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
       }
 
-      // Convert UUID to ObjectId format for MongoDB compatibility (sub still uses MongoDB)
-      const uuidHex = candidateId.replace(/-/g, '');
-      const mongoObjectId = uuidHex.substring(0, 24);
-
       // Verify candidate exists
-      const candidate = await this.candService.getCandById(candidateId);
+      const candidate = await this.candService.getCandById(candidateId, dataSource);
       if (!candidate) {
         throw new Error("Candidate not found");
       }
 
-      return await this.subService.getSubsByCandidateId(mongoObjectId);
+      return await this.subService.getSubsByCandidateId(candidateId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -181,7 +181,8 @@ export class InstituteAdminProvider {
 
   public async getCandidateSubmissionById(
     candidateId: string,
-    submissionId: string
+    submissionId: string,
+    dataSource: DataSource
   ): Promise<ISubDoc | null> | never {
     try {
       // Validate UUID formats
@@ -193,7 +194,7 @@ export class InstituteAdminProvider {
       }
 
       // Get populated submission
-      const submission = await this.subService.getSubById(submissionId);
+      const submission = await this.subService.getSubById(submissionId, dataSource);
       if (!submission) {
         return null;
       }
@@ -260,25 +261,25 @@ export class InstituteAdminProvider {
     year?: number;
     startDate?: Date;
     endDate?: Date;
-  }): Promise<ICalSurgDoc[]> | never {
+  }, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
-      return await this.calSurgService.getCalSurgWithFilters(filters);
+      return await this.calSurgService.getCalSurgWithFilters(filters, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllHospitals(): Promise<IHospitalDoc[]> | never {
+  public async getAllHospitals(dataSource: DataSource): Promise<IHospitalDoc[]> | never {
     try {
-      return await this.hospitalService.getAllHospitals();
+      return await this.hospitalService.getAllHospitals(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getArabicProcedures(search?: string): Promise<IArabProcDoc[]> | never {
+  public async getArabicProcedures(search: string | undefined, dataSource: DataSource): Promise<IArabProcDoc[]> | never {
     try {
-      return await this.arabProcService.getArabProcsWithSearch(search);
+      return await this.arabProcService.getArabProcsWithSearch(search, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -291,7 +292,7 @@ export class InstituteAdminProvider {
     startDate?: Date;
     endDate?: Date;
     groupBy?: "title" | "alphaCode";
-  }): Promise<any[]> | never {
+  }, dataSource: DataSource): Promise<any[]> | never {
     try {
       // Get calendar procedures with filters
       const calSurgs = await this.calSurgService.getCalSurgWithFilters({
@@ -300,7 +301,7 @@ export class InstituteAdminProvider {
         year: filters.year,
         startDate: filters.startDate,
         endDate: filters.endDate
-      });
+      }, dataSource);
 
       // Group by hospital
       const hospitalMap = new Map<string, {

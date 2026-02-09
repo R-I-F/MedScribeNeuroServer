@@ -3,6 +3,7 @@ import express, { Request, Response, Router, NextFunction } from "express";
 import { EventController } from "./event.controller";
 import { createEventValidator } from "../validators/createEvent.validator";
 import { getEventByIdValidator } from "../validators/getEventById.validator";
+import { getEventsByPresenterValidator } from "../validators/getEventsByPresenter.validator";
 import { updateEventValidator } from "../validators/updateEvent.validator";
 import { deleteEventValidator } from "../validators/deleteEvent.validator";
 import { addAttendanceValidator } from "../validators/addAttendance.validator";
@@ -16,11 +17,14 @@ import extractJWT from "../middleware/extractJWT";
 import { requireInstituteAdmin, requireSupervisor, requireCandidate, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 // Middleware for clerk or institute admin or super admin
 const requireClerkOrInstituteAdmin = authorize(UserRole.CLERK, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 // Middleware for candidate, supervisor, clerk, institute admin, or super admin
 const requireCandidateOrSupervisorOrClerkOrInstituteAdmin = authorize(UserRole.CANDIDATE, UserRole.SUPERVISOR, UserRole.CLERK, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
+// Middleware for supervisor, institute admin, or super admin
+const requireSupervisorOrInstituteAdminOrSuperAdmin = authorize(UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN);
 import { EventService } from "./event.service";
 
 @injectable()
@@ -38,8 +42,9 @@ export class EventRouter {
     // Create event
     this.router.post(
       "/",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireClerkOrInstituteAdmin,
       createEventValidator,
       async (req: Request, res: Response) => {
@@ -62,12 +67,32 @@ export class EventRouter {
     // Get all events
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidateOrSupervisorOrClerkOrInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.eventController.handleGetAllEvents(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          res
+            .status(StatusCodes.INTERNAL_SERVER_ERROR)
+            .json({ error: err.message });
+        }
+      }
+    );
+
+    // Dashboard: events from last 30 days through future, stripped of createdAt and updatedAt
+    this.router.get(
+      "/dashboard",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireCandidateOrSupervisorOrClerkOrInstituteAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          const resp = await this.eventController.handleGetEventsDashboard(req, res);
           res.status(StatusCodes.OK).json(resp);
         } catch (err: any) {
           res
@@ -82,8 +107,9 @@ export class EventRouter {
     // Institute Admin only
     this.router.post(
       "/bulk-import-attendance",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -100,8 +126,9 @@ export class EventRouter {
     // Candidate only - uses their own ID from JWT token
     this.router.get(
       "/candidate/points",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       async (req: Request, res: Response) => {
         try {
@@ -122,8 +149,9 @@ export class EventRouter {
     // Anyone authenticated can view points (for transparency)
     this.router.get(
       "/candidate/:candidateId/points",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       getCandidateTotalPointsValidator,
       async (req: Request, res: Response) => {
@@ -141,11 +169,70 @@ export class EventRouter {
       }
     );
 
+    // Academic (points) ranking: all candidates by attendance points
+    this.router.get(
+      "/academicRanking",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireCandidate,
+      async (req: Request, res: Response) => {
+        try {
+          const resp = await this.eventController.handleGetAcademicRanking(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          if (err.message?.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    );
+
+    // Get events by presenter (supervisor ID)
+    // Supervisor: can only request their own ID (from JWT)
+    // Institute Admin / Super Admin: can pass any supervisor ID
+    this.router.get(
+      "/by-presenter/:supervisorId",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSupervisorOrInstituteAdminOrSuperAdmin,
+      getEventsByPresenterValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        const jwt = res.locals.jwt as { id?: string; _id?: string; role?: string };
+        const userId = jwt?.id ?? jwt?._id;
+        const userRole = jwt?.role;
+        const supervisorId = req.params.supervisorId;
+        // Supervisors can only request their own events
+        if (userRole === "supervisor" && userId && supervisorId !== userId) {
+          return res.status(StatusCodes.FORBIDDEN).json({
+            status: "error",
+            statusCode: StatusCodes.FORBIDDEN,
+            message: "Forbidden",
+            error: "Supervisors can only request their own events",
+          });
+        }
+        try {
+          const resp = await this.eventController.handleGetEventsByPresenter(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
     // Get event by ID
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidateOrSupervisorOrClerkOrInstituteAdmin,
       getEventByIdValidator,
       async (req: Request, res: Response) => {
@@ -174,8 +261,9 @@ export class EventRouter {
     // Update event
     this.router.patch(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireClerkOrInstituteAdmin,
       updateEventValidator,
       async (req: Request, res: Response) => {
@@ -204,8 +292,9 @@ export class EventRouter {
     // Delete event
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireClerkOrInstituteAdmin,
       deleteEventValidator,
       async (req: Request, res: Response) => {
@@ -239,8 +328,9 @@ export class EventRouter {
     // Candidate: can add themselves to any event
     this.router.post(
       "/:eventId/attendance/:candidateId",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       addAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -266,7 +356,11 @@ export class EventRouter {
         if (userRole === "supervisor") {
           try {
             const eventService = this.eventService;
-            const event = await eventService.getEventById(req.params.eventId);
+            const dataSource = (req as any).institutionDataSource;
+            if (!dataSource) {
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Institution DataSource not resolved" });
+            }
+            const event = await eventService.getEventById(req.params.eventId, dataSource);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });
             }
@@ -304,8 +398,9 @@ export class EventRouter {
     // Supervisor: can remove from events where they are the presenter
     this.router.delete(
       "/:eventId/attendance/:candidateId",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       removeAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -326,7 +421,11 @@ export class EventRouter {
         if (userRole === "supervisor") {
           try {
             const eventService = this.eventService;
-            const event = await eventService.getEventById(req.params.eventId);
+            const dataSource = (req as any).institutionDataSource;
+            if (!dataSource) {
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Institution DataSource not resolved" });
+            }
+            const event = await eventService.getEventById(req.params.eventId, dataSource);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });
             }
@@ -361,8 +460,9 @@ export class EventRouter {
     // Supervisor: can flag in events where they are the presenter
     this.router.patch(
       "/:eventId/attendance/:candidateId/flag",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       flagAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -383,12 +483,17 @@ export class EventRouter {
         if (userRole === "supervisor") {
           try {
             const eventService = this.eventService;
-            const event = await eventService.getEventById(req.params.eventId);
+            const dataSource = (req as any).institutionDataSource;
+            if (!dataSource) {
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Institution DataSource not resolved" });
+            }
+            const event = await eventService.getEventById(req.params.eventId, dataSource);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });
             }
-            if ((event.type === "lecture" || event.type === "conf") && 
-                event.presenter.toString() === userId) {
+            // Handle both UUID (id) and ObjectId (_id) formats for presenter
+            const presenterId = (event as any).presenterId || (event.presenter as any)?.id || (event.presenter as any)?._id?.toString() || event.presenter?.toString();
+            if ((event.type === "lecture" || event.type === "conf") && presenterId === userId) {
               return next();
             }
             return res.status(StatusCodes.FORBIDDEN).json({ 
@@ -408,7 +513,14 @@ export class EventRouter {
           const resp = await this.eventController.handleFlagAttendance(req, res);
           res.status(StatusCodes.OK).json(resp);
         } catch (err: any) {
-          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          const msg = err?.message || String(err);
+          if (msg === "Event not found" || msg === "Candidate not found in attendance") {
+            return res.status(StatusCodes.NOT_FOUND).json({ error: msg });
+          }
+          if (msg.includes("Invalid") || msg.includes("format")) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ error: msg });
+          }
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: msg });
         }
       }
     );
@@ -418,8 +530,9 @@ export class EventRouter {
     // Supervisor: can unflag in events where they are the presenter
     this.router.patch(
       "/:eventId/attendance/:candidateId/unflag",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       unflagAttendanceValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -440,12 +553,17 @@ export class EventRouter {
         if (userRole === "supervisor") {
           try {
             const eventService = this.eventService;
-            const event = await eventService.getEventById(req.params.eventId);
+            const dataSource = (req as any).institutionDataSource;
+            if (!dataSource) {
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Institution DataSource not resolved" });
+            }
+            const event = await eventService.getEventById(req.params.eventId, dataSource);
             if (!event) {
               return res.status(StatusCodes.NOT_FOUND).json({ error: "Event not found" });
             }
-            if ((event.type === "lecture" || event.type === "conf") && 
-                event.presenter.toString() === userId) {
+            // Handle both UUID (id) and ObjectId (_id) formats for presenter
+            const presenterId = (event as any).presenterId || (event.presenter as any)?.id || (event.presenter as any)?._id?.toString() || event.presenter?.toString();
+            if ((event.type === "lecture" || event.type === "conf") && presenterId === userId) {
               return next();
             }
             return res.status(StatusCodes.FORBIDDEN).json({ 
@@ -465,7 +583,14 @@ export class EventRouter {
           const resp = await this.eventController.handleUnflagAttendance(req, res);
           res.status(StatusCodes.OK).json(resp);
         } catch (err: any) {
-          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          const msg = err?.message || String(err);
+          if (msg === "Event not found" || msg === "Candidate not found in attendance") {
+            return res.status(StatusCodes.NOT_FOUND).json({ error: msg });
+          }
+          if (msg.includes("Invalid") || msg.includes("format")) {
+            return res.status(StatusCodes.BAD_REQUEST).json({ error: msg });
+          }
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: msg });
         }
       }
     );

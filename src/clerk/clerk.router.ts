@@ -12,6 +12,7 @@ import { requireSuperAdmin, requireInstituteAdmin } from "../middleware/authoriz
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import { authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class ClerkRouter {
@@ -27,8 +28,9 @@ export class ClerkRouter {
     // Create clerk (super admins and institute admins can create)
     this.router.post(
       "/",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN),
       createClerkValidator,
       async (req: Request, res: Response) => {
@@ -49,8 +51,9 @@ export class ClerkRouter {
     // Get all clerks (super admins and institute admins only)
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN),
       async (req: Request, res: Response) => {
         try {
@@ -65,8 +68,9 @@ export class ClerkRouter {
     // Get clerk by ID (super admins and institute admins only)
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN),
       getClerkByIdValidator,
       async (req: Request, res: Response) => {
@@ -91,8 +95,9 @@ export class ClerkRouter {
     // Update clerk (super admins and institute admins only)
     this.router.put(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN),
       updateClerkValidator,
       async (req: Request, res: Response) => {
@@ -117,8 +122,9 @@ export class ClerkRouter {
     // Delete clerk (super admins and institute admins only)
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN),
       deleteClerkValidator,
       async (req: Request, res: Response) => {

@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { DiagnosisService } from "./diagnosis.service";
 import { IDiagnosis, IDiagnosisDoc, IDiagnosisUpdateInput } from "./diagnosis.interface";
 import { UtilService } from "../utils/utils.service";
@@ -14,9 +15,9 @@ export class DiagnosisProvider {
    * Retrieves all diagnoses from the database
    * @returns Promise<IDiagnosisDoc[]>
    */
-  public async getAllDiagnoses(): Promise<IDiagnosisDoc[]> {
+  public async getAllDiagnoses(dataSource: DataSource): Promise<IDiagnosisDoc[]> {
     try {
-      return await this.diagnosisService.getAllDiagnoses();
+      return await this.diagnosisService.getAllDiagnoses(dataSource);
     } catch (error: any) {
       throw new Error(`Failed to retrieve diagnoses: ${error.message}`);
     }
@@ -27,16 +28,16 @@ export class DiagnosisProvider {
    * @param diagnosisData - Validated diagnosis data
    * @returns Promise<IDiagnosisDoc>
    */
-  public async createDiagnosis(diagnosisData: IDiagnosis): Promise<IDiagnosisDoc> {
+  public async createDiagnosis(diagnosisData: IDiagnosis, dataSource: DataSource): Promise<IDiagnosisDoc> {
     try {
       // Business logic: Transform and validate data before service call
       const processedData = this.processDiagnosisData(diagnosisData);
       
       // Check for duplicates if needed
-      await this.checkForDuplicateDiagnosis(processedData);
+      await this.checkForDuplicateDiagnosis(processedData, dataSource);
       
       // Call service to create diagnosis
-      const newDiagnosis = await this.diagnosisService.createDiagnosis(processedData);
+      const newDiagnosis = await this.diagnosisService.createDiagnosis(processedData, dataSource);
       
       return newDiagnosis;
     } catch (error: any) {
@@ -50,7 +51,7 @@ export class DiagnosisProvider {
    * @param diagnosisDataArray - Validated array of diagnosis data
    * @returns Promise<IDiagnosisDoc[]>
    */
-  public async createBulkDiagnosis(diagnosisDataArray: IDiagnosis[]): Promise<IDiagnosisDoc[]> {
+  public async createBulkDiagnosis(diagnosisDataArray: IDiagnosis[], dataSource: DataSource): Promise<IDiagnosisDoc[]> {
     try {
       // Business logic: Process each diagnosis in the array
       const processedDataArray = diagnosisDataArray.map(data => 
@@ -58,13 +59,13 @@ export class DiagnosisProvider {
       );
 
       // Business logic: Check for duplicates across the array
-      await this.checkForDuplicateDiagnoses(processedDataArray);
+      await this.checkForDuplicateDiagnoses(processedDataArray, dataSource);
 
       // Business logic: Validate array constraints (e.g., max batch size)
       this.validateBulkOperationConstraints(processedDataArray);
 
       // Call service to create bulk diagnoses
-      const newDiagnoses = await this.diagnosisService.createBulkDiagnosis(processedDataArray);
+      const newDiagnoses = await this.diagnosisService.createBulkDiagnosis(processedDataArray, dataSource);
       
       return newDiagnoses;
     } catch (error: any) {
@@ -94,11 +95,12 @@ export class DiagnosisProvider {
    * @param diagnosisData - Diagnosis data to check
    * @throws Error if duplicate found
    */
-  private async checkForDuplicateDiagnosis(diagnosisData: IDiagnosis): Promise<void> {
+  private async checkForDuplicateDiagnosis(diagnosisData: IDiagnosis, dataSource: DataSource): Promise<void> {
     try {
       const existingDiagnosis = await this.diagnosisService.findExistingDiagnosis(
         diagnosisData.icdCode,
-        diagnosisData.icdName
+        diagnosisData.icdName,
+        dataSource
       );
 
       if (existingDiagnosis) {
@@ -119,7 +121,7 @@ export class DiagnosisProvider {
    * @param diagnosisDataArray - Array of diagnosis data to check
    * @throws Error if duplicates found
    */
-  private async checkForDuplicateDiagnoses(diagnosisDataArray: IDiagnosis[]): Promise<void> {
+  private async checkForDuplicateDiagnoses(diagnosisDataArray: IDiagnosis[], dataSource: DataSource): Promise<void> {
     // Business logic: Check for duplicates within the array itself
     const icdCodes = diagnosisDataArray.map(data => data.icdCode);
     const icdNames = diagnosisDataArray.map(data => data.icdName);
@@ -136,7 +138,7 @@ export class DiagnosisProvider {
 
     // Business logic: Check against existing diagnoses in database
     for (const diagnosisData of diagnosisDataArray) {
-      await this.checkForDuplicateDiagnosis(diagnosisData);
+      await this.checkForDuplicateDiagnosis(diagnosisData, dataSource);
     }
   }
 
@@ -163,7 +165,7 @@ export class DiagnosisProvider {
    * @param validatedReq - Validated update request with id and optional fields
    * @returns Promise<IDiagnosisDoc | null>
    */
-  public async updateDiagnosis(validatedReq: IDiagnosisUpdateInput): Promise<IDiagnosisDoc | null> {
+  public async updateDiagnosis(validatedReq: IDiagnosisUpdateInput, dataSource: DataSource): Promise<IDiagnosisDoc | null> {
     try {
       const { id, ...updateData } = validatedReq;
 
@@ -187,7 +189,7 @@ export class DiagnosisProvider {
       // Check for duplicates if icdCode or icdName is being updated
       if (updateFields.icdCode || updateFields.icdName) {
         // Get current diagnosis to check what's changing
-        const currentDiagnosis = await this.diagnosisService.getDiagnosisById(id);
+        const currentDiagnosis = await this.diagnosisService.getDiagnosisById(id, dataSource);
         if (!currentDiagnosis) {
           throw new Error("Diagnosis not found");
         }
@@ -198,7 +200,8 @@ export class DiagnosisProvider {
         
         const existingDiagnosis = await this.diagnosisService.findExistingDiagnosis(
           checkIcdCode,
-          checkIcdName
+          checkIcdName,
+          dataSource
         );
 
         if (existingDiagnosis && existingDiagnosis.id !== id) {
@@ -211,7 +214,7 @@ export class DiagnosisProvider {
         }
       }
 
-      return await this.diagnosisService.updateDiagnosis(id, updateFields);
+      return await this.diagnosisService.updateDiagnosis(id, updateFields, dataSource);
     } catch (error: any) {
       throw new Error(`Failed to update diagnosis: ${error.message}`);
     }
@@ -222,9 +225,9 @@ export class DiagnosisProvider {
    * @param id - Diagnosis ID to delete
    * @returns Promise<boolean>
    */
-  public async deleteDiagnosis(id: string): Promise<boolean> {
+  public async deleteDiagnosis(id: string, dataSource: DataSource): Promise<boolean> {
     try {
-      return await this.diagnosisService.deleteDiagnosis(id);
+      return await this.diagnosisService.deleteDiagnosis(id, dataSource);
     } catch (error: any) {
       throw new Error(`Failed to delete diagnosis: ${error.message}`);
     }

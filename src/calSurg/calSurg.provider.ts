@@ -8,6 +8,7 @@ import { HospitalService } from "../hospital/hospital.service";
 import { IHospitalDoc } from "../hospital/hospital.interface";
 import { IArabProcDoc } from "../arabProc/arabProc.interface";
 import { ArabProcService } from "../arabProc/arabProc.service";
+import { DataSource } from "typeorm";
 
 @injectable()
 export class CalSurgProvider {
@@ -24,13 +25,13 @@ export class CalSurgProvider {
    * @param calSurgData - Validated calSurg data
    * @returns Promise<ICalSurgDoc>
    */
-  public async createCalSurg(calSurgData: ICalSurg): Promise<ICalSurgDoc> {
+  public async createCalSurg(calSurgData: ICalSurg, dataSource: DataSource): Promise<ICalSurgDoc> {
     try {
       // Business logic: Transform and validate data before service call
       const processedData = this.processCalSurgData(calSurgData);
       
       // Call service to create calSurg
-      const newCalSurg = await this.calSurgService.createCalSurg(processedData);
+      const newCalSurg = await this.calSurgService.createCalSurg(processedData, dataSource);
       
       return newCalSurg;
     } catch (error: any) {
@@ -44,7 +45,7 @@ export class CalSurgProvider {
    * @param calSurgDataArray - Validated array of calSurg data
    * @returns Promise<ICalSurgDoc[]>
    */
-  public async createBulkCalSurg(calSurgDataArray: ICalSurg[]): Promise<ICalSurgDoc[]> {
+  public async createBulkCalSurg(calSurgDataArray: ICalSurg[], dataSource: DataSource): Promise<ICalSurgDoc[]> {
     try {
       // Business logic: Process each calSurg in the array
       const processedDataArray = calSurgDataArray.map(data => 
@@ -55,7 +56,7 @@ export class CalSurgProvider {
       this.validateBulkOperationConstraints(processedDataArray);
 
       // Call service to create bulk calSurgs
-      const newCalSurgs = await this.calSurgService.createBulkCalSurg(processedDataArray);
+      const newCalSurgs = await this.calSurgService.createBulkCalSurg(processedDataArray, dataSource);
       
       return newCalSurgs;
     } catch (error: any) {
@@ -69,7 +70,7 @@ export class CalSurgProvider {
    * @param validatedReq - Validated external request data
    * @returns Promise<ICalSurgDoc[] | any>
    */
-  public async createCalSurgFromExternal(validatedReq: Partial<IExternalRow>) {
+  public async createCalSurgFromExternal(validatedReq: Partial<IExternalRow>, dataSource: DataSource) {
     try {
       // Business logic: Build API string based on request parameters
       const apiString = this.buildExternalApiString(validatedReq);
@@ -82,16 +83,16 @@ export class CalSurgProvider {
       }
 
       // Business logic: Process external data and create calSurg records
-      const processedItems = await this.processExternalData(externalData);
+      const processedItems = await this.processExternalData(externalData, dataSource);
       
       // Business logic: Filter out duplicates before bulk creation
-      const uniqueCalSurgs = await this.filterDuplicateCalSurgs(processedItems);
+      const uniqueCalSurgs = await this.filterDuplicateCalSurgs(processedItems, dataSource);
       
       // Business logic: Create bulk calSurgs (only new ones)
       if (uniqueCalSurgs.length === 0) {
         return [];
       }
-      const newCalSurgs = await this.createBulkCalSurg(uniqueCalSurgs);
+      const newCalSurgs = await this.createBulkCalSurg(uniqueCalSurgs, dataSource);
       
       return newCalSurgs;
     } catch (error: any) {
@@ -105,13 +106,13 @@ export class CalSurgProvider {
    * @param calSurgId - The calSurg ID to retrieve
    * @returns Promise<ICalSurgDoc>
    */
-  public async getCalSurgById(calSurgId: string): Promise<ICalSurgDoc> {
+  public async getCalSurgById(calSurgId: string, dataSource: DataSource): Promise<ICalSurgDoc> {
     try {
       // Business logic: Validate ID format if needed
       this.validateObjectId(calSurgId);
       
       // Call service to get calSurg
-      const calSurg = await this.calSurgService.getCalSurgById(calSurgId);
+      const calSurg = await this.calSurgService.getCalSurgById(calSurgId, dataSource);
       
       return calSurg;
     } catch (error: any) {
@@ -124,15 +125,27 @@ export class CalSurgProvider {
    * Gets all calSurg records with populated references
    * @returns Promise<ICalSurgDoc[]>
    */
-  public async getAllCalSurg(): Promise<ICalSurgDoc[]> {
+  public async getAllCalSurg(dataSource: DataSource): Promise<ICalSurgDoc[]> {
     try {
       // Call service to get all calSurgs
-      const calSurgs = await this.calSurgService.getAllCalSurg();
+      const calSurgs = await this.calSurgService.getAllCalSurg(dataSource);
       
       return calSurgs;
     } catch (error: any) {
       // Handle business logic errors
       throw new Error(`Failed to get all calSurgs: ${error.message}`);
+    }
+  }
+
+  /**
+   * Dashboard: calSurg within last 60 days, stripped of formLink and google_uid
+   * @returns Promise<CalendarProcedure[]>
+   */
+  public async getCalSurgDashboard(dataSource: DataSource): Promise<any[]> {
+    try {
+      return await this.calSurgService.getCalSurgDashboard(dataSource);
+    } catch (error: any) {
+      throw new Error(`Failed to get calSurg dashboard: ${error.message}`);
     }
   }
 
@@ -147,36 +160,36 @@ export class CalSurgProvider {
     month?: string;
     year?: string;
     day?: string;
-  }): Promise<ICalSurgDoc[]> {
+  }, dataSource: DataSource): Promise<ICalSurgDoc[]> {
     try {
       // Business logic: Determine which filtering method to use
       if (filters.startDate && filters.endDate) {
         // Date range filtering
         const startDate = new Date(filters.startDate);
         const endDate = new Date(filters.endDate);
-        return await this.calSurgService.getCalSurgByDateRange(startDate, endDate);
+        return await this.calSurgService.getCalSurgByDateRange(startDate, endDate, dataSource);
       }
       
       if (filters.month) {
         // Month filtering (YYYY-MM format)
         const [year, month] = filters.month.split('-').map(Number);
-        return await this.calSurgService.getCalSurgByMonth(year, month);
+        return await this.calSurgService.getCalSurgByMonth(year, month, dataSource);
       }
       
       if (filters.year) {
         // Year filtering - get entire year (January to December)
         const year = parseInt(filters.year);
-        return await this.calSurgService.getCalSurgByYear(year);
+        return await this.calSurgService.getCalSurgByYear(year, dataSource);
       }
       
       if (filters.day) {
         // Day filtering
         const day = new Date(filters.day);
-        return await this.calSurgService.getCalSurgByDay(day);
+        return await this.calSurgService.getCalSurgByDay(day, dataSource);
       }
       
       // No filters provided, return all
-      return await this.calSurgService.getAllCalSurg();
+      return await this.calSurgService.getAllCalSurg(dataSource);
     } catch (error: any) {
       // Handle business logic errors
       throw new Error(`Failed to get calSurg with filters: ${error.message}`);
@@ -224,10 +237,10 @@ export class CalSurgProvider {
    * @param externalData - External data from API
    * @returns Array of processed calSurg items
    */
-  private async processExternalData(externalData: any): Promise<ICalSurg[]> {
+  private async processExternalData(externalData: any, dataSource: DataSource): Promise<ICalSurg[]> {
     // Business logic: Get reference data for mapping
     // Use hospitalService instead of direct Mongoose model (hospital may still be MongoDB)
-    const hospitals: IHospitalDoc[] = await this.hospitalService.getAllHospitals();
+    const hospitals: IHospitalDoc[] = await this.hospitalService.getAllHospitals(dataSource);
     // Handle both MongoDB (_id) and MariaDB (id) formats
     const hospitalsMap = new Map(hospitals.map(h => {
       const hospitalId = (h as any).id || (h as any)._id?.toString() || '';
@@ -235,7 +248,7 @@ export class CalSurgProvider {
     }));
 
     // Use arabProcService instead of direct Mongoose model access
-    const arabicProcs: IArabProcDoc[] = await this.arabProcService.getAllArabProcs();
+    const arabicProcs: IArabProcDoc[] = await this.arabProcService.getAllArabProcs(dataSource);
     const arabicProcsMap = new Map(arabicProcs.map(p => [p.title, p]));
 
     const items: ICalSurg[] = [];
@@ -255,7 +268,9 @@ export class CalSurgProvider {
         const normalizedItem: ICalSurg = {
           timeStamp: this.utilService.stringToDateConverter(rawItem["Timestamp"]),
           patientName: sanPatientName,
-          patientDob: rawItem["Patient DOB"],
+          patientDob: rawItem["Patient DOB"]
+            ? this.utilService.stringToDateConverter(String(rawItem["Patient DOB"]))
+            : this.utilService.stringToDateConverter(rawItem["Timestamp"]), // fallback if DOB missing
           gender: rawItem["Gender"],
           hospital: location.id, // Use UUID directly (handles both MongoDB _id and MariaDB id)
           arabProc: arabicProc.id, // Use UUID directly
@@ -306,7 +321,7 @@ export class CalSurgProvider {
    * @param calSurgs - Array of calSurgs to check
    * @returns Array of unique calSurgs that don't exist yet
    */
-  private async filterDuplicateCalSurgs(calSurgs: ICalSurg[]): Promise<ICalSurg[]> {
+  private async filterDuplicateCalSurgs(calSurgs: ICalSurg[], dataSource: DataSource): Promise<ICalSurg[]> {
     try {
       // Extract all google_uids from the calSurgs array
       const googleUids = calSurgs
@@ -319,7 +334,7 @@ export class CalSurgProvider {
       }
 
       // Find all existing calSurgs with these google_uids in one query
-      const existingCalSurgs = await this.calSurgService.findCalSurgsByGoogleUids(googleUids);
+      const existingCalSurgs = await this.calSurgService.findCalSurgsByGoogleUids(googleUids, dataSource);
       const existingUidsSet = new Set(
         existingCalSurgs
           .map(cs => cs.google_uid)
@@ -348,7 +363,7 @@ export class CalSurgProvider {
    * @param updateData - Partial calSurg data to update
    * @returns Promise<ICalSurgDoc>
    */
-  public async updateCalSurg(id: string, updateData: Partial<ICalSurg>): Promise<ICalSurgDoc> {
+  public async updateCalSurg(id: string, updateData: Partial<ICalSurg>, dataSource: DataSource): Promise<ICalSurgDoc> {
     try {
       // Business logic: Validate ID format
       this.validateObjectId(id);
@@ -360,7 +375,7 @@ export class CalSurgProvider {
       }
 
       // Call service to update calSurg
-      const updatedCalSurg = await this.calSurgService.updateCalSurg(id, processedUpdateData);
+      const updatedCalSurg = await this.calSurgService.updateCalSurg(id, processedUpdateData, dataSource);
 
       return updatedCalSurg;
     } catch (error: any) {
@@ -374,9 +389,9 @@ export class CalSurgProvider {
    * @param id - CalSurg ID to delete
    * @returns Promise<boolean>
    */
-  public async deleteCalSurg(id: string): Promise<boolean> {
+  public async deleteCalSurg(id: string, dataSource: DataSource): Promise<boolean> {
     try {
-      return await this.calSurgService.deleteCalSurg(id);
+      return await this.calSurgService.deleteCalSurg(id, dataSource);
     } catch (error: any) {
       throw new Error(`Failed to delete calSurg: ${error.message}`);
     }

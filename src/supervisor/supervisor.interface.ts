@@ -15,6 +15,16 @@ export interface ISupervisorDoc extends ISupervisor {
   updatedAt: Date;
 }
 
+/** Censored supervisor view: no email, phone, password, or PII beyond what's needed for display. */
+export interface ISupervisorCensoredDoc {
+  id: string;
+  fullName: string;
+  position?: TSupervisorPosition;
+  canValidate?: boolean; // true = validator (can review submissions), false = academic (events only)
+  approved: boolean;
+  role?: TUserRole;
+}
+
 // Input types for create/update operations
 export type ISupervisorInput = ISupervisor;
 export type ISupervisorUpdateInput = Partial<ISupervisor> & { id: string };

@@ -1,24 +1,21 @@
 import { IArabProc, IArabProcDoc } from "./arabProc.interface";
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { ExternalService } from "../externalService/external.service";
 import { IExternalRow } from "./interfaces/IExternalRow.interface";
-import { AppDataSource } from "../config/database.config";
 import { ArabProcEntity } from "./arabProc.mDbSchema";
 import { Repository, Like } from "typeorm";
 
 @injectable()
 export class ArabProcService {
-  private arabProcRepository: Repository<ArabProcEntity>;
-
   constructor(
     @inject(ExternalService) private externalService: ExternalService
-  ) {
-    this.arabProcRepository = AppDataSource.getRepository(ArabProcEntity);
-  }
+  ) {}
 
-  public async getAllArabProcs(): Promise<IArabProcDoc[]> | never {
+  public async getAllArabProcs(dataSource: DataSource): Promise<IArabProcDoc[]> | never {
     try {
-      const allArabProcs = await this.arabProcRepository.find({
+      const arabProcRepository = dataSource.getRepository(ArabProcEntity);
+      const allArabProcs = await arabProcRepository.find({
         order: { createdAt: "DESC" },
       });
       return allArabProcs as unknown as IArabProcDoc[];
@@ -27,10 +24,11 @@ export class ArabProcService {
     }
   }
 
-  public async getArabProcsWithSearch(search?: string): Promise<IArabProcDoc[]> | never {
+  public async getArabProcsWithSearch(search: string | undefined, dataSource: DataSource): Promise<IArabProcDoc[]> | never {
     try {
+      const arabProcRepository = dataSource.getRepository(ArabProcEntity);
       if (search) {
-        const arabProcs = await this.arabProcRepository.find({
+        const arabProcs = await arabProcRepository.find({
           where: [
             { title: Like(`%${search}%`) },
             { numCode: Like(`%${search}%`) },
@@ -39,17 +37,18 @@ export class ArabProcService {
         });
         return arabProcs as unknown as IArabProcDoc[];
       } else {
-        return await this.getAllArabProcs();
+        return await this.getAllArabProcs(dataSource);
       }
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async createArabProc(arabProcData: IArabProc): Promise<IArabProcDoc> | never {
+  public async createArabProc(arabProcData: IArabProc, dataSource: DataSource): Promise<IArabProcDoc> | never {
     try {
-      const newArabProc = this.arabProcRepository.create(arabProcData);
-      const savedArabProc = await this.arabProcRepository.save(newArabProc);
+      const arabProcRepository = dataSource.getRepository(ArabProcEntity);
+      const newArabProc = arabProcRepository.create(arabProcData);
+      const savedArabProc = await arabProcRepository.save(newArabProc);
       return savedArabProc as unknown as IArabProcDoc;
     } catch (err: any) {
       throw new Error(err);
@@ -57,7 +56,8 @@ export class ArabProcService {
   }
 
   public async createArabProcsFromExternal(
-    validatedReq: Partial<IExternalRow>
+    validatedReq: Partial<IExternalRow>,
+    dataSource: DataSource
   ): Promise<IArabProcDoc[]> | never {
     try {
       let apiString;
@@ -84,7 +84,7 @@ export class ArabProcService {
         }
         const newArabProcs = await Promise.all(
           items.map((item) => {
-            return this.createArabProc(item);
+            return this.createArabProc(item, dataSource);
           })
         );
         return newArabProcs;
@@ -96,9 +96,10 @@ export class ArabProcService {
     }
   }
 
-  public async deleteArabProc(id: string): Promise<boolean> | never {
+  public async deleteArabProc(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
-      const result = await this.arabProcRepository.delete(id);
+      const arabProcRepository = dataSource.getRepository(ArabProcEntity);
+      const result = await arabProcRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);

@@ -10,8 +10,9 @@ import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import { UserRole } from "../types/role.types";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
-injectable()
+@injectable()
 export class ProcCptRouter {
   public router: Router;
 
@@ -33,8 +34,9 @@ export class ProcCptRouter {
     // GET endpoint - Get all procedure codes
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSuperAdminOrInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -48,8 +50,9 @@ export class ProcCptRouter {
 
     this.router.post(
       "/postAllFromExternal",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
@@ -69,8 +72,9 @@ export class ProcCptRouter {
 
     this.router.post(
       "/upsert",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       upsertProcCptValidator,
       async (req: Request, res: Response) => {
@@ -90,8 +94,9 @@ export class ProcCptRouter {
 
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteProcCptValidator,
       async (req: Request, res: Response) => {

@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { JournalService } from "./journal.service";
 import { IJournal, IJournalDoc, IJournalInput, IJournalUpdateInput } from "./journal.interface";
 import { UtilService } from "../utils/utils.service";
@@ -13,7 +14,7 @@ export class JournalProvider {
     @inject(ExternalService) private externalService: ExternalService
   ) {}
 
-  public async createJournal(validatedReq: IJournalInput): Promise<IJournalDoc> | never {
+  public async createJournal(validatedReq: IJournalInput, dataSource: DataSource): Promise<IJournalDoc> | never {
     try {
       // Business logic: Process and transform data
       const processedData: IJournal = {
@@ -23,32 +24,32 @@ export class JournalProvider {
       };
 
       // Check for duplicate google_uid
-      await this.checkForDuplicateGoogleUid(processedData.google_uid);
+      await this.checkForDuplicateGoogleUid(processedData.google_uid, dataSource);
 
       // Call service to create journal
-      return await this.journalService.createJournal(processedData);
+      return await this.journalService.createJournal(processedData, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllJournals(): Promise<IJournalDoc[]> | never {
+  public async getAllJournals(dataSource: DataSource): Promise<IJournalDoc[]> | never {
     try {
-      return await this.journalService.getAllJournals();
+      return await this.journalService.getAllJournals(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getJournalById(id: string): Promise<IJournalDoc | null> | never {
+  public async getJournalById(id: string, dataSource: DataSource): Promise<IJournalDoc | null> | never {
     try {
-      return await this.journalService.getJournalById(id);
+      return await this.journalService.getJournalById(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async updateJournal(validatedReq: IJournalUpdateInput): Promise<IJournalDoc | null> | never {
+  public async updateJournal(validatedReq: IJournalUpdateInput, dataSource: DataSource): Promise<IJournalDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;
 
@@ -66,18 +67,18 @@ export class JournalProvider {
       if (updateData.google_uid !== undefined) {
         updateFields.google_uid = updateData.google_uid.trim();
         // Check for duplicate google_uid if it's being updated
-        await this.checkForDuplicateGoogleUid(updateFields.google_uid, id);
+        await this.checkForDuplicateGoogleUid(updateFields.google_uid, dataSource, id);
       }
 
-      return await this.journalService.updateJournal(id, updateFields);
+      return await this.journalService.updateJournal(id, updateFields, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async deleteJournal(id: string): Promise<boolean> | never {
+  public async deleteJournal(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
-      return await this.journalService.deleteJournal(id);
+      return await this.journalService.deleteJournal(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -86,12 +87,13 @@ export class JournalProvider {
   /**
    * Checks for duplicate google_uid
    * @param google_uid - Google UID to check
+   * @param dataSource - DataSource instance
    * @param excludeId - Optional ID to exclude from check (for updates)
    * @throws Error if duplicate found
    */
-  private async checkForDuplicateGoogleUid(google_uid: string, excludeId?: string): Promise<void> {
+  private async checkForDuplicateGoogleUid(google_uid: string, dataSource: DataSource, excludeId?: string): Promise<void> {
     try {
-      const existingJournal = await this.journalService.findByGoogleUid(google_uid, excludeId);
+      const existingJournal = await this.journalService.findByGoogleUid(google_uid, dataSource, excludeId);
       
       if (existingJournal) {
         throw new Error(`Journal with google_uid '${google_uid}' already exists`);
@@ -112,10 +114,12 @@ export class JournalProvider {
   /**
    * Creates journals from external spreadsheet data
    * @param validatedReq - External request with spreadsheet info
+   * @param dataSource - DataSource instance
    * @returns Promise<IJournalDoc[]>
    */
   public async createJournalsFromExternal(
-    validatedReq: Partial<IExternalRow>
+    validatedReq: Partial<IExternalRow>,
+    dataSource: DataSource
   ): Promise<IJournalDoc[]> | never {
     try {
       // Build API string
@@ -132,13 +136,13 @@ export class JournalProvider {
       const processedJournals = await this.processExternalData(externalData);
 
       // Filter out duplicates before bulk creation
-      const uniqueJournals = await this.filterDuplicateJournals(processedJournals);
+      const uniqueJournals = await this.filterDuplicateJournals(processedJournals, dataSource);
 
       // Create bulk journals (only new ones)
       if (uniqueJournals.length === 0) {
         return [];
       }
-      return await this.journalService.createBulkJournals(uniqueJournals);
+      return await this.journalService.createBulkJournals(uniqueJournals, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -228,14 +232,15 @@ export class JournalProvider {
   /**
    * Filters out journals that already exist in the database (by google_uid)
    * @param journals - Array of journals to check
+   * @param dataSource - DataSource instance
    * @returns Array of unique journals that don't exist yet
    */
-  private async filterDuplicateJournals(journals: IJournal[]): Promise<IJournal[]> {
+  private async filterDuplicateJournals(journals: IJournal[], dataSource: DataSource): Promise<IJournal[]> {
     try {
       const uniqueJournals: IJournal[] = [];
 
       for (const journal of journals) {
-        const existingJournal = await this.journalService.findByGoogleUid(journal.google_uid);
+        const existingJournal = await this.journalService.findByGoogleUid(journal.google_uid, dataSource);
         if (!existingJournal) {
           // Only add if it doesn't already exist
           uniqueJournals.push(journal);

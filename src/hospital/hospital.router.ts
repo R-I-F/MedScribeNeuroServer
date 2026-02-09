@@ -9,6 +9,7 @@ import { getHospitalByIdValidator } from "../validators/getHospitalById.validato
 import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, requireCandidate } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class HospitalRouter {
@@ -24,8 +25,9 @@ export class HospitalRouter {
     // Accessible to: superAdmin, instituteAdmin, supervisors, clerks, candidates
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       async (req: Request, res: Response) => {
         try {
@@ -41,8 +43,9 @@ export class HospitalRouter {
     // Accessible to: superAdmin, instituteAdmin, supervisors, clerks, candidates
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       getHospitalByIdValidator,
       async (req: Request, res: Response) => {
@@ -68,8 +71,9 @@ export class HospitalRouter {
     // Accessible to: superAdmin only
     this.router.post(
       "/create",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createHospitalValidator,
       async (req: Request, res: Response) => {
@@ -94,8 +98,9 @@ export class HospitalRouter {
     // Accessible to: superAdmin only
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteHospitalValidator,
       async (req: Request, res: Response) => {

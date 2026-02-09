@@ -38,7 +38,7 @@ export class AuthTokenService {
     console.log(`  Refresh Token: ${refreshExpireTimeInSeconds} seconds`);
   }
 
-  public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string }): Promise<string> {
+  public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string; institutionId?: string }): Promise<string> {
     try {
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
       const userId = user.id || user._id || "";
@@ -46,14 +46,21 @@ export class AuthTokenService {
         throw new Error("User ID is required");
       }
 
+      const payload: any = {
+        email: user.email,
+        role: user.role,
+        id: userId,      // New format (UUID)
+        _id: userId,     // Keep for backward compatibility
+      };
+
+      // Include institutionId if provided (for multi-tenant support)
+      if (user.institutionId) {
+        payload.institutionId = user.institutionId;
+      }
+
       return await new Promise<string>((resolve, reject) => {
         jwt.sign(
-          {
-            email: user.email,
-            role: user.role,
-            id: userId,      // New format (UUID)
-            _id: userId,     // Keep for backward compatibility
-          },
+          payload,
           config.server.token.secret,
           this.signOptions,
           (error, token) => {
@@ -74,7 +81,7 @@ export class AuthTokenService {
   /**
    * Sign a refresh token with longer expiration
    */
-  public async signRefreshToken(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string }): Promise<string> {
+  public async signRefreshToken(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string; institutionId?: string }): Promise<string> {
     try {
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
       const userId = user.id || user._id || "";
@@ -82,15 +89,22 @@ export class AuthTokenService {
         throw new Error("User ID is required");
       }
 
+      const payload: any = {
+        email: user.email,
+        role: user.role,
+        id: userId,      // New format (UUID)
+        _id: userId,     // Keep for backward compatibility
+        type: "refresh",
+      };
+
+      // Include institutionId if provided (for multi-tenant support)
+      if (user.institutionId) {
+        payload.institutionId = user.institutionId;
+      }
+
       return await new Promise<string>((resolve, reject) => {
         jwt.sign(
-          {
-            email: user.email,
-            role: user.role,
-            id: userId,      // New format (UUID)
-            _id: userId,     // Keep for backward compatibility
-            type: "refresh",
-          },
+          payload,
           config.server.refreshToken.secret,
           this.refreshSignOptions,
           (error, token) => {

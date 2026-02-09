@@ -1,5 +1,6 @@
 import bcryptjs from "bcryptjs";
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -10,6 +11,13 @@ import { ICandDoc } from "../cand/cand.interface";
 import { JwtPayload } from "../middleware/authorize.middleware";
 import IAuth, { IRegisterCandPayload } from "./auth.interface";
 import { UserRole } from "../types/role.types";
+import { DataSourceManager } from "../config/datasource.manager";
+import { getInstitutionById } from "../institution/institution.service";
+import { CandidateEntity } from "../cand/cand.mDbSchema";
+import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
+import { SuperAdminEntity } from "../superAdmin/superAdmin.mDbSchema";
+import { InstituteAdminEntity } from "../instituteAdmin/instituteAdmin.mDbSchema";
+import { ClerkEntity } from "../clerk/clerk.mDbSchema";
 
 @injectable()
 export class AuthController {
@@ -29,7 +37,7 @@ export class AuthController {
     };
   }
 
-  public async registerCand(payload: IRegisterCandPayload) {
+  public async registerCand(payload: IRegisterCandPayload, dataSource?: DataSource) {
     const {
       email,
       password,
@@ -39,12 +47,26 @@ export class AuthController {
       nationality,
       rank,
       regDeg,
+      institutionId,
     } = payload;
 
     try {
+      // Validate institution if provided
+      if (institutionId) {
+        const institution = await getInstitutionById(institutionId);
+        if (!institution || !institution.isActive) {
+          throw new Error(`Invalid or inactive institution: ${institutionId}`);
+        }
+      }
+
+      // If DataSource provided, use it; otherwise use default (backward compatibility)
+      const targetDataSource = dataSource || (await import("../config/database.config")).AppDataSource;
+      
       const encPass = await bcryptjs.hash(password, 10);
 
-      const newCand = await this.candService.createCand({
+      // Use DataSource to create candidate in institution's database
+      const candRepository = targetDataSource.getRepository(CandidateEntity);
+      const newCand = candRepository.create({
         email,
         password: encPass,
         fullName,
@@ -55,81 +77,67 @@ export class AuthController {
         rank,
         regDeg,
       });
+      const savedCand = await candRepository.save(newCand);
 
-      return this.sanitizeCandidate(newCand);
+      return this.sanitizeCandidate(savedCand as unknown as ICandDoc);
     } catch (err: any) {
       throw new Error(err?.message ?? "Failed to register candidate");
     }
-    // TODO: Create user in database
   };
   
-  public async login(payload: IAuth & { role?: UserRole }){
-    const { email, password, role } = payload;
+  /**
+   * Candidate and Supervisor login - shared endpoint
+   * REQUIRES institutionId since each institution has its own candidates and supervisors
+   */
+  public async candidateSupervisorLogin(payload: IAuth, dataSource: DataSource) {
+    const { email, password, institutionId } = payload;
     try {
+      // institutionId is REQUIRED
+      if (!institutionId) {
+        throw new Error("institutionId is required for login");
+      }
+
+      // DataSource is REQUIRED (must be provided from router)
+      if (!dataSource) {
+        throw new Error("Institution DataSource is required for login");
+      }
+
+      // Validate institution
+      const institution = await getInstitutionById(institutionId);
+      if (!institution || !institution.isActive) {
+        throw new Error(`Invalid or inactive institution: ${institutionId}`);
+      }
+
+      // Use the provided DataSource (institution-specific)
+      const targetDataSource = dataSource;
+
+      // Helper function to query user by email from DataSource
+      const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
+        const repository = targetDataSource.getRepository(entityClass);
+        return await repository.findOne({ where: { email } });
+      };
+
+      // Try candidate first, then supervisor
       let user: any = null;
       let userRole: UserRole | undefined;
 
-      // Determine which service to use based on role or try all
-      if (role) {
-        switch(role) {
-          case UserRole.CANDIDATE:
-            user = await this.candService.getCandByEmail(email);
-            userRole = UserRole.CANDIDATE;
-            break;
-          case UserRole.SUPERVISOR:
-            user = await this.supervisorService.getSupervisorByEmail(email);
-            userRole = UserRole.SUPERVISOR;
-            break;
-          case UserRole.SUPER_ADMIN:
-            user = await this.superAdminService.getSuperAdminByEmail(email);
-            userRole = UserRole.SUPER_ADMIN;
-            break;
-          case UserRole.INSTITUTE_ADMIN:
-            user = await this.instituteAdminService.getInstituteAdminByEmail(email);
-            userRole = UserRole.INSTITUTE_ADMIN;
-            break;
-          case UserRole.CLERK:
-            user = await this.clerkService.getClerkByEmail(email);
-            userRole = UserRole.CLERK;
-            break;
-          default:
-            throw new Error("Invalid role specified");
-        }
+      user = await findUserByEmail(CandidateEntity, email);
+      if (user) {
+        userRole = UserRole.CANDIDATE;
       } else {
-        // Try all roles (backward compatibility - try candidate first)
-        user = await this.candService.getCandByEmail(email);
+        user = await findUserByEmail(SupervisorEntity, email);
         if (user) {
-          userRole = UserRole.CANDIDATE;
-        } else {
-          user = await this.supervisorService.getSupervisorByEmail(email);
-          if (user) {
-            userRole = UserRole.SUPERVISOR;
-          } else {
-            user = await this.superAdminService.getSuperAdminByEmail(email);
-            if (user) {
-              userRole = UserRole.SUPER_ADMIN;
-            } else {
-            user = await this.instituteAdminService.getInstituteAdminByEmail(email);
-            if (user) {
-              userRole = UserRole.INSTITUTE_ADMIN;
-            } else {
-              user = await this.clerkService.getClerkByEmail(email);
-              if (user) {
-                userRole = UserRole.CLERK;
-              }
-            }
-          }
+          userRole = UserRole.SUPERVISOR;
         }
-      }
       }
 
-      if(!user || !userRole){
-        throw new Error("UnAuthorized");
+      if (!user || !userRole) {
+        throw new Error("Unauthorized: Candidate or Supervisor account not found");
       }
 
       const isMatch = await bcryptjs.compare(password, user.password);
       if (!isMatch) {
-        throw new Error("UnAuthorized: wrong password");
+        throw new Error("Unauthorized: Invalid credentials");
       }
 
       // Extract id from user document (support both UUID 'id' and ObjectId '_id' for backward compatibility)
@@ -138,21 +146,17 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
-      const accessToken = await this.authTokenService.sign({ 
+      // Include institutionId in token (required - always included)
+      const tokenPayload: any = {
         email: user.email,
         role: userRole,
         id: userId,  // Use 'id' for new tokens (UUID)
-        _id: userId  // Keep '_id' for backward compatibility with existing tokens
-      });
+        _id: userId,  // Keep '_id' for backward compatibility with existing tokens
+        institutionId: institutionId  // Always included (required)
+      };
 
-      const refreshToken = await this.authTokenService.signRefreshToken({
-        email: user.email,
-        role: userRole,
-        id: userId,  // Use 'id' for new tokens (UUID)
-        _id: userId  // Keep '_id' for backward compatibility with existing tokens
-      });
-
-      // Log successful login (logging happens in router to access request info)
+      const accessToken = await this.authTokenService.sign(tokenPayload);
+      const refreshToken = await this.authTokenService.signRefreshToken(tokenPayload);
 
       return {
         token: accessToken,
@@ -160,22 +164,338 @@ export class AuthController {
         user: this.sanitizeUser(user, userRole),
         role: userRole
       };
-    }
-    catch (err: any) {
-      // Log failed login attempt (detailed logging happens in router)
+    } catch (err: any) {
       const errorMessage = err?.message ?? "Failed to login";
       throw new Error(errorMessage);
     }
-  };
+  }
+
+  /**
+   * Super Admin login - isolated endpoint
+   * REQUIRES institutionId since each institution has its own super admins
+   */
+  public async superAdminLogin(payload: IAuth, dataSource: DataSource) {
+    const { email, password, institutionId } = payload;
+    try {
+      // institutionId is REQUIRED
+      if (!institutionId) {
+        throw new Error("institutionId is required for super admin login");
+      }
+
+      // DataSource is REQUIRED (must be provided from router)
+      if (!dataSource) {
+        throw new Error("Institution DataSource is required for super admin login");
+      }
+
+      // Validate institution
+      const institution = await getInstitutionById(institutionId);
+      if (!institution || !institution.isActive) {
+        throw new Error(`Invalid or inactive institution: ${institutionId}`);
+      }
+
+      // Use the provided DataSource (institution-specific)
+      const targetDataSource = dataSource;
+
+      // Helper function to query user by email from DataSource
+      const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
+        const repository = targetDataSource.getRepository(entityClass);
+        return await repository.findOne({ where: { email } });
+      };
+
+      // Query super admin from institution-specific database
+      const user = await findUserByEmail(SuperAdminEntity, email);
+
+      if (!user) {
+        throw new Error("Unauthorized: Super Admin account not found");
+      }
+
+      const isMatch = await bcryptjs.compare(password, user.password);
+      if (!isMatch) {
+        throw new Error("Unauthorized: Invalid credentials");
+      }
+
+      // Extract id from user document (support both UUID 'id' and ObjectId '_id' for backward compatibility)
+      const userId = user.id || (user._id ? user._id.toString() : null);
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+
+      // Include institutionId in token (required - always included)
+      const tokenPayload: any = {
+        email: user.email,
+        role: UserRole.SUPER_ADMIN,
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId,  // Keep '_id' for backward compatibility with existing tokens
+        institutionId: institutionId  // Always included (required)
+      };
+
+      const accessToken = await this.authTokenService.sign(tokenPayload);
+      const refreshToken = await this.authTokenService.signRefreshToken(tokenPayload);
+
+      return {
+        token: accessToken,
+        refreshToken: refreshToken,
+        user: this.sanitizeUser(user, UserRole.SUPER_ADMIN),
+        role: UserRole.SUPER_ADMIN
+      };
+    } catch (err: any) {
+      const errorMessage = err?.message ?? "Failed to login";
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Institute Admin login - isolated endpoint
+   * REQUIRES institutionId since each institution has its own institute admins
+   */
+  public async instituteAdminLogin(payload: IAuth, dataSource: DataSource) {
+    const { email, password, institutionId } = payload;
+    try {
+      // institutionId is REQUIRED
+      if (!institutionId) {
+        throw new Error("institutionId is required for institute admin login");
+      }
+
+      // DataSource is REQUIRED (must be provided from router)
+      if (!dataSource) {
+        throw new Error("Institution DataSource is required for institute admin login");
+      }
+
+      // Validate institution
+      const institution = await getInstitutionById(institutionId);
+      if (!institution || !institution.isActive) {
+        throw new Error(`Invalid or inactive institution: ${institutionId}`);
+      }
+
+      // Use the provided DataSource (institution-specific)
+      const targetDataSource = dataSource;
+
+      // Helper function to query user by email from DataSource
+      const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
+        const repository = targetDataSource.getRepository(entityClass);
+        return await repository.findOne({ where: { email } });
+      };
+
+      // Query institute admin from institution-specific database
+      const user = await findUserByEmail(InstituteAdminEntity, email);
+
+      if (!user) {
+        throw new Error("Unauthorized: Institute Admin account not found");
+      }
+
+      const isMatch = await bcryptjs.compare(password, user.password);
+      if (!isMatch) {
+        throw new Error("Unauthorized: Invalid credentials");
+      }
+
+      // Extract id from user document (support both UUID 'id' and ObjectId '_id' for backward compatibility)
+      const userId = user.id || (user._id ? user._id.toString() : null);
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+
+      // Include institutionId in token (required - always included)
+      const tokenPayload: any = {
+        email: user.email,
+        role: UserRole.INSTITUTE_ADMIN,
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId,  // Keep '_id' for backward compatibility with existing tokens
+        institutionId: institutionId  // Always included (required)
+      };
+
+      const accessToken = await this.authTokenService.sign(tokenPayload);
+      const refreshToken = await this.authTokenService.signRefreshToken(tokenPayload);
+
+      return {
+        token: accessToken,
+        refreshToken: refreshToken,
+        user: this.sanitizeUser(user, UserRole.INSTITUTE_ADMIN),
+        role: UserRole.INSTITUTE_ADMIN
+      };
+    } catch (err: any) {
+      const errorMessage = err?.message ?? "Failed to login";
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Admin login - handles only superAdmin and instituteAdmin
+   * This is a separate endpoint from regular user login for security purposes
+   * REQUIRES institutionId since each institution has its own admins
+   * @deprecated Use superAdminLogin or instituteAdminLogin instead
+   */
+  public async adminLogin(payload: IAuth, dataSource: DataSource) {
+    const { email, password, institutionId } = payload;
+    try {
+      // institutionId is REQUIRED for admin login (each institution has its own admins)
+      if (!institutionId) {
+        throw new Error("institutionId is required for admin login");
+      }
+
+      // DataSource is REQUIRED (must be provided from router)
+      if (!dataSource) {
+        throw new Error("Institution DataSource is required for admin login");
+      }
+
+      // Validate institution
+      const institution = await getInstitutionById(institutionId);
+      if (!institution || !institution.isActive) {
+        throw new Error(`Invalid or inactive institution: ${institutionId}`);
+      }
+
+      // Use the provided DataSource (institution-specific)
+      const targetDataSource = dataSource;
+
+      // Helper function to query user by email from DataSource
+      const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
+        const repository = targetDataSource.getRepository(entityClass);
+        return await repository.findOne({ where: { email } });
+      };
+
+      // Try superAdmin first, then instituteAdmin
+      let user: any = null;
+      let userRole: UserRole | undefined;
+
+      user = await findUserByEmail(SuperAdminEntity, email);
+      if (user) {
+        userRole = UserRole.SUPER_ADMIN;
+      } else {
+        user = await findUserByEmail(InstituteAdminEntity, email);
+        if (user) {
+          userRole = UserRole.INSTITUTE_ADMIN;
+        }
+      }
+
+      if (!user || !userRole) {
+        throw new Error("Unauthorized: Admin account not found");
+      }
+
+      const isMatch = await bcryptjs.compare(password, user.password);
+      if (!isMatch) {
+        throw new Error("Unauthorized: Invalid credentials");
+      }
+
+      // Extract id from user document (support both UUID 'id' and ObjectId '_id' for backward compatibility)
+      const userId = user.id || (user._id ? user._id.toString() : null);
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+
+      // Include institutionId in token (required for admin login - always included)
+      const tokenPayload: any = {
+        email: user.email,
+        role: userRole,
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId,  // Keep '_id' for backward compatibility with existing tokens
+        institutionId: institutionId  // Always included for admin login (required)
+      };
+
+      const accessToken = await this.authTokenService.sign(tokenPayload);
+      const refreshToken = await this.authTokenService.signRefreshToken(tokenPayload);
+
+      return {
+        token: accessToken,
+        refreshToken: refreshToken,
+        user: this.sanitizeUser(user, userRole),
+        role: userRole
+      };
+    } catch (err: any) {
+      const errorMessage = err?.message ?? "Failed to login";
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Clerk login - handles only clerks
+   * This is a separate endpoint from regular user login for security purposes
+   * REQUIRES institutionId since each institution has its own clerks
+   */
+  public async clerkLogin(payload: IAuth, dataSource: DataSource) {
+    const { email, password, institutionId } = payload;
+    try {
+      // institutionId is REQUIRED for clerk login (each institution has its own clerks)
+      if (!institutionId) {
+        throw new Error("institutionId is required for clerk login");
+      }
+
+      // DataSource is REQUIRED (must be provided from router)
+      if (!dataSource) {
+        throw new Error("Institution DataSource is required for clerk login");
+      }
+
+      // Validate institution
+      const institution = await getInstitutionById(institutionId);
+      if (!institution || !institution.isActive) {
+        throw new Error(`Invalid or inactive institution: ${institutionId}`);
+      }
+
+      // Use the provided DataSource (institution-specific)
+      const targetDataSource = dataSource;
+
+      // Helper function to query user by email from DataSource
+      const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
+        const repository = targetDataSource.getRepository(entityClass);
+        return await repository.findOne({ where: { email } });
+      };
+
+      // Query clerk from institution-specific database
+      const user = await findUserByEmail(ClerkEntity, email);
+
+      if (!user) {
+        throw new Error("Unauthorized: Clerk account not found");
+      }
+
+      const isMatch = await bcryptjs.compare(password, user.password);
+      if (!isMatch) {
+        throw new Error("Unauthorized: Invalid credentials");
+      }
+
+      // Extract id from user document (support both UUID 'id' and ObjectId '_id' for backward compatibility)
+      const userId = user.id || (user._id ? user._id.toString() : null);
+      if (!userId) {
+        throw new Error("User ID not found");
+      }
+
+      // Include institutionId in token (required for clerk login - always included)
+      const tokenPayload: any = {
+        email: user.email,
+        role: UserRole.CLERK,
+        id: userId,  // Use 'id' for new tokens (UUID)
+        _id: userId,  // Keep '_id' for backward compatibility with existing tokens
+        institutionId: institutionId  // Always included for clerk login (required)
+      };
+
+      const accessToken = await this.authTokenService.sign(tokenPayload);
+      const refreshToken = await this.authTokenService.signRefreshToken(tokenPayload);
+
+      return {
+        token: accessToken,
+        refreshToken: refreshToken,
+        user: this.sanitizeUser(user, UserRole.CLERK),
+        role: UserRole.CLERK
+      };
+    } catch (err: any) {
+      const errorMessage = err?.message ?? "Failed to login";
+      throw new Error(errorMessage);
+    }
+  }
   
   public async getAllUsers(){};
 
-  public async resetCandidatePasswords() {
-    const defaultPassword = "MEDscrobe01$";
+  public async resetCandidatePasswords(req: any, res: any) {
+    const defaultPassword = process.env.BASE_CAND_PASSWORD;
+    if (!defaultPassword) {
+      throw new Error("BASE_CAND_PASSWORD environment variable is not set");
+    }
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       const hashedPassword = await bcryptjs.hash(defaultPassword, 10);
       const modifiedCount = await this.candService.resetAllCandidatePasswords(
-        hashedPassword
+        hashedPassword,
+        dataSource
       );
       return {
         modifiedCount,
@@ -192,28 +512,30 @@ export class AuthController {
   public async refreshToken(refreshTokenPayload: any) {
     try {
       // Extract user info from refresh token payload (support both 'id' and '_id')
-      const { email, role, id, _id } = refreshTokenPayload;
+      const { email, role, id, _id, institutionId } = refreshTokenPayload;
       const userId = id || _id;
 
       if (!email || !role || !userId) {
         throw new Error("Invalid refresh token payload");
       }
 
-      // Generate new access token
-      const newAccessToken = await this.authTokenService.sign({
+      const tokenPayload: any = {
         email,
         role: role as UserRole,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId  // Keep '_id' for backward compatibility
-      });
+      };
+
+      // Preserve institutionId if present
+      if (institutionId) {
+        tokenPayload.institutionId = institutionId;
+      }
+
+      // Generate new access token
+      const newAccessToken = await this.authTokenService.sign(tokenPayload);
 
       // Optionally generate new refresh token (token rotation)
-      const newRefreshToken = await this.authTokenService.signRefreshToken({
-        email,
-        role: role as UserRole,
-        id: userId,  // Use 'id' for new tokens (UUID)
-        _id: userId  // Keep '_id' for backward compatibility
-      });
+      const newRefreshToken = await this.authTokenService.signRefreshToken(tokenPayload);
 
       return {
         token: newAccessToken,
@@ -240,10 +562,10 @@ export class AuthController {
   }
 
   private sanitizeUser(user: any, role: UserRole) {
-    const userObject = typeof user.toObject === "function" 
-      ? user.toObject() 
+    const userObject = typeof user.toObject === "function"
+      ? user.toObject()
       : user;
-    const { password, __v, ...rest } = userObject;
+    const { password, __v, google_uid, createdAt, updatedAt, ...rest } = userObject;
     // Ensure 'id' is present (convert _id to id if needed for backward compatibility)
     if (rest._id && !rest.id) {
       rest.id = typeof rest._id === "string" ? rest._id : rest._id.toString();

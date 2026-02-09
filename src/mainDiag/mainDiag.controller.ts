@@ -16,7 +16,11 @@ export class MainDiagController {
   ): Promise<IMainDiagDoc> | never {
     const validatedReq = matchedData(req) as IMainDiagInput;
     try {
-      return await this.mainDiagService.createMainDiag(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.mainDiagService.createMainDiag(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -27,7 +31,11 @@ export class MainDiagController {
     res: Response
   ): Promise<IMainDiagDoc[]> | never {
     try {
-      return await this.mainDiagService.getAllMainDiags();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.mainDiagService.getAllMainDiags(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -39,7 +47,11 @@ export class MainDiagController {
   ): Promise<IMainDiagDoc | null> | never {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      return await this.mainDiagService.getMainDiagById(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.mainDiagService.getMainDiagById(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -53,7 +65,11 @@ export class MainDiagController {
     // Merge id from params into validatedReq
     validatedReq.id = req.params.id;
     try {
-      return await this.mainDiagService.updateMainDiag(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.mainDiagService.updateMainDiag(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -65,7 +81,11 @@ export class MainDiagController {
   ): Promise<boolean> | never {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      return await this.mainDiagService.deleteMainDiag(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.mainDiagService.deleteMainDiag(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

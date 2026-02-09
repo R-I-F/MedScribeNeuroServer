@@ -1,52 +1,53 @@
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { IEvent, IEventDoc, IEventAttendance } from "./event.interface";
-import { AppDataSource } from "../config/database.config";
 import { EventEntity } from "./event.mDbSchema";
 import { EventAttendanceEntity } from "./eventAttendance.mDbSchema";
-import { Repository, In } from "typeorm";
+import { Repository, In, MoreThanOrEqual } from "typeorm";
+import { CandService } from "../cand/cand.service";
+import { SupervisorService } from "../supervisor/supervisor.service";
+
+export interface IAttendanceWithEvent {
+  att: EventAttendanceEntity;
+  event: EventEntity;
+}
 
 @injectable()
 export class EventService {
-  private eventRepository: Repository<EventEntity>;
-  private attendanceRepository: Repository<EventAttendanceEntity>;
   private uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  constructor() {
-    this.eventRepository = AppDataSource.getRepository(EventEntity);
-    this.attendanceRepository = AppDataSource.getRepository(EventAttendanceEntity);
-    // Note: SupervisorService and CandService are not currently needed for presenter population
-    // Presenter is populated manually in populatePresenter method
-  }
+  constructor(
+    @inject(CandService) private candService: CandService,
+    @inject(SupervisorService) private supervisorService: SupervisorService
+  ) {}
 
   /**
    * Populates the presenter field based on event type
-   * - For lecture and conf: populates from Supervisor
-   * - For journal: populates from Candidate
+   * - For lecture and conf: presenter is Supervisor (id, name, position)
+   * - For journal: presenter is Candidate (id, name, rank)
    */
-  private async populatePresenter(event: EventEntity | EventEntity[]): Promise<any> {
+  private async populatePresenter(event: EventEntity | EventEntity[], dataSource: DataSource): Promise<any> {
     if (Array.isArray(event)) {
-      return await Promise.all(event.map(e => this.populatePresenter(e)));
+      return await Promise.all(event.map(e => this.populatePresenter(e, dataSource)));
     }
 
     const eventDoc = event as any;
-    
-    // Populate presenter based on type
+
     if (event.presenterId) {
       try {
         if (event.type === "lecture" || event.type === "conf") {
-          // For lecture/conf: presenter is a Supervisor
-          // Note: We'll need to inject SupervisorService to populate this
-          // For now, we'll just set the presenterId
-          eventDoc.presenter = { id: event.presenterId };
+          const supervisor = await this.supervisorService.getSupervisorById({ id: event.presenterId }, dataSource);
+          eventDoc.presenter = supervisor
+            ? { id: event.presenterId, name: (supervisor as any).fullName ?? "—", position: (supervisor as any).position }
+            : { id: event.presenterId, name: "—", position: undefined };
         } else if (event.type === "journal") {
-          // For journal: presenter is a Candidate
-          // Note: We'll need to inject CandService to populate this
-          // For now, we'll just set the presenterId
-          eventDoc.presenter = { id: event.presenterId };
+          const candidate = await this.candService.getCandById(event.presenterId, dataSource);
+          eventDoc.presenter = candidate
+            ? { id: event.presenterId, name: (candidate as any).fullName ?? "—", rank: (candidate as any).rank }
+            : { id: event.presenterId, name: "—", rank: undefined };
         }
       } catch (err) {
-        // If population fails, just keep the ID
-        eventDoc.presenter = { id: event.presenterId };
+        eventDoc.presenter = { id: event.presenterId, name: "—", rank: undefined, position: undefined };
       }
     }
 
@@ -56,8 +57,9 @@ export class EventService {
   /**
    * Populates attendance records for an event
    */
-  private async populateAttendance(eventId: string): Promise<IEventAttendance[]> {
-    const attendanceRecords = await this.attendanceRepository.find({
+  private async populateAttendance(eventId: string, dataSource: DataSource): Promise<IEventAttendance[]> {
+    const attendanceRepository = dataSource.getRepository(EventAttendanceEntity);
+    const attendanceRecords = await attendanceRepository.find({
       where: { eventId },
       relations: ["candidate"],
       order: { createdAt: "ASC" },
@@ -77,16 +79,18 @@ export class EventService {
     }));
   }
 
-  public async createEvent(eventData: IEvent): Promise<IEventDoc> | never {
+  public async createEvent(eventData: IEvent, dataSource: DataSource): Promise<IEventDoc> | never {
     try {
-      const newEvent = this.eventRepository.create(eventData);
-      const savedEvent = await this.eventRepository.save(newEvent);
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const attendanceRepository = dataSource.getRepository(EventAttendanceEntity);
+      const newEvent = eventRepository.create(eventData);
+      const savedEvent = await eventRepository.save(newEvent);
 
       // If attendance was provided, create attendance records
       if ((eventData as any).attendance && Array.isArray((eventData as any).attendance)) {
         const attendanceArray = (eventData as any).attendance as IEventAttendance[];
         for (const att of attendanceArray) {
-          const attendanceRecord = this.attendanceRepository.create({
+          const attendanceRecord = attendanceRepository.create({
             eventId: savedEvent.id,
             candidateId: att.candidateId,
             addedBy: att.addedBy,
@@ -96,18 +100,18 @@ export class EventService {
             flaggedAt: att.flaggedAt || undefined,
             points: att.points || 1,
           });
-          await this.attendanceRepository.save(attendanceRecord);
+          await attendanceRepository.save(attendanceRecord);
         }
       }
 
       // Update status if attendance was provided
       if ((eventData as any).attendance && Array.isArray((eventData as any).attendance) && (eventData as any).attendance.length > 0) {
-        await this.eventRepository.update(savedEvent.id, { status: "held" });
+        await eventRepository.update(savedEvent.id, { status: "held" });
         savedEvent.status = "held";
       }
 
       // Load relations and populate
-      const eventWithRelations = await this.eventRepository.findOne({
+      const eventWithRelations = await eventRepository.findOne({
         where: { id: savedEvent.id },
         relations: ["lecture", "journal", "conf"],
       });
@@ -116,8 +120,8 @@ export class EventService {
         throw new Error("Failed to load created event");
       }
 
-      const populated = await this.populatePresenter(eventWithRelations);
-      const attendance = await this.populateAttendance(savedEvent.id);
+      const populated = await this.populatePresenter(eventWithRelations, dataSource);
+      const attendance = await this.populateAttendance(savedEvent.id, dataSource);
 
       return {
         ...populated,
@@ -128,17 +132,18 @@ export class EventService {
     }
   }
 
-  public async getAllEvents(): Promise<IEventDoc[]> | never {
+  public async getAllEvents(dataSource: DataSource): Promise<IEventDoc[]> | never {
     try {
-      const events = await this.eventRepository.find({
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const events = await eventRepository.find({
         relations: ["lecture", "journal", "conf"],
         order: { createdAt: "DESC" },
       });
 
       const populatedEvents = await Promise.all(
         events.map(async (event) => {
-          const populated = await this.populatePresenter(event);
-          const attendance = await this.populateAttendance(event.id);
+          const populated = await this.populatePresenter(event, dataSource);
+          const attendance = await this.populateAttendance(event.id, dataSource);
           return {
             ...populated,
             attendance,
@@ -152,14 +157,106 @@ export class EventService {
     }
   }
 
-  public async getEventById(id: string): Promise<IEventDoc | null> | never {
+  /**
+   * Returns all events where the given supervisor ID was the presenter.
+   * Includes lecture, journal, conf relations and aggregated attendance for each event.
+   */
+  public async getEventsByPresenter(supervisorId: string, dataSource: DataSource): Promise<any[]> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
+      if (!this.uuidRegex.test(supervisorId)) {
+        throw new Error("Invalid supervisor ID format");
+      }
+
+      const events = await eventRepository.find({
+        where: { presenterId: supervisorId },
+        relations: ["lecture", "journal", "conf"],
+        order: { dateTime: "ASC" },
+      });
+
+      const populatedEvents = await Promise.all(
+        events.map(async (event) => {
+          const populated = await this.populatePresenter(event, dataSource);
+          const attendance = await this.populateAttendance(event.id, dataSource);
+          const { createdAt, updatedAt, ...rest } = populated as any;
+          const item: any = {
+            ...rest,
+            _id: rest.id ?? rest._id,
+            lecture: rest.lecture ? { _id: rest.lecture.id, lectureTitle: rest.lecture.lectureTitle } : undefined,
+            journal: rest.journal ? { _id: rest.journal.id, journalTitle: rest.journal.journalTitle } : undefined,
+            conf: rest.conf ? { _id: rest.conf.id, confTitle: rest.conf.confTitle } : undefined,
+            presenter: rest.presenter ? { _id: rest.presenter.id ?? rest.presenterId, fullName: rest.presenter.fullName ?? rest.presenter.name } : undefined,
+            attendance: (attendance || []).map((att: any) => ({
+              candidate: att.candidate ? { _id: att.candidate.id ?? att.candidate._id, fullName: att.candidate.fullName } : undefined,
+              flagged: att.flagged,
+              points: att.points,
+              createdAt: att.createdAt,
+            })),
+          };
+          return item;
+        })
+      );
+
+      return populatedEvents;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  /**
+   * Dashboard: events from last 30 days through all future, stripped of createdAt and updatedAt
+   */
+  public async getEventsDashboard(dataSource: DataSource): Promise<any[]> | never {
+    try {
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+      cutoff.setHours(0, 0, 0, 0);
+
+      const events = await eventRepository.find({
+        where: { dateTime: MoreThanOrEqual(cutoff) },
+        relations: ["lecture", "journal", "conf"],
+        order: { dateTime: "ASC" },
+      });
+
+      const populatedEvents = await Promise.all(
+        events.map(async (event) => {
+          const populated = await this.populatePresenter(event, dataSource);
+          const attendance = await this.populateAttendance(event.id, dataSource);
+          const { createdAt, updatedAt, ...rest } = populated as any;
+          const item: any = {
+            ...rest,
+            _id: rest.id ?? rest._id,
+            lecture: rest.lecture ? { _id: rest.lecture.id, lectureTitle: rest.lecture.lectureTitle } : undefined,
+            journal: rest.journal ? { _id: rest.journal.id, journalTitle: rest.journal.journalTitle } : undefined,
+            conf: rest.conf ? { _id: rest.conf.id, confTitle: rest.conf.confTitle } : undefined,
+            presenter: rest.presenter ? { _id: rest.presenter.id ?? rest.presenterId, fullName: rest.presenter.fullName ?? rest.presenter.name } : undefined,
+            attendance: (attendance || []).map((att: any) => ({
+              candidate: att.candidate ? { _id: att.candidate.id ?? att.candidate._id, fullName: att.candidate.fullName } : undefined,
+              flagged: att.flagged,
+              points: att.points,
+              createdAt: att.createdAt,
+            })),
+          };
+          return item;
+        })
+      );
+
+      return populatedEvents;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getEventById(id: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
+    try {
+      const eventRepository = dataSource.getRepository(EventEntity);
       // Validate UUID format
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid event ID format");
       }
 
-      const event = await this.eventRepository.findOne({
+      const event = await eventRepository.findOne({
         where: { id },
         relations: ["lecture", "journal", "conf"],
       });
@@ -168,8 +265,8 @@ export class EventService {
         return null;
       }
 
-      const populated = await this.populatePresenter(event);
-      const attendance = await this.populateAttendance(id);
+      const populated = await this.populatePresenter(event, dataSource);
+      const attendance = await this.populateAttendance(id, dataSource);
 
       return {
         ...populated,
@@ -180,8 +277,10 @@ export class EventService {
     }
   }
 
-  public async updateEvent(id: string, updateData: Partial<IEvent>): Promise<IEventDoc | null> | never {
+  public async updateEvent(id: string, updateData: Partial<IEvent>, dataSource: DataSource): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const attendanceRepository = dataSource.getRepository(EventAttendanceEntity);
       // Validate UUID format
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid event ID format");
@@ -192,11 +291,11 @@ export class EventService {
         const attendanceArray = (updateData as any).attendance as IEventAttendance[];
         
         // Delete all existing attendance
-        await this.attendanceRepository.delete({ eventId: id });
+        await attendanceRepository.delete({ eventId: id });
         
         // Create new attendance records
         for (const att of attendanceArray) {
-          const attendanceRecord = this.attendanceRepository.create({
+          const attendanceRecord = attendanceRepository.create({
             eventId: id,
             candidateId: att.candidateId,
             addedBy: att.addedBy,
@@ -206,20 +305,14 @@ export class EventService {
             flaggedAt: att.flaggedAt || undefined,
             points: att.points || 1,
           });
-          await this.attendanceRepository.save(attendanceRecord);
+          await attendanceRepository.save(attendanceRecord);
         }
 
-        // Update status based on attendance
+        // Update status based on attendance: set to "held" when there are attendees
         if (attendanceArray.length > 0) {
           updateData.status = "held";
         } else {
-          // Check if event date has passed
-          const currentEvent = await this.eventRepository.findOne({ where: { id } });
-          if (currentEvent && currentEvent.dateTime < new Date()) {
-            updateData.status = "canceled";
-          } else {
-            updateData.status = "booked";
-          }
+          updateData.status = "booked";
         }
 
         // Remove attendance from updateData to avoid conflicts
@@ -227,10 +320,10 @@ export class EventService {
       }
 
       // Update event fields
-      await this.eventRepository.update(id, updateData);
+      await eventRepository.update(id, updateData);
 
       // Load updated event with relations
-      const updatedEvent = await this.eventRepository.findOne({
+      const updatedEvent = await eventRepository.findOne({
         where: { id },
         relations: ["lecture", "journal", "conf"],
       });
@@ -239,8 +332,8 @@ export class EventService {
         return null;
       }
 
-      const populated = await this.populatePresenter(updatedEvent);
-      const attendance = await this.populateAttendance(id);
+      const populated = await this.populatePresenter(updatedEvent, dataSource);
+      const attendance = await this.populateAttendance(id, dataSource);
 
       return {
         ...populated,
@@ -251,15 +344,16 @@ export class EventService {
     }
   }
 
-  public async deleteEvent(id: string): Promise<boolean> | never {
+  public async deleteEvent(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
       // Validate UUID format
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid event ID format");
       }
 
       // Attendance will be deleted automatically via CASCADE
-      const result = await this.eventRepository.delete(id);
+      const result = await eventRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
@@ -273,21 +367,24 @@ export class EventService {
     eventId: string,
     candidateId: string,
     addedBy: string,
-    addedByRole: "instituteAdmin" | "supervisor" | "candidate"
+    addedByRole: "instituteAdmin" | "supervisor" | "candidate",
+    dataSource: DataSource
   ): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const attendanceRepository = dataSource.getRepository(EventAttendanceEntity);
       // Validate UUID formats
       if (!this.uuidRegex.test(eventId) || !this.uuidRegex.test(candidateId) || !this.uuidRegex.test(addedBy)) {
         throw new Error("Invalid event, candidate, or user ID format");
       }
 
-      const event = await this.eventRepository.findOne({ where: { id: eventId } });
+      const event = await eventRepository.findOne({ where: { id: eventId } });
       if (!event) {
         throw new Error("Event not found");
       }
 
       // Check if candidate is already in attendance
-      const existingAttendance = await this.attendanceRepository.findOne({
+      const existingAttendance = await attendanceRepository.findOne({
         where: { eventId, candidateId },
       });
       if (existingAttendance) {
@@ -295,7 +392,7 @@ export class EventService {
       }
 
       // Create new attendance record
-      await this.attendanceRepository.save({
+      await attendanceRepository.save({
         eventId,
         candidateId,
         addedBy,
@@ -305,14 +402,14 @@ export class EventService {
       });
 
       // Update status to "held" if event has attendees
-      const attendanceCount = await this.attendanceRepository.count({ where: { eventId } });
+      const attendanceCount = await attendanceRepository.count({ where: { eventId } });
       if (attendanceCount > 0) {
-        await this.eventRepository.update(eventId, { status: "held" });
+        await eventRepository.update(eventId, { status: "held" });
         event.status = "held";
       }
 
       // Load event with relations
-      const eventWithRelations = await this.eventRepository.findOne({
+      const eventWithRelations = await eventRepository.findOne({
         where: { id: eventId },
         relations: ["lecture", "journal", "conf"],
       });
@@ -321,8 +418,8 @@ export class EventService {
         throw new Error("Failed to load updated event");
       }
 
-      const populated = await this.populatePresenter(eventWithRelations);
-      const attendance = await this.populateAttendance(eventId);
+      const populated = await this.populatePresenter(eventWithRelations, dataSource);
+      const attendance = await this.populateAttendance(eventId, dataSource);
 
       return {
         ...populated,
@@ -336,36 +433,32 @@ export class EventService {
   /**
    * Remove candidate from event attendance
    */
-  public async removeAttendance(eventId: string, candidateId: string): Promise<IEventDoc | null> | never {
+  public async removeAttendance(eventId: string, candidateId: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const attendanceRepository = dataSource.getRepository(EventAttendanceEntity);
       // Validate UUID formats
       if (!this.uuidRegex.test(eventId) || !this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid event or candidate ID format");
       }
 
-      const event = await this.eventRepository.findOne({ where: { id: eventId } });
+      const event = await eventRepository.findOne({ where: { id: eventId } });
       if (!event) {
         throw new Error("Event not found");
       }
 
       // Delete attendance record
-      await this.attendanceRepository.delete({ eventId, candidateId });
+      await attendanceRepository.delete({ eventId, candidateId });
 
-      // Update status based on attendance
-      const attendanceCount = await this.attendanceRepository.count({ where: { eventId } });
+      // Update status based on attendance: when no attendees left, set to "booked" (do not auto-set "canceled")
+      const attendanceCount = await attendanceRepository.count({ where: { eventId } });
       if (attendanceCount === 0) {
-        // If no attendees and event date has passed, set to "canceled"
-        if (event.dateTime < new Date()) {
-          await this.eventRepository.update(eventId, { status: "canceled" });
-          event.status = "canceled";
-        } else {
-          await this.eventRepository.update(eventId, { status: "booked" });
-          event.status = "booked";
-        }
+        await eventRepository.update(eventId, { status: "booked" });
+        event.status = "booked";
       }
 
       // Load event with relations
-      const eventWithRelations = await this.eventRepository.findOne({
+      const eventWithRelations = await eventRepository.findOne({
         where: { id: eventId },
         relations: ["lecture", "journal", "conf"],
       });
@@ -374,8 +467,8 @@ export class EventService {
         throw new Error("Failed to load updated event");
       }
 
-      const populated = await this.populatePresenter(eventWithRelations);
-      const attendance = await this.populateAttendance(eventId);
+      const populated = await this.populatePresenter(eventWithRelations, dataSource);
+      const attendance = await this.populateAttendance(eventId, dataSource);
 
       return {
         ...populated,
@@ -389,19 +482,21 @@ export class EventService {
   /**
    * Flag a candidate in attendance (sets points to -2)
    */
-  public async flagAttendance(eventId: string, candidateId: string, flaggedBy: string): Promise<IEventDoc | null> | never {
+  public async flagAttendance(eventId: string, candidateId: string, flaggedBy: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const attendanceRepository = dataSource.getRepository(EventAttendanceEntity);
       // Validate UUID formats
       if (!this.uuidRegex.test(eventId) || !this.uuidRegex.test(candidateId) || !this.uuidRegex.test(flaggedBy)) {
         throw new Error("Invalid event, candidate, or user ID format");
       }
 
-      const event = await this.eventRepository.findOne({ where: { id: eventId } });
+      const event = await eventRepository.findOne({ where: { id: eventId } });
       if (!event) {
         throw new Error("Event not found");
       }
 
-      const attendance = await this.attendanceRepository.findOne({
+      const attendance = await attendanceRepository.findOne({
         where: { eventId, candidateId },
       });
       if (!attendance) {
@@ -409,7 +504,7 @@ export class EventService {
       }
 
       // Flag the candidate
-      await this.attendanceRepository.update(
+      await attendanceRepository.update(
         { eventId, candidateId },
         {
           flagged: true,
@@ -420,7 +515,7 @@ export class EventService {
       );
 
       // Load event with relations
-      const eventWithRelations = await this.eventRepository.findOne({
+      const eventWithRelations = await eventRepository.findOne({
         where: { id: eventId },
         relations: ["lecture", "journal", "conf"],
       });
@@ -429,8 +524,8 @@ export class EventService {
         throw new Error("Failed to load updated event");
       }
 
-      const populated = await this.populatePresenter(eventWithRelations);
-      const attendanceRecords = await this.populateAttendance(eventId);
+      const populated = await this.populatePresenter(eventWithRelations, dataSource);
+      const attendanceRecords = await this.populateAttendance(eventId, dataSource);
 
       return {
         ...populated,
@@ -444,19 +539,21 @@ export class EventService {
   /**
    * Unflag a candidate in attendance (sets points back to 1)
    */
-  public async unflagAttendance(eventId: string, candidateId: string): Promise<IEventDoc | null> | never {
+  public async unflagAttendance(eventId: string, candidateId: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
+      const attendanceRepository = dataSource.getRepository(EventAttendanceEntity);
       // Validate UUID formats
       if (!this.uuidRegex.test(eventId) || !this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid event or candidate ID format");
       }
 
-      const event = await this.eventRepository.findOne({ where: { id: eventId } });
+      const event = await eventRepository.findOne({ where: { id: eventId } });
       if (!event) {
         throw new Error("Event not found");
       }
 
-      const attendance = await this.attendanceRepository.findOne({
+      const attendance = await attendanceRepository.findOne({
         where: { eventId, candidateId },
       });
       if (!attendance) {
@@ -464,7 +561,7 @@ export class EventService {
       }
 
       // Unflag the candidate
-      await this.attendanceRepository.update(
+      await attendanceRepository.update(
         { eventId, candidateId },
         {
           flagged: false,
@@ -476,16 +573,16 @@ export class EventService {
 
       // Auto-update status: if event has unflagged candidates and status is "booked" or "canceled",
       // automatically change to "held"
-      const unflaggedCount = await this.attendanceRepository.count({
+      const unflaggedCount = await attendanceRepository.count({
         where: { eventId, flagged: false },
       });
       if (unflaggedCount > 0 && (event.status === "booked" || event.status === "canceled")) {
-        await this.eventRepository.update(eventId, { status: "held" });
+        await eventRepository.update(eventId, { status: "held" });
         event.status = "held";
       }
 
       // Load event with relations
-      const eventWithRelations = await this.eventRepository.findOne({
+      const eventWithRelations = await eventRepository.findOne({
         where: { id: eventId },
         relations: ["lecture", "journal", "conf"],
       });
@@ -494,8 +591,8 @@ export class EventService {
         throw new Error("Failed to load updated event");
       }
 
-      const populated = await this.populatePresenter(eventWithRelations);
-      const attendanceRecords = await this.populateAttendance(eventId);
+      const populated = await this.populatePresenter(eventWithRelations, dataSource);
+      const attendanceRecords = await this.populateAttendance(eventId, dataSource);
 
       return {
         ...populated,
@@ -507,37 +604,73 @@ export class EventService {
   }
 
   /**
-   * Get total points for a candidate across all events
+   * Compute points for a single attendance record using journal-presenter rules.
+   * Flagged → −2; journal presenter+attendee → +3; else +1.
    */
-  public async getCandidateTotalPoints(candidateId: string): Promise<number> | never {
-    try {
-      // Validate UUID format
-      if (!this.uuidRegex.test(candidateId)) {
-        throw new Error("Invalid candidate ID format");
-      }
+  public computePointsForAttendance(
+    att: EventAttendanceEntity,
+    event: EventEntity,
+    candidateId: string
+  ): number {
+    if (att.flagged) return -2;
+    if (event.type === "journal" && event.presenterId === candidateId) return 3;
+    return 1;
+  }
 
-      const attendanceRecords = await this.attendanceRepository.find({
-        where: { candidateId },
-      });
-
-      const totalPoints = attendanceRecords.reduce((sum, att) => sum + att.points, 0);
-      return totalPoints;
-    } catch (err: any) {
-      throw new Error(err);
+  /**
+   * Fetch all attendance records for a candidate with event and lecture/journal/conf loaded.
+   */
+  public async getAttendanceWithEventsForCandidate(
+    candidateId: string,
+    dataSource: DataSource
+  ): Promise<IAttendanceWithEvent[]> {
+    if (!this.uuidRegex.test(candidateId)) {
+      throw new Error("Invalid candidate ID format");
     }
+    const attRepo = dataSource.getRepository(EventAttendanceEntity);
+    const records = await attRepo.find({
+      where: { candidateId },
+      relations: ["event", "event.lecture", "event.journal", "event.conf"],
+      order: { createdAt: "DESC" },
+    });
+    return records.map((att) => ({
+      att,
+      event: att.event! as EventEntity,
+    }));
+  }
+
+  /**
+   * Returns academic points per candidate (candidateId -> total) using journal-presenter rules.
+   * Used for ranking.
+   */
+  public async getAcademicPointsPerCandidate(dataSource: DataSource): Promise<Map<string, number>> {
+    const attRepo = dataSource.getRepository(EventAttendanceEntity);
+    const records = await attRepo.find({
+      relations: ["event"],
+      order: { createdAt: "DESC" },
+    });
+    const map = new Map<string, number>();
+    for (const r of records) {
+      const cid = r.candidateId;
+      const ev = r.event as EventEntity;
+      const pts = this.computePointsForAttendance(r, ev, cid);
+      map.set(cid, (map.get(cid) ?? 0) + pts);
+    }
+    return map;
   }
 
   /**
    * Find event by lecture UUID
    */
-  public async findEventByLecture(lectureId: string): Promise<IEventDoc | null> | never {
+  public async findEventByLecture(lectureId: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
       // Validate UUID format
       if (!this.uuidRegex.test(lectureId)) {
         throw new Error("Invalid lecture ID format");
       }
 
-      const event = await this.eventRepository.findOne({
+      const event = await eventRepository.findOne({
         where: { lectureId },
         relations: ["lecture", "journal", "conf"],
       });
@@ -546,8 +679,8 @@ export class EventService {
         return null;
       }
 
-      const populated = await this.populatePresenter(event);
-      const attendance = await this.populateAttendance(event.id);
+      const populated = await this.populatePresenter(event, dataSource);
+      const attendance = await this.populateAttendance(event.id, dataSource);
 
       return {
         ...populated,
@@ -561,14 +694,15 @@ export class EventService {
   /**
    * Find event by journal UUID
    */
-  public async findEventByJournal(journalId: string): Promise<IEventDoc | null> | never {
+  public async findEventByJournal(journalId: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
       // Validate UUID format
       if (!this.uuidRegex.test(journalId)) {
         throw new Error("Invalid journal ID format");
       }
 
-      const event = await this.eventRepository.findOne({
+      const event = await eventRepository.findOne({
         where: { journalId },
         relations: ["lecture", "journal", "conf"],
       });
@@ -577,8 +711,8 @@ export class EventService {
         return null;
       }
 
-      const populated = await this.populatePresenter(event);
-      const attendance = await this.populateAttendance(event.id);
+      const populated = await this.populatePresenter(event, dataSource);
+      const attendance = await this.populateAttendance(event.id, dataSource);
 
       return {
         ...populated,
@@ -592,14 +726,15 @@ export class EventService {
   /**
    * Find event by conf UUID
    */
-  public async findEventByConf(confId: string): Promise<IEventDoc | null> | never {
+  public async findEventByConf(confId: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
       // Validate UUID format
       if (!this.uuidRegex.test(confId)) {
         throw new Error("Invalid conf ID format");
       }
 
-      const event = await this.eventRepository.findOne({
+      const event = await eventRepository.findOne({
         where: { confId },
         relations: ["lecture", "journal", "conf"],
       });
@@ -608,8 +743,8 @@ export class EventService {
         return null;
       }
 
-      const populated = await this.populatePresenter(event);
-      const attendance = await this.populateAttendance(event.id);
+      const populated = await this.populatePresenter(event, dataSource);
+      const attendance = await this.populateAttendance(event.id, dataSource);
 
       return {
         ...populated,
@@ -628,9 +763,11 @@ export class EventService {
   public async findEventsByLectureJournalConfIds(
     lectureIds: (string | any)[],
     journalIds: (string | any)[],
-    confIds: (string | any)[]
+    confIds: (string | any)[],
+    dataSource: DataSource
   ): Promise<Map<string, IEventDoc>> | never {
     try {
+      const eventRepository = dataSource.getRepository(EventEntity);
       // Convert ObjectIds to strings and filter valid UUIDs
       const normalizeIds = (ids: (string | any)[]): string[] => {
         return ids
@@ -670,15 +807,15 @@ export class EventService {
         return new Map();
       }
 
-      const events = await this.eventRepository.find({
+      const events = await eventRepository.find({
         where,
         relations: ["lecture", "journal", "conf"],
       });
 
       const populatedEvents = await Promise.all(
         events.map(async (event) => {
-          const populated = await this.populatePresenter(event);
-          const attendance = await this.populateAttendance(event.id);
+          const populated = await this.populatePresenter(event, dataSource);
+          const attendance = await this.populateAttendance(event.id, dataSource);
           return {
             ...populated,
             attendance,

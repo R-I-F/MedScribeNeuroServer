@@ -9,5 +9,11 @@ export const loginValidator = [
     .isString()
     .notEmpty()
     .withMessage("password is required"),
+
+  body("institutionId")
+    .isUUID()
+    .withMessage("institutionId must be a valid UUID")
+    .notEmpty()
+    .withMessage("institutionId is required"),
 ];
 

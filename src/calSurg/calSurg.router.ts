@@ -2,6 +2,7 @@ import express, { Request, Response, Router } from "express";
 import { inject, injectable } from "inversify";
 import { CalSurgController } from "./calSurg.controller";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
+import { createCalSurgValidator } from "../validators/createCalSurg.validator";
 import { getCalSurgByIdValidator } from "../validators/getCalSurgById.validator";
 import { getCalSurgWithFiltersValidator } from "../validators/getCalSurgWithFilters.validator";
 import { updateCalSurgValidator } from "../validators/updateCalSurg.validator";
@@ -9,9 +10,10 @@ import { deleteCalSurgValidator } from "../validators/deleteCalSurg.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { requireCandidate, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
-import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class CalSurgRouter {
@@ -33,25 +35,50 @@ export class CalSurgRouter {
       UserRole.CLERK
     );
 
-    // Create calSurg from external source
+    // Dashboard: candidate, supervisor, clerk, instituteAdmin, superAdmin
+    const requireDashboardRoles = authorize(
+      UserRole.CANDIDATE,
+      UserRole.SUPERVISOR,
+      UserRole.CLERK,
+      UserRole.INSTITUTE_ADMIN,
+      UserRole.SUPER_ADMIN
+    );
+
+    // Create one calSurg (webapp); clerk, instituteAdmin, superAdmin
     this.router.post(
-      "/postAllFromExternal",
-      userBasedStrictRateLimiter,
+      "/",
       extractJWT,
-      requireSuperAdmin,
-      createFromExternalValidator,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdminOrClerk,
+      createCalSurgValidator,
       async (req: Request, res: Response) => {
-        const result = validationResult(req)
-        if(result.isEmpty()){
+        const result = validationResult(req);
+        if (result.isEmpty()) {
           try {
-            const newCalSurgs = await this.calSurgController.handlePostCalSurgFromExternal(req, res);
-            res.status(StatusCodes.CREATED).json(newCalSurgs);
+            const newCalSurg = await this.calSurgController.handlePostCalSurg(req, res);
+            res.status(StatusCodes.CREATED).json(newCalSurg);
           } catch (err: any) {
-            throw new Error(err)
+            throw new Error(err);
           }
-        } else{
+        } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
+      }
+    );
+
+    // DISABLED: See docs/DISABLED_ROUTES.md. Create calSurg from external (no auth; X-Institution-Id).
+    this.router.post(
+      "/postAllFromExternal",
+      institutionResolver,
+      strictRateLimiter,
+      createFromExternalValidator,
+      async (req: Request, res: Response) => {
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
       }
     );
 
@@ -59,8 +86,9 @@ export class CalSurgRouter {
     // Accessible to: superAdmin, instituteAdmin, clerk, supervisor, candidate
     this.router.get(
       "/getById",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       getCalSurgByIdValidator,
       async (req: Request, res: Response) => {
@@ -78,12 +106,31 @@ export class CalSurgRouter {
       }
     );
 
+    // Dashboard: calSurg within last 60 days, stripped of formLink and google_uid
+    // Accessible to: candidate, supervisor, clerk, instituteAdmin, superAdmin
+    this.router.get(
+      "/dashboard",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireDashboardRoles,
+      async (req: Request, res: Response) => {
+        try {
+          const calSurgs = await this.calSurgController.handleGetCalSurgDashboard(req, res);
+          res.status(StatusCodes.OK).json(calSurgs);
+        } catch (err: any) {
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
     // Get all calSurgs with optional filters
     // Accessible to: superAdmin, instituteAdmin, clerk, supervisor, candidate
     this.router.get(
       "/getAll",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       getCalSurgWithFiltersValidator,
       async (req: Request, res: Response) => {
@@ -105,8 +152,9 @@ export class CalSurgRouter {
     // Accessible to: superAdmin, instituteAdmin, clerk
     this.router.patch(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdminOrInstituteAdminOrClerk,
       updateCalSurgValidator,
       async (req: Request, res: Response) => {
@@ -136,8 +184,9 @@ export class CalSurgRouter {
     // Accessible to: superAdmin, instituteAdmin, clerk
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdminOrInstituteAdminOrClerk,
       deleteCalSurgValidator,
       async (req: Request, res: Response) => {

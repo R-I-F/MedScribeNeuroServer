@@ -18,7 +18,11 @@ export class EventController {
   public async handlePostEvent(req: Request, res: Response) {
     const validatedReq = matchedData(req) as IEventInput;
     try {
-      return await this.eventProvider.createEvent(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.createEvent(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -26,7 +30,39 @@ export class EventController {
 
   public async handleGetAllEvents(req: Request, res: Response) {
     try {
-      return await this.eventProvider.getAllEvents();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.getAllEvents(dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetEventsDashboard(req: Request, res: Response) {
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.getEventsDashboard(dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetEventsByPresenter(req: Request, res: Response) {
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const supervisorId = req.params.supervisorId;
+      if (!supervisorId) {
+        throw new Error("Supervisor ID is required");
+      }
+      return await this.eventProvider.getEventsByPresenter(supervisorId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -36,7 +72,11 @@ export class EventController {
     const validatedReq = matchedData(req) as { id: string };
     validatedReq.id = req.params.id;
     try {
-      return await this.eventProvider.getEventById(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.getEventById(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -46,7 +86,11 @@ export class EventController {
     const validatedReq = matchedData(req) as IEventUpdateInput;
     validatedReq.id = req.params.id;
     try {
-      return await this.eventProvider.updateEvent(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.updateEvent(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -56,7 +100,11 @@ export class EventController {
     const validatedReq = matchedData(req) as { id: string };
     validatedReq.id = req.params.id;
     try {
-      return await this.eventProvider.deleteEvent(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.deleteEvent(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -72,7 +120,11 @@ export class EventController {
                                res.locals.jwt.role === "supervisor" ? "supervisor" : 
                                "instituteAdmin";
     try {
-      return await this.eventProvider.addAttendance(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.addAttendance(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -83,7 +135,11 @@ export class EventController {
     validatedReq.eventId = req.params.eventId;
     validatedReq.candidateId = req.params.candidateId;
     try {
-      return await this.eventProvider.removeAttendance(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.removeAttendance(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -95,7 +151,11 @@ export class EventController {
     validatedReq.candidateId = req.params.candidateId;
     validatedReq.flaggedBy = res.locals.jwt.id || res.locals.jwt._id;
     try {
-      return await this.eventProvider.flagAttendance(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.flagAttendance(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -106,7 +166,11 @@ export class EventController {
     validatedReq.eventId = req.params.eventId;
     validatedReq.candidateId = req.params.candidateId;
     try {
-      return await this.eventProvider.unflagAttendance(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.unflagAttendance(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -116,8 +180,11 @@ export class EventController {
     const validatedReq = matchedData(req) as { candidateId: string };
     validatedReq.candidateId = req.params.candidateId;
     try {
-      const totalPoints = await this.eventProvider.getCandidateTotalPoints(validatedReq.candidateId);
-      return { totalPoints };
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.getCandidateEventPoints(validatedReq.candidateId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -125,13 +192,30 @@ export class EventController {
 
   public async handleGetMyPoints(req: Request, res: Response) {
     try {
-      // Get candidate ID from JWT token (use id if available, fallback to _id for backward compatibility)
       const candidateId = res.locals.jwt.id || res.locals.jwt._id;
       if (!candidateId) {
         throw new Error("Unauthorized: No candidate ID found in token");
       }
-      const totalPoints = await this.eventProvider.getCandidateTotalPoints(candidateId);
-      return { totalPoints };
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.getCandidateEventPoints(candidateId, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetAcademicRanking(req: Request, res: Response) {
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const jwt = res.locals.jwt as { id?: string; _id?: string; role?: string } | undefined;
+      const userId = jwt?.id ?? jwt?._id;
+      const role = jwt?.role;
+      return await this.eventProvider.getAcademicRanking(dataSource, userId, role);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -145,7 +229,11 @@ export class EventController {
                          res.locals.jwt.role === "supervisor" ? "supervisor" : 
                          "instituteAdmin";
       
-      return await this.eventProvider.bulkImportAttendanceFromExternal(addedBy, addedByRole);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.eventProvider.bulkImportAttendanceFromExternal(addedBy, addedByRole, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

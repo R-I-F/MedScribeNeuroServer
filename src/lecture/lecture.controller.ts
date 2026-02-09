@@ -16,7 +16,11 @@ export class LectureController {
   ) {
     const validatedReq = matchedData(req) as ILectureInput;
     try {
-      return await this.lectureProvider.createLecture(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.lectureProvider.createLecture(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -27,7 +31,12 @@ export class LectureController {
     res: Response
   ) {
     try {
-      return await this.lectureProvider.getAllLectures();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const list = await this.lectureProvider.getAllLectures(dataSource);
+      return list.map(({ createdAt, updatedAt, google_uid, ...rest }) => rest);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -41,7 +50,11 @@ export class LectureController {
     // Ensure id is extracted from params
     validatedReq.id = req.params.id;
     try {
-      return await this.lectureProvider.getLectureById(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.lectureProvider.getLectureById(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -55,7 +68,11 @@ export class LectureController {
     // Merge id from params into validatedReq
     validatedReq.id = req.params.id;
     try {
-      return await this.lectureProvider.updateLecture(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.lectureProvider.updateLecture(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -69,7 +86,11 @@ export class LectureController {
     // Ensure id is extracted from params
     validatedReq.id = req.params.id;
     try {
-      return await this.lectureProvider.deleteLecture(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.lectureProvider.deleteLecture(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -86,7 +107,11 @@ export class LectureController {
       mainTopic: string; 
     };
     try {
-      return await this.lectureProvider.createLecturesFromExternal(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.lectureProvider.createLecturesFromExternal(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

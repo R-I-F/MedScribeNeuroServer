@@ -12,6 +12,7 @@ import { CalSurgService } from "../calSurg/calSurg.service";
 import { HospitalService } from "../hospital/hospital.service";
 import { EventService } from "../event/event.service";
 import { ICanceledEventReportItem } from "./reports.interface";
+import { DataSource } from "typeorm";
 
 @injectable()
 export class ReportsService {
@@ -24,17 +25,23 @@ export class ReportsService {
     @inject(EventService) private eventService: EventService
   ) {}
 
-  public async getAllSupervisors(): Promise<ISupervisorDoc[]> | never {
+  public async getAllSupervisors(dataSource?: DataSource): Promise<ISupervisorDoc[]> | never {
     try {
-      return await this.supervisorService.getAllSupervisors();
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      return await this.supervisorService.getAllSupervisors(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllCandidates(): Promise<ICandDoc[]> | never {
+  public async getAllCandidates(dataSource?: DataSource): Promise<ICandDoc[]> | never {
     try {
-      return await this.candService.getAllCandidates();
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      return await this.candService.getAllCandidates(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -43,10 +50,14 @@ export class ReportsService {
   public async getSubmissionsBySupervisorId(
     supervisorId: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    dataSource?: DataSource
   ): Promise<ISubDoc[]> | never {
     try {
-      const allSubs = await this.subService.getSubsBySupervisorId(supervisorId);
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      const allSubs = await this.subService.getSubsBySupervisorId(supervisorId, dataSource);
       
       if (startDate && endDate) {
         return allSubs.filter(sub => {
@@ -65,10 +76,14 @@ export class ReportsService {
   public async getSubmissionsByCandidateId(
     candidateId: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    dataSource?: DataSource
   ): Promise<ISubDoc[]> | never {
     try {
-      const allSubs = await this.subService.getSubsByCandidateId(candidateId);
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      const allSubs = await this.subService.getSubsByCandidateId(candidateId, dataSource);
       
       if (startDate && endDate) {
         return allSubs.filter(sub => {
@@ -90,25 +105,34 @@ export class ReportsService {
     year?: number;
     startDate?: Date;
     endDate?: Date;
-  }): Promise<ICalSurgDoc[]> | never {
+  }, dataSource?: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
-      return await this.calSurgService.getCalSurgWithFilters(filters);
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      return await this.calSurgService.getCalSurgWithFilters(filters, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllHospitals(): Promise<IHospitalDoc[]> | never {
+  public async getAllHospitals(dataSource?: DataSource): Promise<IHospitalDoc[]> | never {
     try {
-      return await this.hospitalService.getAllHospitals();
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      return await this.hospitalService.getAllHospitals(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllSubmissions(): Promise<ISubDoc[]> | never {
+  public async getAllSubmissions(dataSource?: DataSource): Promise<ISubDoc[]> | never {
     try {
-      return await this.subService.getAllSubs();
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      return await this.subService.getAllSubs(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -116,11 +140,15 @@ export class ReportsService {
 
   public async getCanceledEventsReportData(
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    dataSource?: DataSource
   ): Promise<ICanceledEventReportItem[]> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
       // Get all events using EventService (now using MariaDB)
-      const allEvents = await this.eventService.getAllEvents();
+      const allEvents = await this.eventService.getAllEvents(dataSource);
 
       // Filter for canceled events and date range
       let events: IEventDoc[] = allEvents.filter((e) => e.status === "canceled");
@@ -167,7 +195,7 @@ export class ReportsService {
       // Fetch supervisors and candidates (using MariaDB UUIDs)
       const [supervisors, candidates] = await Promise.all([
         uniqueSupervisorIds.length
-          ? this.supervisorService.getAllSupervisors().then(allSupervisors => 
+          ? this.supervisorService.getAllSupervisors(dataSource!).then(allSupervisors => 
               allSupervisors.filter((s: any) => {
                 const sId = s.id || s._id?.toString();
                 return uniqueSupervisorIds.includes(sId);
@@ -175,7 +203,7 @@ export class ReportsService {
             )
           : Promise.resolve([]),
         uniqueCandidateIds.length
-          ? this.candService.getAllCandidates().then(allCandidates =>
+          ? this.candService.getAllCandidates(dataSource!).then(allCandidates =>
               allCandidates.filter((c: any) => {
                 const cId = c.id || c._id?.toString();
                 return uniqueCandidateIds.includes(cId);
@@ -238,11 +266,15 @@ export class ReportsService {
 
   public async getEventCountsForPeriod(
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    dataSource?: DataSource
   ): Promise<{ total: number; canceled: number }> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
       // Get all events using EventService (now using MariaDB)
-      let allEvents = await this.eventService.getAllEvents();
+      let allEvents = await this.eventService.getAllEvents(dataSource);
 
       // Filter by date range if provided
       if (startDate || endDate) {

@@ -2,13 +2,17 @@ import express, { Request, Response, Router } from "express";
 import { inject, injectable } from "inversify";
 import { SubController } from "./sub.controller";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
+import { createSubmissionValidator } from "../validators/createSubmission.validator";
+import { createSupervisorSubmissionValidator } from "../validators/createSupervisorSubmission.validator";
 import { getSubmissionByIdValidator } from "../validators/getSubmissionById.validator";
 import { reviewSubmissionValidator } from "../validators/reviewSubmission.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireCandidate, requireSuperAdmin, requireSupervisor, requireInstituteAdmin, requireValidatorSupervisor } from "../middleware/authorize.middleware";
-import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import { authorize, requireCandidate, requireSuperAdmin, requireSupervisor, requireInstituteAdmin, requireValidatorSupervisor } from "../middleware/authorize.middleware";
+import { UserRole } from "../types/role.types";
+import { userBasedRateLimiter, userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 @injectable()
 export class SubRouter {
 
@@ -22,42 +26,86 @@ export class SubRouter {
     this.initRoutes();
   }
   private async initRoutes(){
+    // DISABLED: See docs/DISABLED_ROUTES.md. Import submissions from external (no auth; X-Institution-Id).
     this.router.post(
       "/postAllFromExternal",
-      userBasedStrictRateLimiter,
-      extractJWT,
-      requireSuperAdmin,
+      institutionResolver,
+      strictRateLimiter,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
+      }
+    );
+    // DISABLED: See docs/DISABLED_ROUTES.md. Update submission status from external (no auth; X-Institution-Id).
+    this.router.patch(
+      "/updateStatusFromExternal",
+      institutionResolver,
+      strictRateLimiter,
+      createFromExternalValidator,
+      async (req: Request, res: Response) => {
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
+      }
+    );
+
+    // Create submission (candidate only)
+    this.router.post(
+      "/candidate/submissions",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireCandidate,
+      createSubmissionValidator,
+      async (req: Request, res: Response) => {
         const result = validationResult(req);
-        if(result.isEmpty()){
-          try{
-            const newSubs = await this.subController.handlePostSubFromExternal(req, res);
-            res.status(StatusCodes.CREATED).json(newSubs);
-          }
-          catch(err: any){ 
-            throw new Error(err) 
+        if (result.isEmpty()) {
+          try {
+            const submission = await this.subController.handleCreateSubmission(req, res);
+            res.status(StatusCodes.CREATED).json(submission);
+          } catch (err: any) {
+            if (err.message?.includes("Unauthorized")) {
+              res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+            } else if (err.message?.includes("not found") || err.message?.includes("Main diagnosis")) {
+              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }
-    )
-    this.router.patch(
-      "/updateStatusFromExternal",
-      userBasedStrictRateLimiter,
+    );
+
+    // Create submission (supervisor only - auto-approved, no candidate)
+    this.router.post(
+      "/supervisor/submissions",
       extractJWT,
-      requireSuperAdmin,
-      createFromExternalValidator,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSupervisor,
+      createSupervisorSubmissionValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
-        if(result.isEmpty()){
-          try{
-            const updatedSubs = await this.subController.handleUpdateStatusFromExternal(req, res);
-            res.status(StatusCodes.OK).json(updatedSubs);
-          }
-          catch(err: any){
-            throw new Error(err)
+        if (result.isEmpty()) {
+          try {
+            const submission = await this.subController.handleCreateSupervisorSubmission(req, res);
+            res.status(StatusCodes.CREATED).json(submission);
+          } catch (err: any) {
+            if (err.message?.includes("Unauthorized")) {
+              res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+            } else if (err.message?.includes("not found") || err.message?.includes("Main diagnosis")) {
+              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
@@ -68,8 +116,9 @@ export class SubRouter {
     // Get candidate submission statistics (requires authentication)
     this.router.get(
       "/candidate/stats",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       async (req: Request, res: Response) => {
         try {
@@ -85,11 +134,96 @@ export class SubRouter {
       }
     )
 
+    // CPT analytics: approved submissions by CPT code (count, % of total). Candidates and supervisors (and admins).
+    this.router.get(
+      "/cptAnalytics",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      authorize(UserRole.CANDIDATE, UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN),
+      async (req: Request, res: Response) => {
+        try {
+          const result = await this.subController.handleGetCptAnalytics(req, res);
+          res.status(StatusCodes.OK).json(result);
+        } catch (err: any) {
+          if (err.message.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    )
+
+    // ICD analytics: approved submissions by ICD code (count, % of total). Candidates and supervisors (and admins).
+    this.router.get(
+      "/icdAnalytics",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      authorize(UserRole.CANDIDATE, UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN),
+      async (req: Request, res: Response) => {
+        try {
+          const result = await this.subController.handleGetIcdAnalytics(req, res);
+          res.status(StatusCodes.OK).json(result);
+        } catch (err: any) {
+          if (err.message.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    )
+
+    // Supervisor analytics: approved submissions by supervisor (count, % of total)
+    this.router.get(
+      "/supervisorAnalytics",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireCandidate,
+      async (req: Request, res: Response) => {
+        try {
+          const result = await this.subController.handleGetSupervisorAnalytics(req, res);
+          res.status(StatusCodes.OK).json(result);
+        } catch (err: any) {
+          if (err.message.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    )
+
+    // Submission (surgical experience) ranking: all candidates by approved count
+    this.router.get(
+      "/submissionRanking",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireCandidate,
+      async (req: Request, res: Response) => {
+        try {
+          const result = await this.subController.handleGetSubmissionRanking(req, res);
+          res.status(StatusCodes.OK).json(result);
+        } catch (err: any) {
+          if (err.message.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    )
+
     // Get single candidate submission by ID (requires candidate authentication)
     this.router.get(
       "/candidate/submissions/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       getSubmissionByIdValidator,
       async (req: Request, res: Response) => {
@@ -116,8 +250,9 @@ export class SubRouter {
     // Get all candidate submissions with populated data (requires authentication)
     this.router.get(
       "/candidate/submissions",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       async (req: Request, res: Response) => {
         try {
@@ -136,8 +271,9 @@ export class SubRouter {
     // Get supervisor submissions (requires supervisor authentication)
     this.router.get(
       "/supervisor/submissions",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSupervisor,
       async (req: Request, res: Response) => {
         try {
@@ -153,11 +289,33 @@ export class SubRouter {
       }
     )
 
+    // Get supervisor own submissions (submitted by supervisor, not candidate) - SUPERVISOR, INSADMIN, SUPERADMIN
+    this.router.get(
+      "/supervisor/own/submissions",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      authorize(UserRole.SUPERVISOR, UserRole.INSTITUTE_ADMIN, UserRole.SUPER_ADMIN),
+      async (req: Request, res: Response) => {
+        try {
+          const submissions = await this.subController.handleGetSupervisorOwnSubmissions(req, res);
+          res.status(StatusCodes.OK).json(submissions);
+        } catch (err: any) {
+          if (err.message.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    )
+
     // Get single supervisor submission by ID (requires supervisor authentication)
     this.router.get(
       "/supervisor/submissions/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSupervisor,
       getSubmissionByIdValidator,
       async (req: Request, res: Response) => {
@@ -184,8 +342,9 @@ export class SubRouter {
     // Get candidate submissions by supervisor (requires supervisor authentication)
     this.router.get(
       "/supervisor/candidates/:candidateId/submissions",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSupervisor,
       async (req: Request, res: Response) => {
         try {
@@ -206,8 +365,9 @@ export class SubRouter {
     // Academic supervisors (canValidate=false) can only participate in events
     this.router.patch(
       "/supervisor/submissions/:id/review",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSupervisor, // First check if user is supervisor
       requireValidatorSupervisor, // Then check if supervisor can validate
       reviewSubmissionValidator,
@@ -237,8 +397,8 @@ export class SubRouter {
     /*
     this.router.post(
       "/submissions/:id/generateSurgicalNotes",
-      userBasedStrictRateLimiter,
       extractJWT,
+      userBasedStrictRateLimiter,
       requireInstituteAdmin,
       getSubmissionByIdValidator,
       async (req: Request, res: Response) => {
@@ -265,8 +425,9 @@ export class SubRouter {
 
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       getSubmissionByIdValidator,
       async (req: Request, res: Response) => {

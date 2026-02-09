@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 
 import { addRoutes } from "./config/routes.config";
 import { responseFormatter } from "./middleware/responseFormatter";
+import { requestLogger } from "./middleware/requestLogger.middleware";
 import { initializeDatabase, validateDatabaseConfig } from "./config/database.config";
 
 
@@ -13,9 +14,10 @@ const app: Express = express();
 dotenv.config();
 const port = process.env.PORT;
 
-// Trust proxy - required for proper IP address handling (especially IPv6)
-// This ensures req.ip is properly normalized and prevents IPv6 bypass issues in rate limiting
-app.set('trust proxy', true);
+// Trust proxy - use 1 (not true) to avoid ERR_ERL_PERMISSIVE_TRUST_PROXY.
+// With true, clients could spoof X-Forwarded-For and bypass IP-based rate limiting.
+// With 1, we trust only the first proxy (e.g. nginx); req.ip comes from that proxy safely.
+app.set('trust proxy', 1);
 
 // CORS configuration
 // When credentials: true, origin cannot be "*" - must be specific origin
@@ -31,6 +33,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(cookieParser()); // Parse httpOnly cookies
+app.use(requestLogger);
 app.use(responseFormatter);
 
 async function bootstrap() {

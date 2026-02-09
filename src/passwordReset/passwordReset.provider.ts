@@ -12,6 +12,7 @@ import { TUserRole } from "../types/role.types";
 import { IPasswordResetTokenDoc } from "./passwordReset.interface";
 import { AppDataSource } from "../config/database.config";
 import { CandidateEntity } from "../cand/cand.mDbSchema";
+import { DataSource } from "typeorm";
 
 @injectable()
 export class PasswordResetProvider {
@@ -34,31 +35,34 @@ export class PasswordResetProvider {
   /**
    * Find user by email across all user collections
    */
-  public async findUserByEmail(email: string): Promise<{
+  public async findUserByEmail(email: string, dataSource?: DataSource): Promise<{
     user: any;
     role: TUserRole;
   } | null> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
       // Try candidate first
-      const candidate = await this.candService.getCandByEmail(email);
+      const candidate = await this.candService.getCandByEmail(email, dataSource);
       if (candidate) {
         return { user: candidate, role: "candidate" as TUserRole };
       }
 
       // Try supervisor
-      const supervisor = await this.supervisorService.getSupervisorByEmail(email);
+      const supervisor = await this.supervisorService.getSupervisorByEmail(email, dataSource);
       if (supervisor) {
         return { user: supervisor, role: "supervisor" as TUserRole };
       }
 
       // Try superAdmin
-      const superAdmin = await this.superAdminService.getSuperAdminByEmail(email);
+      const superAdmin = await this.superAdminService.getSuperAdminByEmail(email, dataSource);
       if (superAdmin) {
         return { user: superAdmin, role: "superAdmin" as TUserRole };
       }
 
       // Try instituteAdmin
-      const instituteAdmin = await this.instituteAdminService.getInstituteAdminByEmail(email);
+      const instituteAdmin = await this.instituteAdminService.getInstituteAdminByEmail(email, dataSource);
       if (instituteAdmin) {
         return { user: instituteAdmin, role: "instituteAdmin" as TUserRole };
       }
@@ -74,9 +78,13 @@ export class PasswordResetProvider {
    */
   public async findUserByIdAndRole(
     userId: string,
-    role: TUserRole
+    role: TUserRole,
+    dataSource?: DataSource
   ): Promise<any | null> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
       // Validate UUID format (support both UUID and ObjectId for backward compatibility)
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const objectIdRegex = /^[0-9a-f]{24}$/i;
@@ -87,16 +95,16 @@ export class PasswordResetProvider {
 
       switch (role) {
         case "candidate":
-          const cand = await this.candService.getCandById(userId);
+          const cand = await this.candService.getCandById(userId, dataSource);
           return cand;
         case "supervisor":
-          const supervisor = await this.supervisorService.getSupervisorById({ id: userId });
+          const supervisor = await this.supervisorService.getSupervisorById({ id: userId }, dataSource);
           return supervisor;
         case "superAdmin":
-          const superAdmin = await this.superAdminService.getSuperAdminById({ id: userId });
+          const superAdmin = await this.superAdminService.getSuperAdminById({ id: userId }, dataSource);
           return superAdmin;
         case "instituteAdmin":
-          const instituteAdmin = await this.instituteAdminService.getInstituteAdminById({ id: userId });
+          const instituteAdmin = await this.instituteAdminService.getInstituteAdminById({ id: userId }, dataSource);
           return instituteAdmin;
         default:
           throw new Error("Invalid role");
@@ -109,11 +117,14 @@ export class PasswordResetProvider {
   /**
    * Check rate limiting for password reset requests
    */
-  public async checkRateLimit(email: string): Promise<boolean> | never {
+  public async checkRateLimit(email: string, dataSource?: DataSource): Promise<boolean> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
       // Check if there are more than 3 tokens created in the last hour for this email
       // We'll need to find tokens by userId, but we need to find user first
-      const userData = await this.findUserByEmail(email);
+      const userData = await this.findUserByEmail(email, dataSource);
       if (!userData) {
         return true; // Allow if user doesn't exist (security: don't reveal)
       }
@@ -125,7 +136,7 @@ export class PasswordResetProvider {
       }
 
       const oneHourAgo = Date.now() - 60 * 60 * 1000;
-      const tokenCount = await this.passwordResetService.countTokensByUserId(userId, oneHourAgo);
+      const tokenCount = await this.passwordResetService.countTokensByUserId(userId, oneHourAgo, dataSource);
       
       // Allow if less than 3 tokens in the last hour
       return tokenCount < 3;
@@ -137,10 +148,13 @@ export class PasswordResetProvider {
   /**
    * Create password reset token and send email
    */
-  public async createPasswordResetToken(email: string): Promise<void> | never {
+  public async createPasswordResetToken(email: string, dataSource?: DataSource): Promise<void> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
       // Find user by email
-      const userData = await this.findUserByEmail(email);
+      const userData = await this.findUserByEmail(email, dataSource);
       if (!userData) {
         // Don't reveal if user exists (security best practice)
         return;
@@ -148,7 +162,7 @@ export class PasswordResetProvider {
 
       // Check application-level rate limit (3 tokens per hour per user)
       // This provides defense in depth beyond router-level rate limiting
-      const isWithinRateLimit = await this.checkRateLimit(email);
+      const isWithinRateLimit = await this.checkRateLimit(email, dataSource);
       if (!isWithinRateLimit) {
         // Don't reveal rate limit exceeded (security: don't reveal user exists)
         // Return silently to prevent email enumeration
@@ -175,7 +189,7 @@ export class PasswordResetProvider {
         token,
         expiresAt,
         used: false,
-      });
+      }, dataSource);
 
       // Generate reset link
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
@@ -199,12 +213,15 @@ export class PasswordResetProvider {
   /**
    * Validate and use password reset token
    */
-  public async validateAndUseToken(token: string): Promise<{
+  public async validateAndUseToken(token: string, dataSource?: DataSource): Promise<{
     userId: string;
     userRole: TUserRole;
   }> | never {
     try {
-      const tokenDoc = await this.passwordResetService.findTokenByValue(token);
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
+      const tokenDoc = await this.passwordResetService.findTokenByValue(token, dataSource);
       if (!tokenDoc) {
         throw new Error("Invalid or expired reset token");
       }
@@ -220,7 +237,7 @@ export class PasswordResetProvider {
       }
 
       // Mark token as used
-      await this.passwordResetService.markTokenAsUsed(token);
+      await this.passwordResetService.markTokenAsUsed(token, dataSource);
 
       return {
         userId: tokenDoc.userId,
@@ -237,9 +254,13 @@ export class PasswordResetProvider {
   public async updateUserPassword(
     userId: string,
     userRole: TUserRole,
-    newPassword: string
+    newPassword: string,
+    dataSource?: DataSource
   ): Promise<void> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
       // Validate UUID format (support both UUID and ObjectId for backward compatibility)
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const objectIdRegex = /^[0-9a-f]{24}$/i;
@@ -254,31 +275,31 @@ export class PasswordResetProvider {
         case "candidate":
           // Update candidate password using repository directly
           // Note: CandService doesn't have a generic update method, so we use the repository pattern
-          const cand = await this.candService.getCandById(userId);
+          const cand = await this.candService.getCandById(userId, dataSource);
           if (!cand) {
             throw new Error("Candidate not found");
           }
           // Use the repository update pattern similar to resetCandidatePassword
-          const candRepository = AppDataSource.getRepository(CandidateEntity);
+          const candRepository = dataSource.getRepository(CandidateEntity);
           await candRepository.update(userId, { password: hashedPassword });
           break;
         case "supervisor":
           await this.supervisorService.updateSupervisor({
             id: userId,
             password: hashedPassword,
-          });
+          }, dataSource);
           break;
         case "superAdmin":
           await this.superAdminService.updateSuperAdmin({
             id: userId,
             password: hashedPassword,
-          });
+          }, dataSource);
           break;
         case "instituteAdmin":
           await this.instituteAdminService.updateInstituteAdmin({
             id: userId,
             password: hashedPassword,
-          });
+          }, dataSource);
           break;
         default:
           throw new Error("Invalid role");
@@ -295,9 +316,13 @@ export class PasswordResetProvider {
     userId: string,
     userRole: TUserRole,
     userEmail: string,
-    userName: string
+    userName: string,
+    dataSource?: DataSource
   ): Promise<void> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
       // Validate UUID format (support both UUID and ObjectId for backward compatibility)
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const objectIdRegex = /^[0-9a-f]{24}$/i;
@@ -319,7 +344,7 @@ export class PasswordResetProvider {
         token,
         expiresAt,
         used: false,
-      });
+      }, dataSource);
 
       // Generate password change link with role-specific path
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
@@ -348,9 +373,13 @@ export class PasswordResetProvider {
     userRole: TUserRole,
     newPassword: string,
     currentPassword?: string,
-    token?: string
+    token?: string,
+    dataSource?: DataSource
   ): Promise<void> | never {
     try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for password reset operations");
+      }
       // Validate UUID format (support both UUID and ObjectId for backward compatibility)
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const objectIdRegex = /^[0-9a-f]{24}$/i;
@@ -361,7 +390,7 @@ export class PasswordResetProvider {
 
       // If token is provided, validate and use it
       if (token) {
-        const tokenData = await this.validateAndUseToken(token);
+        const tokenData = await this.validateAndUseToken(token, dataSource);
         
         // Verify the token belongs to the authenticated user
         if (tokenData.userId !== userId || tokenData.userRole !== userRole) {
@@ -372,16 +401,16 @@ export class PasswordResetProvider {
         let user: any = null;
         switch (userRole) {
           case "candidate":
-            user = await this.candService.getCandById(userId);
+            user = await this.candService.getCandById(userId, dataSource);
             break;
           case "supervisor":
-            user = await this.supervisorService.getSupervisorById({ id: userId });
+            user = await this.supervisorService.getSupervisorById({ id: userId }, dataSource);
             break;
           case "superAdmin":
-            user = await this.superAdminService.getSuperAdminById({ id: userId });
+            user = await this.superAdminService.getSuperAdminById({ id: userId }, dataSource);
             break;
           case "instituteAdmin":
-            user = await this.instituteAdminService.getInstituteAdminById({ id: userId });
+            user = await this.instituteAdminService.getInstituteAdminById({ id: userId }, dataSource);
             break;
           default:
             throw new Error("Invalid role");
@@ -407,7 +436,7 @@ export class PasswordResetProvider {
       }
 
       // Update password
-      await this.updateUserPassword(userId, userRole, newPassword);
+      await this.updateUserPassword(userId, userRole, newPassword, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

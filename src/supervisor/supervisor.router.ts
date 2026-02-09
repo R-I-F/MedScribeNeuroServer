@@ -11,6 +11,7 @@ import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, requireSupervisor, requireCandidate, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class SupervisorRouter {
@@ -37,8 +38,9 @@ export class SupervisorRouter {
     // Accessible to: superAdmin only
     this.router.post(
       "/",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createSupervisorValidator,
       async (req: Request, res: Response) => {
@@ -60,8 +62,9 @@ export class SupervisorRouter {
     // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSuperAdminOrInstituteAdminOrSupervisorOrCandidate,
       async (req: Request, res: Response) => {
         try {
@@ -78,8 +81,9 @@ export class SupervisorRouter {
     // Accessible to: supervisors (and higher roles)
     this.router.get(
       "/candidates",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSupervisor,
       async (req: Request, res: Response) => {
         try {
@@ -99,8 +103,9 @@ export class SupervisorRouter {
     // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSuperAdminOrInstituteAdminOrSupervisorOrCandidate,
       getSupervisorByIdValidator,
       async (req: Request, res: Response) => {
@@ -126,8 +131,9 @@ export class SupervisorRouter {
     // Accessible to: superAdmin, instituteAdmin, supervisor
     this.router.put(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdminOrInstituteAdminOrSupervisor,
       updateSupervisorValidator,
       async (req: Request, res: Response) => {
@@ -153,8 +159,9 @@ export class SupervisorRouter {
     // Accessible to: superAdmin only
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteSupervisorValidator,
       async (req: Request, res: Response) => {
@@ -180,8 +187,9 @@ export class SupervisorRouter {
     // Accessible to: superAdmin only
     this.router.post(
       "/resetPasswords",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       async (req: Request, res: Response) => {
         try {

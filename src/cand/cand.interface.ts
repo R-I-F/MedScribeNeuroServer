@@ -37,6 +37,17 @@ export interface ICandDoc extends ICand {
   updatedAt: Date;
 }
 
+/** Censored candidate view: no email, phone, password, or PII beyond what's needed for display. */
+export interface ICandCensoredDoc {
+  id: string;
+  fullName: string;
+  regNum: string;
+  rank: Rank;
+  regDeg: RegDegree;
+  approved: boolean;
+  role?: TUserRole;
+}
+
 // Input types for create/update operations
 export type ICandInput = ICand;
 export type ICandUpdateInput = Partial<ICand> & { id: string };

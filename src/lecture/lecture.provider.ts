@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { LectureService } from "./lecture.service";
 import { ILecture, ILectureDoc, ILectureInput, ILectureUpdateInput, TLectureLevel } from "./lecture.interface";
 import { UtilService } from "../utils/utils.service";
@@ -13,7 +14,7 @@ export class LectureProvider {
     @inject(ExternalService) private externalService: ExternalService
   ) {}
 
-  public async createLecture(validatedReq: ILectureInput): Promise<ILectureDoc> | never {
+  public async createLecture(validatedReq: ILectureInput, dataSource: DataSource): Promise<ILectureDoc> | never {
     try {
       // Business logic: Process and transform data
       const processedData: ILecture = {
@@ -24,32 +25,32 @@ export class LectureProvider {
       };
 
       // Check for duplicate google_uid
-      await this.checkForDuplicateGoogleUid(processedData.google_uid);
+      await this.checkForDuplicateGoogleUid(processedData.google_uid, dataSource);
 
       // Call service to create lecture
-      return await this.lectureService.createLecture(processedData);
+      return await this.lectureService.createLecture(processedData, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllLectures(): Promise<ILectureDoc[]> | never {
+  public async getAllLectures(dataSource: DataSource): Promise<ILectureDoc[]> | never {
     try {
-      return await this.lectureService.getAllLectures();
+      return await this.lectureService.getAllLectures(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getLectureById(id: string): Promise<ILectureDoc | null> | never {
+  public async getLectureById(id: string, dataSource: DataSource): Promise<ILectureDoc | null> | never {
     try {
-      return await this.lectureService.getLectureById(id);
+      return await this.lectureService.getLectureById(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async updateLecture(validatedReq: ILectureUpdateInput): Promise<ILectureDoc | null> | never {
+  public async updateLecture(validatedReq: ILectureUpdateInput, dataSource: DataSource): Promise<ILectureDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;
 
@@ -63,7 +64,7 @@ export class LectureProvider {
       if (updateData.google_uid !== undefined) {
         updateFields.google_uid = updateData.google_uid.trim();
         // Check for duplicate google_uid if it's being updated
-        await this.checkForDuplicateGoogleUid(updateFields.google_uid, id);
+        await this.checkForDuplicateGoogleUid(updateFields.google_uid, dataSource, id);
       }
 
       if (updateData.mainTopic !== undefined) {
@@ -74,15 +75,15 @@ export class LectureProvider {
         updateFields.level = updateData.level;
       }
 
-      return await this.lectureService.updateLecture(id, updateFields);
+      return await this.lectureService.updateLecture(id, updateFields, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async deleteLecture(id: string): Promise<boolean> | never {
+  public async deleteLecture(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
-      return await this.lectureService.deleteLecture(id);
+      return await this.lectureService.deleteLecture(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -91,12 +92,13 @@ export class LectureProvider {
   /**
    * Checks for duplicate google_uid
    * @param google_uid - Google UID to check
+   * @param dataSource - DataSource instance
    * @param excludeId - Optional ID to exclude from check (for updates)
    * @throws Error if duplicate found
    */
-  private async checkForDuplicateGoogleUid(google_uid: string, excludeId?: string): Promise<void> {
+  private async checkForDuplicateGoogleUid(google_uid: string, dataSource: DataSource, excludeId?: string): Promise<void> {
     try {
-      const existingLecture = await this.lectureService.findByGoogleUid(google_uid, excludeId);
+      const existingLecture = await this.lectureService.findByGoogleUid(google_uid, dataSource, excludeId);
       
       if (existingLecture) {
         throw new Error(`Lecture with google_uid '${google_uid}' already exists`);
@@ -117,10 +119,12 @@ export class LectureProvider {
   /**
    * Creates lectures from external spreadsheet data
    * @param validatedReq - External request with spreadsheet info and mainTopic
+   * @param dataSource - DataSource instance
    * @returns Promise<ILectureDoc[]>
    */
   public async createLecturesFromExternal(
-    validatedReq: Partial<IExternalRow> & { mainTopic: string }
+    validatedReq: Partial<IExternalRow> & { mainTopic: string },
+    dataSource: DataSource
   ): Promise<ILectureDoc[]> | never {
     try {
       // Build API string
@@ -140,13 +144,13 @@ export class LectureProvider {
       );
 
       // Filter out duplicates before bulk creation
-      const uniqueLectures = await this.filterDuplicateLectures(processedLectures);
+      const uniqueLectures = await this.filterDuplicateLectures(processedLectures, dataSource);
 
       // Create bulk lectures (only new ones)
       if (uniqueLectures.length === 0) {
         return [];
       }
-      return await this.lectureService.createBulkLectures(uniqueLectures);
+      return await this.lectureService.createBulkLectures(uniqueLectures, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -266,14 +270,15 @@ export class LectureProvider {
   /**
    * Filters out lectures that already exist in the database (by google_uid)
    * @param lectures - Array of lectures to check
+   * @param dataSource - DataSource instance
    * @returns Array of unique lectures that don't exist yet
    */
-  private async filterDuplicateLectures(lectures: ILecture[]): Promise<ILecture[]> {
+  private async filterDuplicateLectures(lectures: ILecture[], dataSource: DataSource): Promise<ILecture[]> {
     try {
       const uniqueLectures: ILecture[] = [];
 
       for (const lecture of lectures) {
-        const existingLecture = await this.lectureService.findByGoogleUid(lecture.google_uid);
+        const existingLecture = await this.lectureService.findByGoogleUid(lecture.google_uid, dataSource);
         if (!existingLecture) {
           // Only add if it doesn't already exist
           uniqueLectures.push(lecture);

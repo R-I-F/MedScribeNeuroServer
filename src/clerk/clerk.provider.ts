@@ -1,31 +1,27 @@
 import { injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { IClerk, IClerkDoc } from "./clerk.interface";
-import { AppDataSource } from "../config/database.config";
 import { ClerkEntity } from "./clerk.mDbSchema";
-import { Repository } from "typeorm";
 
 @injectable()
 export class ClerkProvider {
-  private clerkRepository: Repository<ClerkEntity>;
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  constructor() {
-    this.clerkRepository = AppDataSource.getRepository(ClerkEntity);
-  }
-
-  public async createClerk(validatedReq: Partial<IClerk>): Promise<IClerkDoc> | never {
+  public async createClerk(validatedReq: Partial<IClerk>, dataSource: DataSource): Promise<IClerkDoc> | never {
     try {
-      const newClerk = this.clerkRepository.create(validatedReq);
-      const savedClerk = await this.clerkRepository.save(newClerk);
+      const clerkRepository = dataSource.getRepository(ClerkEntity);
+      const newClerk = clerkRepository.create(validatedReq);
+      const savedClerk = await clerkRepository.save(newClerk);
       return savedClerk as unknown as IClerkDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllClerks(): Promise<IClerkDoc[]> | never {
+  public async getAllClerks(dataSource: DataSource): Promise<IClerkDoc[]> | never {
     try {
-      const clerks = await this.clerkRepository.find({
+      const clerkRepository = dataSource.getRepository(ClerkEntity);
+      const clerks = await clerkRepository.find({
         order: { createdAt: "DESC" },
       });
       return clerks as unknown as IClerkDoc[];
@@ -34,12 +30,13 @@ export class ClerkProvider {
     }
   }
 
-  public async getClerkById(id: string): Promise<IClerkDoc | null> | never {
+  public async getClerkById(id: string, dataSource: DataSource): Promise<IClerkDoc | null> | never {
     try {
+      const clerkRepository = dataSource.getRepository(ClerkEntity);
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid clerk ID format");
       }
-      const clerk = await this.clerkRepository.findOne({
+      const clerk = await clerkRepository.findOne({
         where: { id },
       });
       return clerk as unknown as IClerkDoc | null;
@@ -48,9 +45,10 @@ export class ClerkProvider {
     }
   }
 
-  public async getClerkByEmail(email: string): Promise<IClerkDoc | null> | never {
+  public async getClerkByEmail(email: string, dataSource: DataSource): Promise<IClerkDoc | null> | never {
     try {
-      const clerk = await this.clerkRepository.findOne({
+      const clerkRepository = dataSource.getRepository(ClerkEntity);
+      const clerk = await clerkRepository.findOne({
         where: { email },
       });
       return clerk as unknown as IClerkDoc | null;
@@ -59,14 +57,15 @@ export class ClerkProvider {
     }
   }
 
-  public async updateClerk(validatedReq: Partial<IClerk> & { id: string }): Promise<IClerkDoc | null> | never {
+  public async updateClerk(validatedReq: Partial<IClerk> & { id: string }, dataSource: DataSource): Promise<IClerkDoc | null> | never {
     try {
+      const clerkRepository = dataSource.getRepository(ClerkEntity);
       const { id, ...updateData } = validatedReq;
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid clerk ID format");
       }
-      await this.clerkRepository.update(id, updateData);
-      const updatedClerk = await this.clerkRepository.findOne({
+      await clerkRepository.update(id, updateData);
+      const updatedClerk = await clerkRepository.findOne({
         where: { id },
       });
       return updatedClerk as unknown as IClerkDoc | null;
@@ -75,12 +74,13 @@ export class ClerkProvider {
     }
   }
 
-  public async deleteClerk(id: string): Promise<boolean> | never {
+  public async deleteClerk(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
+      const clerkRepository = dataSource.getRepository(ClerkEntity);
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid clerk ID format");
       }
-      const result = await this.clerkRepository.delete(id);
+      const result = await clerkRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);

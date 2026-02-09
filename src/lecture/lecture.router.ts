@@ -9,8 +9,10 @@ import { createBulkLecturesFromExternalValidator } from "../validators/createBul
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireSupervisor } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
+import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class LectureRouter {
@@ -23,11 +25,20 @@ export class LectureRouter {
   }
 
   public async initRoutes() {
+    // Get all / get by ID: supervisor, clerk, instituteAdmin, superAdmin
+    const requireSupervisorOrClerk = authorize(
+      UserRole.SUPERVISOR,
+      UserRole.CLERK,
+      UserRole.INSTITUTE_ADMIN,
+      UserRole.SUPER_ADMIN
+    );
+
     // Create lecture
     this.router.post(
       "/",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createLectureValidator,
       async (req: Request, res: Response) => {
@@ -48,9 +59,10 @@ export class LectureRouter {
     // Get all lectures
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
-      requireSupervisor,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSupervisorOrClerk,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.lectureController.handleGetAllLectures(req, res);
@@ -64,9 +76,10 @@ export class LectureRouter {
     // Get lecture by ID
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
-      requireSupervisor,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSupervisorOrClerk,
       getLectureByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -90,8 +103,9 @@ export class LectureRouter {
     // Update lecture
     this.router.patch(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       updateLectureValidator,
       async (req: Request, res: Response) => {
@@ -116,8 +130,9 @@ export class LectureRouter {
     // Delete lecture
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteLectureValidator,
       async (req: Request, res: Response) => {
@@ -142,8 +157,9 @@ export class LectureRouter {
     // Bulk create lectures from external (auto-detect level: msc/md)
     this.router.post(
       "/postBulk",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createBulkLecturesFromExternalValidator,
       async (req: Request, res: Response) => {

@@ -10,7 +10,8 @@ import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, requireInstituteAdmin, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
-import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import { userBasedRateLimiter, userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class CandRouter{
@@ -24,19 +25,24 @@ export class CandRouter{
 
   public async initRoutes(
   ){
-    // Custom authorization for GET: allows superAdmin and instituteAdmin
-    const requireSuperAdminOrInstituteAdmin = authorize(
+    // Custom authorization for GET: allows superAdmin, instituteAdmin, clerk, supervisor, candidate
+    // Full data for superAdmin, instituteAdmin; censored data for clerk, supervisor, candidate
+    const requireAnyAuthenticatedForGetCands = authorize(
       UserRole.SUPER_ADMIN,
-      UserRole.INSTITUTE_ADMIN
+      UserRole.INSTITUTE_ADMIN,
+      UserRole.CLERK,
+      UserRole.SUPERVISOR,
+      UserRole.CANDIDATE
     );
 
     // Get all candidates
-    // Accessible to: superAdmin, instituteAdmin
+    // Accessible to: superAdmin, instituteAdmin (full); clerk, supervisor, candidate (censored)
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
-      requireSuperAdminOrInstituteAdmin,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireAnyAuthenticatedForGetCands,
       async (req: Request, res: Response) => {
         try {
           const resp = await this.candController.handleGetAllCands(req, res);
@@ -48,12 +54,13 @@ export class CandRouter{
     );
 
     // Get candidate by ID
-    // Accessible to: superAdmin, instituteAdmin
+    // Accessible to: superAdmin, instituteAdmin (full); clerk, supervisor, candidate (censored)
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
-      requireSuperAdminOrInstituteAdmin,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireAnyAuthenticatedForGetCands,
       getCandByIdValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -78,33 +85,27 @@ export class CandRouter{
       }
     );
 
-    // Create candidates from external source
+    // DISABLED: See docs/DISABLED_ROUTES.md. Create candidates from external (no auth; X-Institution-Id).
     this.router.post(
       "/createCandsFromExternal",
-      userBasedStrictRateLimiter,
-      extractJWT,
-      requireSuperAdmin,
+      institutionResolver,
+      strictRateLimiter,
       createFromExternalValidator,
-      async (req: Request, res: Response)=>{
-        const result = validationResult(req);
-        if(result.isEmpty()){
-          try {
-            const resp = await this.candController.handlePostCandFromExternal(req, res);
-            res.status(StatusCodes.CREATED).json(resp);
-          } catch (err: any) {
-            throw new Error(err);
-          }
-        } else {
-          res.status(StatusCodes.BAD_REQUEST).json(result.array());
-        }
+      async (req: Request, res: Response) => {
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
       }
     );
 
     // Reset candidate password
     this.router.patch(
       "/:id/resetPassword",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       resetCandidatePasswordValidator,
       async (req: Request, res: Response) => {
@@ -125,8 +126,9 @@ export class CandRouter{
     // Delete candidate
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteCandValidator,
       async (req: Request, res: Response) => {

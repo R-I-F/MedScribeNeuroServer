@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { IInstituteAdmin, IInstituteAdminDoc } from "./instituteAdmin.interface";
 import { InstituteAdminProvider } from "./instituteAdmin.provider";
 
@@ -6,90 +7,90 @@ import { InstituteAdminProvider } from "./instituteAdmin.provider";
 export class InstituteAdminService {
   constructor(@inject(InstituteAdminProvider) private instituteAdminProvider: InstituteAdminProvider) {}
 
-  public async createInstituteAdmin(validatedReq: Partial<IInstituteAdmin>): Promise<IInstituteAdminDoc> | never {
+  public async createInstituteAdmin(validatedReq: Partial<IInstituteAdmin>, dataSource: DataSource): Promise<IInstituteAdminDoc> | never {
     try {
-      return await this.instituteAdminProvider.createInstituteAdmin(validatedReq);
+      return await this.instituteAdminProvider.createInstituteAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllInstituteAdmins(): Promise<IInstituteAdminDoc[]> | never {
+  public async getAllInstituteAdmins(dataSource: DataSource): Promise<IInstituteAdminDoc[]> | never {
     try {
-      return await this.instituteAdminProvider.getAllInstituteAdmins();
+      return await this.instituteAdminProvider.getAllInstituteAdmins(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getInstituteAdminById(validatedReq: { id: string }): Promise<IInstituteAdminDoc | null> | never {
+  public async getInstituteAdminById(validatedReq: { id: string }, dataSource: DataSource): Promise<IInstituteAdminDoc | null> | never {
     try {
-      return await this.instituteAdminProvider.getInstituteAdminById(validatedReq.id);
+      return await this.instituteAdminProvider.getInstituteAdminById(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getInstituteAdminByEmail(email: string): Promise<IInstituteAdminDoc | null> | never {
+  public async getInstituteAdminByEmail(email: string, dataSource: DataSource): Promise<IInstituteAdminDoc | null> | never {
     try {
-      return await this.instituteAdminProvider.getInstituteAdminByEmail(email);
+      return await this.instituteAdminProvider.getInstituteAdminByEmail(email, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async updateInstituteAdmin(validatedReq: Partial<IInstituteAdmin> & { id: string }): Promise<IInstituteAdminDoc | null> | never {
+  public async updateInstituteAdmin(validatedReq: Partial<IInstituteAdmin> & { id: string }, dataSource: DataSource): Promise<IInstituteAdminDoc | null> | never {
     try {
-      return await this.instituteAdminProvider.updateInstituteAdmin(validatedReq);
+      return await this.instituteAdminProvider.updateInstituteAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async deleteInstituteAdmin(validatedReq: { id: string }): Promise<boolean> | never {
+  public async deleteInstituteAdmin(validatedReq: { id: string }, dataSource: DataSource): Promise<boolean> | never {
     try {
-      return await this.instituteAdminProvider.deleteInstituteAdmin(validatedReq.id);
+      return await this.instituteAdminProvider.deleteInstituteAdmin(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
   // Dashboard endpoints
-  public async getAllSupervisors() {
+  public async getAllSupervisors(dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getAllSupervisors();
+      return await this.instituteAdminProvider.getAllSupervisors(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getSupervisorSubmissions(supervisorId: string, status?: "approved" | "pending" | "rejected") {
+  public async getSupervisorSubmissions(supervisorId: string, status: "approved" | "pending" | "rejected" | undefined, dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getSupervisorSubmissions(supervisorId, status);
+      return await this.instituteAdminProvider.getSupervisorSubmissions(supervisorId, status, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllCandidates() {
+  public async getAllCandidates(dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getAllCandidates();
+      return await this.instituteAdminProvider.getAllCandidates(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCandidateSubmissions(candidateId: string) {
+  public async getCandidateSubmissions(candidateId: string, dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getCandidateSubmissions(candidateId);
+      return await this.instituteAdminProvider.getCandidateSubmissions(candidateId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCandidateSubmissionById(candidateId: string, submissionId: string) {
+  public async getCandidateSubmissionById(candidateId: string, submissionId: string, dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getCandidateSubmissionById(candidateId, submissionId);
+      return await this.instituteAdminProvider.getCandidateSubmissionById(candidateId, submissionId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -103,25 +104,25 @@ export class InstituteAdminService {
     year?: number;
     startDate?: Date;
     endDate?: Date;
-  }) {
+  }, dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getCalendarProcedures(filters);
+      return await this.instituteAdminProvider.getCalendarProcedures(filters, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllHospitals() {
+  public async getAllHospitals(dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getAllHospitals();
+      return await this.instituteAdminProvider.getAllHospitals(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getArabicProcedures(search?: string) {
+  public async getArabicProcedures(search: string | undefined, dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getArabicProcedures(search);
+      return await this.instituteAdminProvider.getArabicProcedures(search, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -134,9 +135,9 @@ export class InstituteAdminService {
     startDate?: Date;
     endDate?: Date;
     groupBy?: "title" | "alphaCode";
-  }) {
+  }, dataSource: DataSource) {
     try {
-      return await this.instituteAdminProvider.getHospitalAnalysis(filters);
+      return await this.instituteAdminProvider.getHospitalAnalysis(filters, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

@@ -3,6 +3,8 @@ import { HospitalService } from "./hospital.service";
 import { IHospital, IHospitalDoc } from "./hospital.interface";
 import { Request, Response } from "express";
 import { matchedData } from "express-validator";
+import { DataSource } from "typeorm";
+import { AppDataSource } from "../config/database.config";
 
 @injectable()
 export class HospitalController {
@@ -16,7 +18,8 @@ export class HospitalController {
   ): Promise<IHospitalDoc> | never {
     try {
       const validatedReq = matchedData(req) as IHospital;
-      const newHospital = await this.hospitalService.createHospital(validatedReq);
+      const dataSource = (req as any).institutionDataSource || AppDataSource;
+      const newHospital = await this.hospitalService.createHospital(validatedReq, dataSource);
       return newHospital;
     } catch (err: any) {
       throw new Error(err);
@@ -28,7 +31,8 @@ export class HospitalController {
     res: Response
   ): Promise<IHospitalDoc[]> | never {
     try {
-      return await this.hospitalService.getAllHospitals();
+      const dataSource = (req as any).institutionDataSource || AppDataSource;
+      return await this.hospitalService.getAllHospitals(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -40,7 +44,8 @@ export class HospitalController {
   ): Promise<IHospitalDoc | null> | never {
     try {
       const { id } = matchedData(req) as { id: string };
-      return await this.hospitalService.getHospitalById(id);
+      const dataSource = (req as any).institutionDataSource || AppDataSource;
+      return await this.hospitalService.getHospitalById(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -52,7 +57,8 @@ export class HospitalController {
   ): Promise<{ message: string }> | never {
     const { id } = matchedData(req) as { id: string };
     try {
-      const deleted = await this.hospitalService.deleteHospital(id);
+      const dataSource = (req as any).institutionDataSource || AppDataSource;
+      const deleted = await this.hospitalService.deleteHospital(id, dataSource);
       if (!deleted) {
         throw new Error("Hospital not found");
       }

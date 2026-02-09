@@ -15,6 +15,7 @@ import { ICalSurgDoc } from "../calSurg/calSurg.interface";
 import { IHospitalDoc } from "../hospital/hospital.interface";
 import * as path from "path";
 import * as fs from "fs";
+import { DataSource } from "typeorm";
 
 @injectable()
 export class ReportsProvider {
@@ -276,7 +277,8 @@ export class ReportsProvider {
 
   // Generate Supervisors Submission Count Report
   public async generateSupervisorsSubmissionCountReport(
-    filters: IReportFilters
+    filters: IReportFilters,
+    dataSource?: DataSource
   ): Promise<Buffer> | never {
     try {
       const doc = new PDFDocument({ margin: 50 });
@@ -306,7 +308,7 @@ export class ReportsProvider {
 
         // Fetch data
         this.reportsService
-          .getAllSupervisors()
+          .getAllSupervisors(dataSource)
           .then(async (supervisors) => {
             // Filter out Tester_Supervisor (case-insensitive)
             const filteredSupervisors = supervisors.filter(
@@ -332,7 +334,8 @@ export class ReportsProvider {
                 // Use id (UUID) instead of _id (supervisors now use MariaDB)
                 (supervisor as any).id || (supervisor as any)._id?.toString() || supervisor.id,
                 filters.startDate,
-                filters.endDate
+                filters.endDate,
+                dataSource
               );
 
               const approved = submissions.filter((s) => s.subStatus === "approved").length;
@@ -379,7 +382,8 @@ export class ReportsProvider {
 
   // Generate Candidates Submission Count Report
   public async generateCandidatesSubmissionCountReport(
-    filters: IReportFilters
+    filters: IReportFilters,
+    dataSource?: DataSource
   ): Promise<Buffer> | never {
     try {
       const doc = new PDFDocument({ margin: 50 });
@@ -409,7 +413,7 @@ export class ReportsProvider {
 
         // Fetch data
         this.reportsService
-          .getAllCandidates()
+          .getAllCandidates(dataSource)
           .then(async (candidates) => {
             // Filter out tester accounts (case-insensitive)
             const filteredCandidates = candidates.filter(
@@ -436,7 +440,8 @@ export class ReportsProvider {
               const submissions = await this.reportsService.getSubmissionsByCandidateId(
                 candidateId,
                 filters.startDate,
-                filters.endDate
+                filters.endDate,
+                dataSource
               );
 
               const approved = submissions.filter((s) => s.subStatus === "approved").length;
@@ -483,7 +488,8 @@ export class ReportsProvider {
 
   // Generate Hospital Analysis Report
   public async generateHospitalAnalysisReport(
-    filters: IReportFilters
+    filters: IReportFilters,
+    dataSource?: DataSource
   ): Promise<Buffer> | never {
     try {
       const doc = new PDFDocument({ margin: 50 });
@@ -519,9 +525,9 @@ export class ReportsProvider {
             year: filters.year,
             startDate: filters.startDate,
             endDate: filters.endDate,
-          }),
-          this.reportsService.getAllHospitals(),
-          this.reportsService.getAllSubmissions(),
+          }, dataSource),
+          this.reportsService.getAllHospitals(dataSource),
+          this.reportsService.getAllSubmissions(dataSource),
         ])
           .then(([calSurgs, hospitals, submissions]) => {
             // Summary section
@@ -655,7 +661,8 @@ export class ReportsProvider {
   }
 
   public async generateCanceledEventsReport(
-    filters: Pick<IReportFilters, "startDate" | "endDate">
+    filters: Pick<IReportFilters, "startDate" | "endDate">,
+    dataSource?: DataSource
   ): Promise<Buffer> | never {
     try {
       const doc = new PDFDocument({ margin: 50 });
@@ -672,7 +679,7 @@ export class ReportsProvider {
         this.addFooter(doc);
 
         this.reportsService
-          .getCanceledEventsReportData(filters.startDate, filters.endDate)
+          .getCanceledEventsReportData(filters.startDate, filters.endDate, dataSource)
           .then((items: ICanceledEventReportItem[]) => {
             if (!items.length) {
               doc.moveDown(2)
@@ -686,7 +693,7 @@ export class ReportsProvider {
 
             // Detailed-only pages (no summary/table)
             this.reportsService
-              .getEventCountsForPeriod(filters.startDate, filters.endDate)
+              .getEventCountsForPeriod(filters.startDate, filters.endDate, dataSource)
               .then((counts) => {
                 doc
                   .moveDown(1)

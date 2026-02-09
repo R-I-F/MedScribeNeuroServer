@@ -17,11 +17,15 @@ export class SuperAdminController {
   ) {
     const validatedReq = matchedData(req) as Partial<ISuperAdmin>;
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       // Hash password before saving
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.superAdminService.createSuperAdmin(validatedReq);
+      return await this.superAdminService.createSuperAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -32,7 +36,11 @@ export class SuperAdminController {
     res: Response
   ) {
     try {
-      return await this.superAdminService.getAllSuperAdmins();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.superAdminService.getAllSuperAdmins(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -44,7 +52,11 @@ export class SuperAdminController {
   ) {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      return await this.superAdminService.getSuperAdminById(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.superAdminService.getSuperAdminById(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -56,11 +68,15 @@ export class SuperAdminController {
   ) {
     const validatedReq = matchedData(req) as Partial<ISuperAdmin> & { id: string };
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       // Hash password if it's being updated
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.superAdminService.updateSuperAdmin(validatedReq);
+      return await this.superAdminService.updateSuperAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -72,7 +88,11 @@ export class SuperAdminController {
   ) {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      return await this.superAdminService.deleteSuperAdmin(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.superAdminService.deleteSuperAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

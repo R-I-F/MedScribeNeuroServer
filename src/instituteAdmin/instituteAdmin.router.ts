@@ -16,6 +16,7 @@ import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, requireInstituteAdmin } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class InstituteAdminRouter {
@@ -31,8 +32,9 @@ export class InstituteAdminRouter {
     // Create institute admin (only super admins can create)
     this.router.post(
       "/",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createInstituteAdminValidator,
       async (req: Request, res: Response) => {
@@ -53,8 +55,9 @@ export class InstituteAdminRouter {
     // Get all institute admins (only institute admins and super admins)
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -69,8 +72,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get all supervisors (MUST be before /:id route)
     this.router.get(
       "/supervisors",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -85,8 +89,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get supervisor submissions (MUST be before /:id route)
     this.router.get(
       "/supervisors/:supervisorId/submissions",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       getSupervisorSubmissionsValidator,
       async (req: Request, res: Response) => {
@@ -111,8 +116,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get all candidates (MUST be before /:id route)
     this.router.get(
       "/candidates",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -127,8 +133,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get candidate submissions (MUST be before /:id route)
     this.router.get(
       "/candidates/:candidateId/submissions",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       getCandidateSubmissionsValidator,
       async (req: Request, res: Response) => {
@@ -153,8 +160,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get candidate submission by ID (MUST be before /:id route)
     this.router.get(
       "/candidates/:candidateId/submissions/:submissionId",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       getCandidateSubmissionByIdValidator,
       async (req: Request, res: Response) => {
@@ -187,8 +195,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get calendar procedures with filters (MUST be before /:id route)
     this.router.get(
       "/calendarProcedures",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       getCalendarProceduresValidator,
       async (req: Request, res: Response) => {
@@ -209,8 +218,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get hospital-based analysis (MUST be before /:id route)
     this.router.get(
       "/calendarProcedures/analysis/hospital",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       getHospitalAnalysisValidator,
       async (req: Request, res: Response) => {
@@ -231,8 +241,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get all hospitals (MUST be before /:id route)
     this.router.get(
       "/hospitals",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -247,8 +258,9 @@ export class InstituteAdminRouter {
     // Dashboard endpoints - Get Arabic procedures with optional search (MUST be before /:id route)
     this.router.get(
       "/arabicProcedures",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       getArabicProceduresValidator,
       async (req: Request, res: Response) => {
@@ -270,8 +282,9 @@ export class InstituteAdminRouter {
     // MUST be after all specific routes to avoid route conflicts
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireInstituteAdmin,
       getInstituteAdminByIdValidator,
       async (req: Request, res: Response) => {
@@ -296,8 +309,9 @@ export class InstituteAdminRouter {
     // Update institute admin (only institute admins and super admins)
     this.router.put(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireInstituteAdmin,
       updateInstituteAdminValidator,
       async (req: Request, res: Response) => {
@@ -322,8 +336,9 @@ export class InstituteAdminRouter {
     // Delete institute admin (only super admins)
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteInstituteAdminValidator,
       async (req: Request, res: Response) => {

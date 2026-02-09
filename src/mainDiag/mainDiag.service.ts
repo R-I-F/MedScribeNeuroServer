@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { IMainDiag, IMainDiagDoc, IMainDiagInput, IMainDiagUpdateInput } from "./mainDiag.interface";
 import { MainDiagProvider } from "./mainDiag.provider";
 
@@ -6,41 +7,41 @@ import { MainDiagProvider } from "./mainDiag.provider";
 export class MainDiagService {
   constructor(@inject(MainDiagProvider) private mainDiagProvider: MainDiagProvider) {}
 
-  public async createMainDiag(validatedReq: IMainDiagInput): Promise<IMainDiagDoc> | never {
+  public async createMainDiag(validatedReq: IMainDiagInput, dataSource: DataSource): Promise<IMainDiagDoc> | never {
     try {
-      return await this.mainDiagProvider.createMainDiag(validatedReq);
+      return await this.mainDiagProvider.createMainDiag(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllMainDiags(): Promise<IMainDiagDoc[]> | never {
+  public async getAllMainDiags(dataSource: DataSource): Promise<IMainDiagDoc[]> | never {
     try {
-      return await this.mainDiagProvider.getAllMainDiags();
+      return await this.mainDiagProvider.getAllMainDiags(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getMainDiagById(validatedReq: { id: string }): Promise<IMainDiagDoc | null> | never {
+  public async getMainDiagById(validatedReq: { id: string }, dataSource: DataSource): Promise<IMainDiagDoc | null> | never {
     try {
-      return await this.mainDiagProvider.getMainDiagById(validatedReq.id);
+      return await this.mainDiagProvider.getMainDiagById(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async updateMainDiag(validatedReq: IMainDiagUpdateInput): Promise<IMainDiagDoc | null> | never {
+  public async updateMainDiag(validatedReq: IMainDiagUpdateInput, dataSource: DataSource): Promise<IMainDiagDoc | null> | never {
     try {
-      return await this.mainDiagProvider.updateMainDiag(validatedReq);
+      return await this.mainDiagProvider.updateMainDiag(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async deleteMainDiag(validatedReq: { id: string }): Promise<boolean> | never {
+  public async deleteMainDiag(validatedReq: { id: string }, dataSource: DataSource): Promise<boolean> | never {
     try {
-      return await this.mainDiagProvider.deleteMainDiag(validatedReq.id);
+      return await this.mainDiagProvider.deleteMainDiag(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

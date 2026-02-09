@@ -11,6 +11,10 @@ export class PasswordResetController {
 
   public async handleChangePassword(req: Request, res: Response) {
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       const jwtPayload = res.locals.jwt as { id?: string; _id?: string; email: string; role: string } | undefined;
       
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
@@ -31,7 +35,8 @@ export class PasswordResetController {
         jwtPayload.role as any,
         validatedData.newPassword,
         validatedData.currentPassword,
-        validatedData.token
+        validatedData.token,
+        dataSource
       );
 
       return {
@@ -44,6 +49,10 @@ export class PasswordResetController {
 
   public async handleRequestPasswordChangeEmail(req: Request, res: Response) {
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       const jwtPayload = res.locals.jwt as { id?: string; _id?: string; email: string; role: string } | undefined;
       
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
@@ -56,7 +65,8 @@ export class PasswordResetController {
       // Get user details to get fullName
       const userData = await this.passwordResetProvider.findUserByIdAndRole(
         userId,
-        jwtPayload.role as any
+        jwtPayload.role as any,
+        dataSource
       );
 
       if (!userData) {
@@ -69,7 +79,8 @@ export class PasswordResetController {
         userId,
         jwtPayload.role as any,
         jwtPayload.email,
-        userName
+        userName,
+        dataSource
       );
 
       return {
@@ -82,10 +93,14 @@ export class PasswordResetController {
 
   public async handleForgotPassword(req: Request, res: Response) {
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       const validatedData = matchedData(req) as { email: string };
       
       // Always return success message (security best practice)
-      await this.passwordResetProvider.createPasswordResetToken(validatedData.email);
+      await this.passwordResetProvider.createPasswordResetToken(validatedData.email, dataSource);
 
       return {
         message: "If an account with that email exists, a password reset link has been sent",
@@ -100,6 +115,10 @@ export class PasswordResetController {
 
   public async handleResetPassword(req: Request, res: Response) {
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       const validatedData = matchedData(req) as {
         token: string;
         newPassword: string;
@@ -107,14 +126,16 @@ export class PasswordResetController {
 
       // Validate and use token
       const { userId, userRole } = await this.passwordResetProvider.validateAndUseToken(
-        validatedData.token
+        validatedData.token,
+        dataSource
       );
 
       // Update password
       await this.passwordResetProvider.updateUserPassword(
         userId,
         userRole,
-        validatedData.newPassword
+        validatedData.newPassword,
+        dataSource
       );
 
       return {

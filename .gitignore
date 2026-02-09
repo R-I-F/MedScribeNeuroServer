@@ -15,3 +15,9 @@ dist/
 
 # Cursor IDE rules (project-specific configuration)
 .cursorrules
+
+# Local / deployment-agnostic scripts and docs (not for version control)
+scripts/
+docs/DISABLED_ROUTES.md
+docs/SENSITIVE_DATA_AUDIT.md
+API_DOCUMENTATION.md

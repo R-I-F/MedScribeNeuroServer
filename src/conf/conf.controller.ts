@@ -3,6 +3,8 @@ import { matchedData } from "express-validator";
 import { inject, injectable } from "inversify";
 import { ConfProvider } from "./conf.provider";
 import { IConfInput, IConfUpdateInput } from "./conf.interface";
+import { toCensoredSupervisor } from "../utils/censored.mapper";
+import { ISupervisorDoc } from "../supervisor/supervisor.interface";
 
 @injectable()
 export class ConfController {
@@ -16,7 +18,11 @@ export class ConfController {
   ) {
     const validatedReq = matchedData(req) as IConfInput;
     try {
-      return await this.confProvider.createConf(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.confProvider.createConf(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -27,7 +33,18 @@ export class ConfController {
     res: Response
   ) {
     try {
-      return await this.confProvider.getAllConfs();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const list = await this.confProvider.getAllConfs(dataSource);
+      return list.map(({ createdAt, updatedAt, google_uid, ...rest }) => {
+        const out = { ...rest };
+        if (out.presenter && typeof out.presenter === "object") {
+          out.presenter = toCensoredSupervisor(out.presenter as ISupervisorDoc);
+        }
+        return out;
+      });
     } catch (err: any) {
       throw new Error(err);
     }
@@ -41,7 +58,16 @@ export class ConfController {
     // Ensure id is extracted from params
     validatedReq.id = req.params.id;
     try {
-      return await this.confProvider.getConfById(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const conf = await this.confProvider.getConfById(validatedReq.id, dataSource);
+      if (!conf) return null;
+      if (conf.presenter && typeof conf.presenter === "object") {
+        conf.presenter = toCensoredSupervisor(conf.presenter as ISupervisorDoc);
+      }
+      return conf;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -55,7 +81,11 @@ export class ConfController {
     // Merge id from params into validatedReq
     validatedReq.id = req.params.id;
     try {
-      return await this.confProvider.updateConf(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.confProvider.updateConf(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -69,7 +99,11 @@ export class ConfController {
     // Ensure id is extracted from params
     validatedReq.id = req.params.id;
     try {
-      return await this.confProvider.deleteConf(validatedReq.id);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.confProvider.deleteConf(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

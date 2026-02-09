@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { ISupervisor, ISupervisorDoc } from "./supervisor.interface";
-import { AppDataSource } from "../config/database.config";
 import { SupervisorEntity } from "./supervisor.mDbSchema";
 import { Repository } from "typeorm";
 import { SubService } from "../sub/sub.service";
@@ -9,27 +9,25 @@ import { ICandDoc } from "../cand/cand.interface";
 
 @injectable()
 export class SupervisorProvider {
-  private supervisorRepository: Repository<SupervisorEntity>;
-
   constructor(
     @inject(SubService) private subService: SubService
-  ) {
-    this.supervisorRepository = AppDataSource.getRepository(SupervisorEntity);
-  }
+  ) {}
 
-  public async createSupervisor(validatedReq: Partial<ISupervisor>): Promise<ISupervisorDoc> | never {
+  public async createSupervisor(validatedReq: Partial<ISupervisor>, dataSource: DataSource): Promise<ISupervisorDoc> | never {
     try {
-      const newSupervisor = this.supervisorRepository.create(validatedReq);
-      const savedSupervisor = await this.supervisorRepository.save(newSupervisor);
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
+      const newSupervisor = supervisorRepository.create(validatedReq);
+      const savedSupervisor = await supervisorRepository.save(newSupervisor);
       return savedSupervisor as unknown as ISupervisorDoc;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllSupervisors(): Promise<ISupervisorDoc[]> | never {
+  public async getAllSupervisors(dataSource: DataSource): Promise<ISupervisorDoc[]> | never {
     try {
-      const supervisors = await this.supervisorRepository.find({
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
+      const supervisors = await supervisorRepository.find({
         order: { createdAt: "DESC" },
       });
       return supervisors as unknown as ISupervisorDoc[];
@@ -38,14 +36,15 @@ export class SupervisorProvider {
     }
   }
 
-  public async getSupervisorById(id: string): Promise<ISupervisorDoc | null> | never {
+  public async getSupervisorById(id: string, dataSource: DataSource): Promise<ISupervisorDoc | null> | never {
     try {
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
         throw new Error("Invalid supervisor ID format");
       }
-      const supervisor = await this.supervisorRepository.findOne({
+      const supervisor = await supervisorRepository.findOne({
         where: { id },
       });
       return supervisor as unknown as ISupervisorDoc | null;
@@ -54,9 +53,10 @@ export class SupervisorProvider {
     }
   }
 
-  public async getSupervisorByEmail(email: string): Promise<ISupervisorDoc | null> | never {
+  public async getSupervisorByEmail(email: string, dataSource: DataSource): Promise<ISupervisorDoc | null> | never {
     try {
-      const supervisor = await this.supervisorRepository.findOne({
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
+      const supervisor = await supervisorRepository.findOne({
         where: { email },
       });
       return supervisor as unknown as ISupervisorDoc | null;
@@ -65,16 +65,17 @@ export class SupervisorProvider {
     }
   }
 
-  public async updateSupervisor(validatedReq: Partial<ISupervisor> & { id: string }): Promise<ISupervisorDoc | null> | never {
+  public async updateSupervisor(validatedReq: Partial<ISupervisor> & { id: string }, dataSource: DataSource): Promise<ISupervisorDoc | null> | never {
     try {
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
       const { id, ...updateData } = validatedReq;
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
         throw new Error("Invalid supervisor ID format");
       }
-      await this.supervisorRepository.update(id, updateData);
-      const updatedSupervisor = await this.supervisorRepository.findOne({
+      await supervisorRepository.update(id, updateData);
+      const updatedSupervisor = await supervisorRepository.findOne({
         where: { id },
       });
       return updatedSupervisor as unknown as ISupervisorDoc | null;
@@ -83,21 +84,22 @@ export class SupervisorProvider {
     }
   }
 
-  public async deleteSupervisor(id: string): Promise<boolean> | never {
+  public async deleteSupervisor(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
         throw new Error("Invalid supervisor ID format");
       }
-      const result = await this.supervisorRepository.delete(id);
+      const result = await supervisorRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getSupervisedCandidates(supervisorId: string): Promise<Array<ICandDoc & { submissionStats: { total: number; approved: number; pending: number; rejected: number } }>> | never {
+  public async getSupervisedCandidates(supervisorId: string, dataSource: DataSource): Promise<Array<ICandDoc & { submissionStats: { total: number; approved: number; pending: number; rejected: number } }>> | never {
     try {
       // Validate UUID format (supervisor now uses MariaDB UUID)
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -106,7 +108,7 @@ export class SupervisorProvider {
       }
       
       // Get all submissions for this supervisor
-      const submissions = await this.subService.getSubsBySupervisorId(supervisorId);
+      const submissions = await this.subService.getSubsBySupervisorId(supervisorId, dataSource);
       
       // Extract unique candidates and calculate statistics
       const candidateMap = new Map<string, {
@@ -115,6 +117,8 @@ export class SupervisorProvider {
       }>();
       
       submissions.forEach((sub: ISubDoc) => {
+        // Only process candidate submissions (supervisor submissions have candDocId = null)
+        if ((sub as any).submissionType === "supervisor" || !sub.candDocId) return;
         // candDocId is populated, so it's an object
         const candidate = sub.candDocId as any;
         const candidateId = candidate._id ? candidate._id.toString() : candidate.toString();

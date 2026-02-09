@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { EventService } from "./event.service";
 import {
   IEvent,
@@ -12,6 +13,11 @@ import {
   IFlagAttendanceInput,
   IUnflagAttendanceInput,
   IEventAttendance,
+  ICandidateEventPointsResponse,
+  IEventPointsItem,
+  IEventPointsPresenter,
+  IEventPointsEvent,
+  TEventTypePublic,
 } from "./event.interface";
 import { UtilService } from "../utils/utils.service";
 import { LectureService } from "../lecture/lecture.service";
@@ -36,15 +42,15 @@ export class EventProvider {
     @inject(ExternalService) private externalService: ExternalService
   ) {}
 
-  public async createEvent(validatedReq: IEventInput): Promise<IEventDoc> | never {
+  public async createEvent(validatedReq: IEventInput, dataSource: DataSource): Promise<IEventDoc> | never {
     try {
       // Validate type and referenced document
       this.validateTypeAndRefs(validatedReq);
-      await this.validateReferencedEntityExists(validatedReq);
+      await this.validateReferencedEntityExists(validatedReq, dataSource);
 
       // Validate presenter based on type
       const presenterId = validatedReq.presenter;
-      await this.validatePresenter(validatedReq.type, presenterId);
+      await this.validatePresenter(validatedReq.type, presenterId, dataSource);
 
       // Validate location based on type
       this.validateLocation(validatedReq.type, validatedReq.location);
@@ -98,30 +104,54 @@ export class EventProvider {
         attendance: processedAttendance,
       } as any;
 
-      return await this.eventService.createEvent(eventWithAttendance);
+      return await this.eventService.createEvent(eventWithAttendance, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllEvents(): Promise<IEventDoc[]> | never {
+  public async getAllEvents(dataSource: DataSource): Promise<IEventDoc[]> | never {
     try {
-      return await this.eventService.getAllEvents();
+      return await this.eventService.getAllEvents(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getEventById(id: string): Promise<IEventDoc | null> | never {
+  /**
+   * Dashboard: events from last 30 days through all future, stripped of createdAt and updatedAt
+   */
+  public async getEventsDashboard(dataSource: DataSource): Promise<any[]> | never {
     try {
-      return await this.eventService.getEventById(id);
+      return await this.eventService.getEventsDashboard(dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  /**
+   * Returns all events where the given supervisor ID was the presenter.
+   * Includes aggregated attendance for each event.
+   */
+  public async getEventsByPresenter(supervisorId: string, dataSource: DataSource): Promise<any[]> | never {
+    try {
+      return await this.eventService.getEventsByPresenter(supervisorId, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getEventById(id: string, dataSource: DataSource): Promise<IEventDoc | null> | never {
+    try {
+      return await this.eventService.getEventById(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
   public async updateEvent(
-    validatedReq: IEventUpdateInput
+    validatedReq: IEventUpdateInput,
+    dataSource: DataSource
   ): Promise<IEventDoc | null> | never {
     try {
       const { id, ...updateData } = validatedReq;
@@ -146,7 +176,7 @@ export class EventProvider {
       }
 
       // Get current event state for validation (needed for status and dateTime validation)
-      const currentEvent = await this.eventService.getEventById(id);
+      const currentEvent = await this.eventService.getEventById(id, dataSource);
       if (!currentEvent) {
         throw new Error("Event not found");
       }
@@ -219,15 +249,9 @@ export class EventProvider {
         
         // Auto-update status based on attendance:
         // - If attendance has attendees, set status to "held"
-        // - If attendance is empty and event date has passed, set status to "canceled"
-        // - Otherwise, keep current status or default to "booked"
+        // - If attendance is empty, do not auto-change status (keep current)
         if (processedAttendance.length > 0) {
           updateFields.status = "held";
-        } else {
-          // Check if event date has passed
-          if (currentEvent.dateTime < new Date()) {
-            updateFields.status = "canceled";
-          }
         }
       }
 
@@ -243,7 +267,7 @@ export class EventProvider {
       }
 
       // If type or refs or presenter/attendance changed, re-validate
-      const currentState = await this.buildCurrentEventState(id);
+      const currentState = await this.buildCurrentEventState(id, dataSource);
       const merged: IEventInput = {
         ...currentState,
         ...updateFields,
@@ -255,28 +279,28 @@ export class EventProvider {
       };
 
       this.validateTypeAndRefs(merged);
-      await this.validateReferencedEntityExists(merged);
-      await this.validatePresenter(merged.type, merged.presenter);
+      await this.validateReferencedEntityExists(merged, dataSource);
+      await this.validatePresenter(merged.type, merged.presenter, dataSource);
       this.validateLocation(merged.type, merged.location);
       const attendanceToValidate = processedAttendance !== undefined ? processedAttendance : (currentState.attendance || []);
       this.validateAttendanceIds(attendanceToValidate);
 
-      return await this.eventService.updateEvent(id, updateFields);
+      return await this.eventService.updateEvent(id, updateFields, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async addAttendance(validatedReq: IAddAttendanceInput): Promise<IEventDoc> | never {
+  public async addAttendance(validatedReq: IAddAttendanceInput, dataSource: DataSource): Promise<IEventDoc> | never {
     try {
       // Validate event exists
-      const event = await this.eventService.getEventById(validatedReq.eventId);
+      const event = await this.eventService.getEventById(validatedReq.eventId, dataSource);
       if (!event) {
         throw new Error("Event not found");
       }
 
       // Validate candidate exists
-      const candidate = await this.candService.getCandById(validatedReq.candidateId);
+      const candidate = await this.candService.getCandById(validatedReq.candidateId, dataSource);
       if (!candidate) {
         throw new Error("Candidate not found");
       }
@@ -293,7 +317,8 @@ export class EventProvider {
         validatedReq.eventId,
         validatedReq.candidateId,
         validatedReq.addedBy,
-        validatedReq.addedByRole
+        validatedReq.addedByRole,
+        dataSource
       );
       if (!result) {
         throw new Error("Failed to add attendance");
@@ -304,10 +329,10 @@ export class EventProvider {
     }
   }
 
-  public async removeAttendance(validatedReq: IRemoveAttendanceInput): Promise<IEventDoc> | never {
+  public async removeAttendance(validatedReq: IRemoveAttendanceInput, dataSource: DataSource): Promise<IEventDoc> | never {
     try {
       // Validate event exists
-      const event = await this.eventService.getEventById(validatedReq.eventId);
+      const event = await this.eventService.getEventById(validatedReq.eventId, dataSource);
       if (!event) {
         throw new Error("Event not found");
       }
@@ -321,7 +346,8 @@ export class EventProvider {
 
       const result = await this.eventService.removeAttendance(
         validatedReq.eventId,
-        validatedReq.candidateId
+        validatedReq.candidateId,
+        dataSource
       );
       if (!result) {
         throw new Error("Failed to remove attendance");
@@ -332,10 +358,10 @@ export class EventProvider {
     }
   }
 
-  public async flagAttendance(validatedReq: IFlagAttendanceInput): Promise<IEventDoc> | never {
+  public async flagAttendance(validatedReq: IFlagAttendanceInput, dataSource: DataSource): Promise<IEventDoc> | never {
     try {
       // Validate event exists
-      const event = await this.eventService.getEventById(validatedReq.eventId);
+      const event = await this.eventService.getEventById(validatedReq.eventId, dataSource);
       if (!event) {
         throw new Error("Event not found");
       }
@@ -351,7 +377,8 @@ export class EventProvider {
       const result = await this.eventService.flagAttendance(
         validatedReq.eventId,
         validatedReq.candidateId,
-        validatedReq.flaggedBy
+        validatedReq.flaggedBy,
+        dataSource
       );
       if (!result) {
         throw new Error("Failed to flag attendance");
@@ -362,10 +389,10 @@ export class EventProvider {
     }
   }
 
-  public async unflagAttendance(validatedReq: IUnflagAttendanceInput): Promise<IEventDoc> | never {
+  public async unflagAttendance(validatedReq: IUnflagAttendanceInput, dataSource: DataSource): Promise<IEventDoc> | never {
     try {
       // Validate event exists
-      const event = await this.eventService.getEventById(validatedReq.eventId);
+      const event = await this.eventService.getEventById(validatedReq.eventId, dataSource);
       if (!event) {
         throw new Error("Event not found");
       }
@@ -379,7 +406,8 @@ export class EventProvider {
 
       const result = await this.eventService.unflagAttendance(
         validatedReq.eventId,
-        validatedReq.candidateId
+        validatedReq.candidateId,
+        dataSource
       );
       if (!result) {
         throw new Error("Failed to unflag attendance");
@@ -390,30 +418,196 @@ export class EventProvider {
     }
   }
 
-  public async getCandidateTotalPoints(candidateId: string): Promise<number> | never {
+  /**
+   * Candidate event points: all attended events with per-event points and total.
+   * Uses journal-presenter rules: flagged −2; journal presenter+attendee +3; else +1.
+   */
+  public async getCandidateEventPoints(
+    candidateId: string,
+    dataSource: DataSource
+  ): Promise<ICandidateEventPointsResponse> | never {
     try {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
       }
 
-      return await this.eventService.getCandidateTotalPoints(candidateId);
+      const attendanceWithEvents = await this.eventService.getAttendanceWithEventsForCandidate(
+        candidateId,
+        dataSource
+      );
+
+      const journalPresenterIds = new Set<string>();
+      const lectureConfPresenterIds = new Set<string>();
+      for (const { event } of attendanceWithEvents) {
+        if (event.type === "journal") {
+          journalPresenterIds.add(event.presenterId);
+        } else {
+          lectureConfPresenterIds.add(event.presenterId);
+        }
+      }
+
+      const presenterMap = new Map<
+        string,
+        { name: string; role: "candidate" | "supervisor"; rank?: string; position?: string }
+      >();
+      for (const id of journalPresenterIds) {
+        const c = await this.candService.getCandById(id, dataSource);
+        presenterMap.set(id, {
+          name: (c as any)?.fullName ?? "—",
+          role: "candidate",
+          rank: (c as any)?.rank,
+        });
+      }
+      for (const id of lectureConfPresenterIds) {
+        const s = await this.supervisorService.getSupervisorById({ id }, dataSource);
+        presenterMap.set(id, {
+          name: (s as any)?.fullName ?? "—",
+          role: "supervisor",
+          position: (s as any)?.position,
+        });
+      }
+
+      const events: IEventPointsItem[] = [];
+      let totalPoints = 0;
+
+      for (const { att, event } of attendanceWithEvents) {
+        const points = this.eventService.computePointsForAttendance(att, event, candidateId);
+        totalPoints += points;
+
+        const type: TEventTypePublic =
+          event.type === "conf" ? "conference" : (event.type as "lecture" | "journal");
+        const ev = event as any;
+        let eventId: string;
+        let eventTitle: string;
+        if (event.type === "lecture" && ev.lecture) {
+          eventId = ev.lecture.id;
+          eventTitle = ev.lecture.lectureTitle ?? "—";
+        } else if (event.type === "journal" && ev.journal) {
+          eventId = ev.journal.id;
+          eventTitle = ev.journal.journalTitle ?? "—";
+        } else if (event.type === "conf" && ev.conf) {
+          eventId = ev.conf.id;
+          eventTitle = ev.conf.confTitle ?? "—";
+        } else {
+          eventId = event.id;
+          eventTitle = "—";
+        }
+
+        const pres = presenterMap.get(event.presenterId);
+        const presenter: IEventPointsPresenter = {
+          presenterId: event.presenterId,
+          name: pres?.name ?? "—",
+          role: pres?.role ?? (event.type === "journal" ? "candidate" : "supervisor"),
+          ...(pres?.rank !== undefined && { rank: String(pres.rank) }),
+          ...(pres?.position !== undefined && { position: String(pres.position) }),
+        };
+
+        const eventInfo: IEventPointsEvent = { id: eventId, title: eventTitle };
+        events.push({
+          eventId: att.eventId,
+          type,
+          presenter,
+          event: eventInfo,
+          points,
+        });
+      }
+
+      return { events, totalPoints };
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async deleteEvent(id: string): Promise<boolean> | never {
+  /**
+   * Academic (points) ranking: top 10 by points + logged-in candidate if not in top 10.
+   * Uses shared event-points rules (attendance +1, flagged −2, journal presenter +2, presenter+attendee +3).
+   * Fetches candidate details only for returned ids (≤11).
+   */
+  public async getAcademicRanking(
+    dataSource: DataSource,
+    loggedInUserId?: string,
+    loggedInUserRole?: string
+  ): Promise<
+    { candidateId: string; candidateName: string; rank: number; academicPoints: number; regDeg: string }[]
+  > | never {
     try {
-      return await this.eventService.deleteEvent(id);
+      const pointsMap = await this.eventService.getAcademicPointsPerCandidate(dataSource);
+      const sorted = Array.from(pointsMap.entries())
+        .map(([candidateId, academicPoints]) => ({ candidateId, academicPoints }))
+        .sort((a, b) => {
+          if (b.academicPoints !== a.academicPoints) return b.academicPoints - a.academicPoints;
+          return a.candidateId.localeCompare(b.candidateId);
+        });
+
+      const top10 = sorted.slice(0, 10);
+      const top10Ids = new Set(top10.map((r) => r.candidateId));
+      const isLoggedInCandidate =
+        loggedInUserRole === "candidate" && loggedInUserId && loggedInUserId.length > 0;
+      const addLoggedIn =
+        isLoggedInCandidate && !top10Ids.has(loggedInUserId!);
+
+      let loggedInRank: number | null = null;
+      let loggedInPoints = 0;
+      if (isLoggedInCandidate && loggedInUserId) {
+        loggedInPoints = pointsMap.get(loggedInUserId) ?? 0;
+        if (addLoggedIn) {
+          const idx = sorted.findIndex((r) => r.candidateId === loggedInUserId);
+          loggedInRank = idx >= 0 ? idx + 1 : sorted.length + 1;
+        }
+      }
+
+      const idsToFetch = addLoggedIn
+        ? [...top10.map((r) => r.candidateId), loggedInUserId!]
+        : top10.map((r) => r.candidateId);
+      const candidateMap = new Map<string, { fullName: string; regDeg: string }>();
+      for (const id of idsToFetch) {
+        const c = await this.candService.getCandById(id, dataSource);
+        candidateMap.set(id, {
+          fullName: (c as any)?.fullName ?? "—",
+          regDeg: (c as any)?.regDeg ?? "",
+        });
+      }
+
+      const result: { candidateId: string; candidateName: string; rank: number; academicPoints: number; regDeg: string }[] = [];
+      for (let i = 0; i < top10.length; i++) {
+        const r = top10[i];
+        const meta = candidateMap.get(r.candidateId);
+        result.push({
+          candidateId: r.candidateId,
+          candidateName: meta?.fullName ?? "—",
+          rank: i + 1,
+          academicPoints: r.academicPoints,
+          regDeg: meta?.regDeg ?? "",
+        });
+      }
+      if (addLoggedIn && loggedInUserId != null && loggedInRank != null) {
+        const meta = candidateMap.get(loggedInUserId);
+        result.push({
+          candidateId: loggedInUserId,
+          candidateName: meta?.fullName ?? "—",
+          rank: loggedInRank,
+          academicPoints: loggedInPoints,
+          regDeg: meta?.regDeg ?? "",
+        });
+      }
+      return result;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async deleteEvent(id: string, dataSource: DataSource): Promise<boolean> | never {
+    try {
+      return await this.eventService.deleteEvent(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
   /** Helper: get current event state (for validation during update) */
-  private async buildCurrentEventState(id: string): Promise<IEventInput> | never {
-    const existing = await this.eventService.getEventById(id);
+  private async buildCurrentEventState(id: string, dataSource: DataSource): Promise<IEventInput> | never {
+    const existing = await this.eventService.getEventById(id, dataSource);
     if (!existing) {
       throw new Error("Event not found");
     }
@@ -455,7 +649,7 @@ export class EventProvider {
   }
 
   /** Helper: validate referenced lecture/journal/conf exists */
-  private async validateReferencedEntityExists(event: IEventInput): Promise<void> {
+  private async validateReferencedEntityExists(event: IEventInput, dataSource: DataSource): Promise<void> {
     const { type, lecture, journal, conf } = event;
 
     // Convert to string for validation
@@ -464,21 +658,21 @@ export class EventProvider {
     const confId = conf ? (typeof conf === "string" ? conf : String(conf)) : null;
 
     if (type === "lecture" && lectureId) {
-      const lectureDoc = await this.lectureService.getLectureById(lectureId);
+      const lectureDoc = await this.lectureService.getLectureById(lectureId, dataSource);
       if (!lectureDoc) {
         throw new Error(`Lecture with ID '${lectureId}' not found`);
       }
     }
 
     if (type === "journal" && journalId) {
-      const journalDoc = await this.journalService.getJournalById(journalId);
+      const journalDoc = await this.journalService.getJournalById(journalId, dataSource);
       if (!journalDoc) {
         throw new Error(`Journal with ID '${journalId}' not found`);
       }
     }
 
     if (type === "conf" && confId) {
-      const confDoc = await this.confService.getConfById(confId);
+      const confDoc = await this.confService.getConfById(confId, dataSource);
       if (!confDoc) {
         throw new Error(`Conf with ID '${confId}' not found`);
       }
@@ -488,7 +682,8 @@ export class EventProvider {
   /** Helper: validate presenter based on event type */
   private async validatePresenter(
     type: TEventType,
-    presenterId: string
+    presenterId: string,
+    dataSource: DataSource
   ): Promise<void> {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(presenterId)) {
@@ -498,12 +693,12 @@ export class EventProvider {
     if (type === "lecture" || type === "conf") {
       const supervisor = await this.supervisorService.getSupervisorById({
         id: presenterId,
-      });
+      }, dataSource);
       if (!supervisor) {
         throw new Error(`Supervisor presenter with ID '${presenterId}' not found`);
       }
     } else if (type === "journal") {
-      const cand = await this.candService.getCandById(presenterId);
+      const cand = await this.candService.getCandById(presenterId, dataSource);
       if (!cand) {
         throw new Error(`Candidate presenter with ID '${presenterId}' not found`);
       }
@@ -602,7 +797,8 @@ export class EventProvider {
    */
   public async bulkImportAttendanceFromExternal(
     addedBy: string,
-    addedByRole: "instituteAdmin" | "supervisor" | "candidate"
+    addedByRole: "instituteAdmin" | "supervisor" | "candidate",
+    dataSource: DataSource
   ): Promise<{
     totalRows: number;
     processed: number;
@@ -693,10 +889,10 @@ export class EventProvider {
 
       // Step 2: Batch fetch all candidates, lectures, journals, and confs
       const [candidates, lectures, journals, confs] = await Promise.all([
-        this.candService.findCandidatesByEmails(Array.from(uniqueEmails)),
-        this.lectureService.findLecturesByGoogleUids(Array.from(uniqueUids)),
-        this.journalService.findJournalsByGoogleUids(Array.from(uniqueUids)),
-        this.confService.findConfsByGoogleUids(Array.from(uniqueUids)),
+        this.candService.findCandidatesByEmails(Array.from(uniqueEmails), dataSource),
+        this.lectureService.findLecturesByGoogleUids(Array.from(uniqueUids), dataSource),
+        this.journalService.findJournalsByGoogleUids(Array.from(uniqueUids), dataSource),
+        this.confService.findConfsByGoogleUids(Array.from(uniqueUids), dataSource),
       ]);
 
       // Step 3: Build in-memory maps for O(1) lookups
@@ -751,12 +947,11 @@ export class EventProvider {
       }
 
       // Step 5: Batch fetch all events
-      // Note: Event service still uses MongoDB ObjectId, so we cast arrays as any[]
-      // This will be fixed when event service is migrated to MariaDB
       const eventMap = await this.eventService.findEventsByLectureJournalConfIds(
         lectureIds as any,
         journalIds as any,
-        confIds as any
+        confIds as any,
+        dataSource
       );
 
       // Step 6: Process all rows using the maps
@@ -857,7 +1052,8 @@ export class EventProvider {
             eventIdStr,
             candidateIdStr,
             addedBy,
-            addedByRole
+            addedByRole,
+            dataSource
           );
 
           added++;

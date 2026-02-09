@@ -10,6 +10,7 @@ import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class SuperAdminRouter {
@@ -48,8 +49,9 @@ export class SuperAdminRouter {
     // Get all super admins (only super admins)
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSuperAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -64,8 +66,9 @@ export class SuperAdminRouter {
     // Get super admin by ID (only super admins)
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSuperAdmin,
       getSuperAdminByIdValidator,
       async (req: Request, res: Response) => {

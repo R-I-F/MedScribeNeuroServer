@@ -10,6 +10,7 @@ import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, requireCandidate } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class MainDiagRouter {
@@ -25,8 +26,9 @@ export class MainDiagRouter {
     // Create mainDiag
     this.router.post(
       "/",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createMainDiagValidator,
       async (req: Request, res: Response) => {
@@ -48,8 +50,9 @@ export class MainDiagRouter {
     // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       async (req: Request, res: Response) => {
         try {
@@ -65,8 +68,9 @@ export class MainDiagRouter {
     // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       getMainDiagByIdValidator,
       async (req: Request, res: Response) => {
@@ -91,8 +95,9 @@ export class MainDiagRouter {
     // Update mainDiag
     this.router.put(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       updateMainDiagValidator,
       async (req: Request, res: Response) => {
@@ -117,8 +122,9 @@ export class MainDiagRouter {
     // Delete mainDiag
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteMainDiagValidator,
       async (req: Request, res: Response) => {

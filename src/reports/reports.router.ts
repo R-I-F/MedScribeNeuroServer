@@ -10,6 +10,7 @@ import { getSupervisorsSubmissionCountValidator } from "../validators/getSupervi
 import { getCandidatesSubmissionCountValidator } from "../validators/getCandidatesSubmissionCount.validator";
 import { getHospitalAnalysisReportValidator } from "../validators/getHospitalAnalysisReport.validator";
 import { userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class ReportsRouter {
@@ -24,8 +25,9 @@ export class ReportsRouter {
     // Supervisors Submission Count Report
     this.router.get(
       "/supervisors/submission-count",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireInstituteAdmin,
       getSupervisorsSubmissionCountValidator,
       async (req: Request, res: Response) => {
@@ -80,8 +82,9 @@ export class ReportsRouter {
     // Candidates Submission Count Report
     this.router.get(
       "/candidates/submission-count",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireInstituteAdmin,
       getCandidatesSubmissionCountValidator,
       async (req: Request, res: Response) => {
@@ -136,8 +139,9 @@ export class ReportsRouter {
     // Calendar Procedures Hospital Analysis Report
     this.router.get(
       "/calendar-procedures/hospital-analysis",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireInstituteAdmin,
       getHospitalAnalysisReportValidator,
       async (req: Request, res: Response) => {
@@ -192,8 +196,9 @@ export class ReportsRouter {
     // Canceled Events PDF Report
     this.router.get(
       "/events/canceled/pdf",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireInstituteAdmin,
       getCanceledEventsPdfValidator,
       async (req: Request, res: Response) => {

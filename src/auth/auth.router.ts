@@ -1,11 +1,15 @@
 import express, { Request, Response, Router, NextFunction } from "express";
 import { inject, injectable } from "inversify";
 import jwt from "jsonwebtoken";
+import { DataSource } from "typeorm";
 import { AuthController } from "./auth.controller";
 import { createCandValidator } from "../validators/createCand.validator";
 import { matchedData, validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import { loginValidator } from "../validators/login.validator";
+import { superAdminLoginValidator } from "../validators/superAdminLogin.validator";
+import { instituteAdminLoginValidator } from "../validators/instituteAdminLogin.validator";
+import { clerkLoginValidator } from "../validators/clerkLogin.validator";
 import { changePasswordValidator } from "../validators/changePassword.validator";
 import { forgotPasswordValidator } from "../validators/forgotPassword.validator";
 import { resetPasswordValidator } from "../validators/resetPassword.validator";
@@ -15,6 +19,9 @@ import { setAuthCookies, clearAuthCookies } from "../utils/cookie.utils";
 import { AuthTokenService } from "./authToken.service";
 import { PasswordResetController } from "../passwordReset/passwordReset.controller";
 import { userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
+import { DataSourceManager } from "../config/datasource.manager";
+import { getInstitutionById } from "../institution/institution.service";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class AuthRouter {
@@ -26,6 +33,36 @@ export class AuthRouter {
   ){
     this.router = express.Router();
     this.initRoutes();
+  }
+
+  /**
+   * Helper function to get DataSource for institution from request
+   * Returns DataSource if institutionId is valid, undefined otherwise
+   */
+  private async getDataSourceFromRequest(req: Request): Promise<DataSource | undefined> {
+    try {
+      // Try to get institutionId from body, query, or header
+      const institutionId = (req.body as any)?.institutionId || 
+                           req.query.institutionId as string || 
+                           req.get("X-Institution-Id");
+
+      if (!institutionId) {
+        return undefined;
+      }
+
+      // Validate institution
+      const institution = await getInstitutionById(institutionId as string);
+      if (!institution || !institution.isActive) {
+        return undefined;
+      }
+
+      // Get DataSource
+      const dataSourceManager = DataSourceManager.getInstance();
+      return await dataSourceManager.getDataSource(institutionId as string);
+    } catch (error) {
+      console.error("[AuthRouter] Error getting DataSource:", error);
+      return undefined;
+    }
   }
 
   private initRoutes(){
@@ -54,7 +91,11 @@ export class AuthRouter {
             const payload = matchedData(req, {
               locations: ["body"],
             }) as IRegisterCandPayload;
-            const resp = await this.authController.registerCand(payload);
+            
+            // Get DataSource for institution if provided
+            const dataSource = await this.getDataSourceFromRequest(req);
+            
+            const resp = await this.authController.registerCand(payload, dataSource);
             res.status(StatusCodes.CREATED).json(resp);
           } catch(err: any){
             res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
@@ -65,8 +106,10 @@ export class AuthRouter {
         }
       }
     );
+    // Shared login endpoint for candidates and supervisors
+    // Requires institutionId since each institution has its own candidates and supervisors
     this.router.post(
-      "/loginCand",
+      "/login",
       loginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -75,10 +118,29 @@ export class AuthRouter {
             const payload = matchedData(req, {
               locations: ["body"],
             }) as IAuth;
-            const resp = await this.authController.login({ ...payload, role: "candidate" as any });
             
-            // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: candidate, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            // Validate that institutionId is provided (required)
+            if (!payload.institutionId) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "institutionId is required for login"
+              });
+            }
+            
+            // Get DataSource for institution (required)
+            const dataSource = await this.getDataSourceFromRequest(req);
+            if (!dataSource) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              });
+            }
+            
+            // Log login attempt
+            console.log(`[AuthRouter] 🔐 LOGIN ATTEMPT - Email: ${payload.email}, InstitutionId: ${payload.institutionId}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            
+            const resp = await (this.authController as any).candidateSupervisorLogin(payload, dataSource);
+            
+            // Log successful login with comprehensive user details
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - User: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, InstitutionId: ${payload.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -92,7 +154,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: candidate, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Email: ${email}, Error: ${err.message}, InstitutionId: ${(req.body as IAuth)?.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -101,9 +163,11 @@ export class AuthRouter {
         }
       }
     );
+    // Super Admin login endpoint - isolated from other endpoints
+    // Requires institutionId since each institution has its own super admins
     this.router.post(
-      "/loginSupervisor",
-      loginValidator,
+      "/superAdmin/login",
+      superAdminLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
         if(result.isEmpty()){
@@ -111,10 +175,26 @@ export class AuthRouter {
             const payload = matchedData(req, {
               locations: ["body"],
             }) as IAuth;
-            const resp = await this.authController.login({ ...payload, role: "supervisor" as any });
             
-            // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: supervisor, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            // Validate that institutionId is provided (required)
+            if (!payload.institutionId) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "institutionId is required for super admin login"
+              });
+            }
+            
+            // Get DataSource for institution (required)
+            const dataSource = await this.getDataSourceFromRequest(req);
+            if (!dataSource) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              });
+            }
+            
+            const resp = await (this.authController as any).superAdminLogin(payload, dataSource);
+            
+            // Log successful login with comprehensive user details
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Super Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, InstitutionId: ${payload.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -128,7 +208,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: supervisor, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Super Admin Email: ${email}, Error: ${err.message}, InstitutionId: ${(req.body as IAuth)?.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -137,9 +217,11 @@ export class AuthRouter {
         }
       }
     );
+    // Institute Admin login endpoint - isolated from other endpoints
+    // Requires institutionId since each institution has its own institute admins
     this.router.post(
-      "/loginSuperAdmin",
-      loginValidator,
+      "/instituteAdmin/login",
+      instituteAdminLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
         if(result.isEmpty()){
@@ -147,10 +229,26 @@ export class AuthRouter {
             const payload = matchedData(req, {
               locations: ["body"],
             }) as IAuth;
-            const resp = await this.authController.login({ ...payload, role: "superAdmin" as any });
             
-            // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: superAdmin, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            // Validate that institutionId is provided (required)
+            if (!payload.institutionId) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "institutionId is required for institute admin login"
+              });
+            }
+            
+            // Get DataSource for institution (required)
+            const dataSource = await this.getDataSourceFromRequest(req);
+            if (!dataSource) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              });
+            }
+            
+            const resp = await (this.authController as any).instituteAdminLogin(payload, dataSource);
+            
+            // Log successful login with comprehensive user details
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Institute Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, InstitutionId: ${payload.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -164,7 +262,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: superAdmin, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Institute Admin Email: ${email}, Error: ${err.message}, InstitutionId: ${(req.body as IAuth)?.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -173,9 +271,11 @@ export class AuthRouter {
         }
       }
     );
+    // Clerk login endpoint - separate from regular user login for security
+    // Requires institutionId since each institution has its own clerks
     this.router.post(
-      "/loginInstituteAdmin",
-      loginValidator,
+      "/clerk/login",
+      clerkLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
         if(result.isEmpty()){
@@ -183,10 +283,26 @@ export class AuthRouter {
             const payload = matchedData(req, {
               locations: ["body"],
             }) as IAuth;
-            const resp = await this.authController.login({ ...payload, role: "instituteAdmin" as any });
             
-            // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: instituteAdmin, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            // Validate that institutionId is provided (required for clerk login)
+            if (!payload.institutionId) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "institutionId is required for clerk login"
+              });
+            }
+            
+            // Get DataSource for institution (required for clerk login)
+            const dataSource = await this.getDataSourceFromRequest(req);
+            if (!dataSource) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              });
+            }
+            
+            const resp = await (this.authController as any).clerkLogin(payload, dataSource);
+            
+            // Log successful login with comprehensive user details
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Clerk: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, InstitutionId: ${payload.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -200,7 +316,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: instituteAdmin, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Clerk Email: ${email}, Error: ${err.message}, InstitutionId: ${(req.body as IAuth)?.institutionId || "none"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -209,59 +325,37 @@ export class AuthRouter {
         }
       }
     );
-    this.router.post(
-      "/loginClerk",
-      loginValidator,
-      async (req: Request, res: Response, next: NextFunction) => {
-        const result = validationResult(req);
-        if(result.isEmpty()){
-          try {
-            const payload = matchedData(req, {
-              locations: ["body"],
-            }) as IAuth;
-            const resp = await this.authController.login({ ...payload, role: "clerk" as any });
-            
-            // Log successful login with request details
-            console.log(`[AuthRouter] User login successful - Email: ${payload.email}, Role: clerk, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
-            
-            // Set httpOnly cookies
-            setAuthCookies(res, resp.token, resp.refreshToken);
-            
-            // Return user, role, and token (token included for testing purposes only)
-            res.status(StatusCodes.OK).json({
-              user: resp.user,
-              role: resp.role,
-              token: resp.token  // TEMPORARY: For testing token generation
-            });
-          } catch(err: any){
-            // Log failed login attempt with request details
-            const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] User login failed - Email: ${email}, Role: clerk, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Method: ${req.method}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
-            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
-          }
-        }
-        else {
-          res.status(StatusCodes.BAD_REQUEST).json(result.array());
-        }
-      }
-    );
+    // DISABLED: See docs/DISABLED_ROUTES.md. To re-enable, restore the handler below.
     this.router.post(
       "/resetCandPass",
+      institutionResolver,
+      strictRateLimiter,
       async (req: Request, res: Response) => {
-        try {
-          const resp = await this.authController.resetCandidatePasswords();
-          res.status(StatusCodes.OK).json(resp);
-        } catch (err: any) {
-          res
-            .status(StatusCodes.INTERNAL_SERVER_ERROR)
-            .json({ error: err?.message ?? "Failed to reset candidate passwords" });
-        }
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
+        // try {
+        //   const resp = await (this.authController as any).resetCandidatePasswords(req, res);
+        //   res.status(StatusCodes.OK).json(resp);
+        // } catch (err: any) {
+        //   res
+        //     .status(StatusCodes.INTERNAL_SERVER_ERROR)
+        //     .json({ error: err?.message ?? "Failed to reset candidate passwords" });
+        // }
       }
     );
+    // DISABLED: See docs/DISABLED_ROUTES.md. To re-enable, restore the handler below.
     this.router.get(
       "/get/all",
       async (req: Request, res: Response, next: NextFunction) => {
-        return this.authController.getAllUsers();
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
+        // return this.authController.getAllUsers();
       }
     );
 
@@ -350,8 +444,9 @@ export class AuthRouter {
     // Request password change email endpoint (requires authentication)
     this.router.post(
       "/requestPasswordChangeEmail",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       async (req: Request, res: Response) => {
         try {
           const response = await this.passwordResetController.handleRequestPasswordChangeEmail(req, res);
@@ -379,8 +474,9 @@ export class AuthRouter {
     // Change password endpoint (requires authentication)
     this.router.patch(
       "/changePassword",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       changePasswordValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -430,77 +526,33 @@ export class AuthRouter {
       }
     );
 
-    // Forgot password endpoint (no authentication required)
-    // Uses strict IP-based rate limiting to prevent abuse
+    // DISABLED: See docs/DISABLED_ROUTES.md. Forgot password (no auth, rate limited).
     this.router.post(
       "/forgotPassword",
       strictRateLimiter,
+      institutionResolver,
       forgotPasswordValidator,
       async (req: Request, res: Response) => {
-        const result = validationResult(req);
-        if (result.isEmpty()) {
-          try {
-            const response = await this.passwordResetController.handleForgotPassword(req, res);
-            res.status(StatusCodes.OK).json(response);
-          } catch (err: any) {
-            // Always return success to prevent email enumeration
-            res.status(StatusCodes.OK).json({
-              status: "success",
-              statusCode: StatusCodes.OK,
-              message: "OK",
-              data: {
-                message: "If an account with that email exists, a password reset link has been sent"
-              }
-            });
-          }
-        } else {
-          res.status(StatusCodes.BAD_REQUEST).json({
-            status: "error",
-            statusCode: StatusCodes.BAD_REQUEST,
-            message: "Bad Request",
-            error: result.array()
-          });
-        }
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
       }
     );
 
-    // Reset password endpoint (no authentication required, uses token)
-    // Uses strict IP-based rate limiting to prevent abuse
+    // DISABLED: See docs/DISABLED_ROUTES.md. Reset password (no auth, uses token from email).
     this.router.post(
       "/resetPassword",
       strictRateLimiter,
+      institutionResolver,
       resetPasswordValidator,
       async (req: Request, res: Response) => {
-        const result = validationResult(req);
-        if (result.isEmpty()) {
-          try {
-            const response = await this.passwordResetController.handleResetPassword(req, res);
-            res.status(StatusCodes.OK).json(response);
-          } catch (err: any) {
-            if (err.message.includes("Invalid") || err.message.includes("expired") || err.message.includes("already been used")) {
-              res.status(StatusCodes.BAD_REQUEST).json({
-                status: "error",
-                statusCode: StatusCodes.BAD_REQUEST,
-                message: "Bad Request",
-                error: err.message
-              });
-            } else {
-              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-                status: "error",
-                statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-                message: "Internal Server Error",
-                error: err?.message ?? "Failed to reset password"
-              });
-            }
-          }
-        } else {
-          res.status(StatusCodes.BAD_REQUEST).json({
-            status: "error",
-            statusCode: StatusCodes.BAD_REQUEST,
-            message: "Bad Request",
-            error: result.array()
-          });
-        }
+        return res.status(StatusCodes.GONE).json({
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+          reference: "docs/DISABLED_ROUTES.md",
+        });
       }
     );
   }

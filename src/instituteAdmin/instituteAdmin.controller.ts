@@ -17,11 +17,15 @@ export class InstituteAdminController {
   ) {
     const validatedReq = matchedData(req) as Partial<IInstituteAdmin>;
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       // Hash password before saving
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.instituteAdminService.createInstituteAdmin(validatedReq);
+      return await this.instituteAdminService.createInstituteAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -32,7 +36,11 @@ export class InstituteAdminController {
     res: Response
   ) {
     try {
-      return await this.instituteAdminService.getAllInstituteAdmins();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getAllInstituteAdmins(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -44,7 +52,11 @@ export class InstituteAdminController {
   ) {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      return await this.instituteAdminService.getInstituteAdminById(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getInstituteAdminById(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -56,11 +68,15 @@ export class InstituteAdminController {
   ) {
     const validatedReq = matchedData(req) as Partial<IInstituteAdmin> & { id: string };
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       // Hash password if it's being updated
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.instituteAdminService.updateInstituteAdmin(validatedReq);
+      return await this.instituteAdminService.updateInstituteAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -72,7 +88,11 @@ export class InstituteAdminController {
   ) {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      return await this.instituteAdminService.deleteInstituteAdmin(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.deleteInstituteAdmin(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -81,7 +101,11 @@ export class InstituteAdminController {
   // Dashboard endpoints
   public async handleGetAllSupervisors(req: Request, res: Response) {
     try {
-      return await this.instituteAdminService.getAllSupervisors();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getAllSupervisors(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -90,7 +114,11 @@ export class InstituteAdminController {
   public async handleGetSupervisorSubmissions(req: Request, res: Response) {
     const validatedReq = matchedData(req) as { supervisorId: string; status?: "approved" | "pending" | "rejected" };
     try {
-      return await this.instituteAdminService.getSupervisorSubmissions(validatedReq.supervisorId, validatedReq.status);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getSupervisorSubmissions(validatedReq.supervisorId, validatedReq.status, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -98,7 +126,11 @@ export class InstituteAdminController {
 
   public async handleGetAllCandidates(req: Request, res: Response) {
     try {
-      return await this.instituteAdminService.getAllCandidates();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getAllCandidates(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -107,7 +139,11 @@ export class InstituteAdminController {
   public async handleGetCandidateSubmissions(req: Request, res: Response) {
     const validatedReq = matchedData(req) as { candidateId: string };
     try {
-      return await this.instituteAdminService.getCandidateSubmissions(validatedReq.candidateId);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getCandidateSubmissions(validatedReq.candidateId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -116,9 +152,14 @@ export class InstituteAdminController {
   public async handleGetCandidateSubmissionById(req: Request, res: Response) {
     const validatedReq = matchedData(req) as { candidateId: string; submissionId: string };
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       return await this.instituteAdminService.getCandidateSubmissionById(
         validatedReq.candidateId,
-        validatedReq.submissionId
+        validatedReq.submissionId,
+        dataSource
       );
     } catch (err: any) {
       throw new Error(err);
@@ -136,6 +177,10 @@ export class InstituteAdminController {
       endDate?: string;
     };
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       const filters: any = {
         hospitalId: validatedReq.hospitalId,
         arabProcTitle: validatedReq.arabProcTitle,
@@ -151,7 +196,7 @@ export class InstituteAdminController {
         filters.endDate = new Date(validatedReq.endDate);
       }
 
-      return await this.instituteAdminService.getCalendarProcedures(filters);
+      return await this.instituteAdminService.getCalendarProcedures(filters, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -159,7 +204,11 @@ export class InstituteAdminController {
 
   public async handleGetAllHospitals(req: Request, res: Response) {
     try {
-      return await this.instituteAdminService.getAllHospitals();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getAllHospitals(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -168,7 +217,11 @@ export class InstituteAdminController {
   public async handleGetArabicProcedures(req: Request, res: Response) {
     const validatedReq = matchedData(req) as { search?: string };
     try {
-      return await this.instituteAdminService.getArabicProcedures(validatedReq.search);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.instituteAdminService.getArabicProcedures(validatedReq.search, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -184,6 +237,10 @@ export class InstituteAdminController {
       groupBy?: "title" | "alphaCode";
     };
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       const filters: any = {
         hospitalId: validatedReq.hospitalId,
         month: validatedReq.month,
@@ -198,7 +255,7 @@ export class InstituteAdminController {
         filters.endDate = new Date(validatedReq.endDate);
       }
 
-      return await this.instituteAdminService.getHospitalAnalysis(filters);
+      return await this.instituteAdminService.getHospitalAnalysis(filters, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

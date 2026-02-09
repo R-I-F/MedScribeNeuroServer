@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { IMainDiag, IMainDiagDoc, IMainDiagInput, IMainDiagUpdateInput } from "./mainDiag.interface";
-import { AppDataSource } from "../config/database.config";
 import { MainDiagEntity } from "./mainDiag.mDbSchema";
 import { ProcCptService } from "../procCpt/procCpt.service";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
@@ -11,21 +11,20 @@ import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
 
 @injectable()
 export class MainDiagProvider {
-  private mainDiagRepository: Repository<MainDiagEntity>;
-
   constructor(
     @inject(ProcCptService) private procCptService: ProcCptService,
     @inject(DiagnosisService) private diagnosisService: DiagnosisService,
     @inject(UtilService) private utilService: UtilService
-  ) {
-    this.mainDiagRepository = AppDataSource.getRepository(MainDiagEntity);
-  }
-  public async createMainDiag(validatedReq: IMainDiagInput): Promise<IMainDiagDoc> | never {
+  ) {}
+
+  public async createMainDiag(validatedReq: IMainDiagInput, dataSource: DataSource): Promise<IMainDiagDoc> | never {
     try {
+      const mainDiagRepository = dataSource.getRepository(MainDiagEntity);
+      
       // Convert procsArray (numCodes) to UUIDs using ProcCpt service
       let procUuids: string[] = [];
       if (validatedReq.procsArray && validatedReq.procsArray.length > 0) {
-        const procDocs = await this.procCptService.findByNumCodes(validatedReq.procsArray);
+        const procDocs = await this.procCptService.findByNumCodes(validatedReq.procsArray, dataSource);
         procUuids = procDocs.map(doc => doc.id);
         
         // Check if all requested numCodes were found
@@ -39,7 +38,7 @@ export class MainDiagProvider {
       // Convert diagnosis (icdCodes) to UUIDs using Diagnosis service
       let diagnosisUuids: string[] = [];
       if (validatedReq.diagnosis && validatedReq.diagnosis.length > 0) {
-        const diagnosisDocs = await this.diagnosisService.findByIcdCodes(validatedReq.diagnosis);
+        const diagnosisDocs = await this.diagnosisService.findByIcdCodes(validatedReq.diagnosis, dataSource);
         diagnosisUuids = diagnosisDocs.map(doc => doc.id);
         
         // Check if all requested icdCodes were found
@@ -51,16 +50,16 @@ export class MainDiagProvider {
       }
 
       // Create mainDiag entity with UUIDs and sanitized title
-      const mainDiagEntity = this.mainDiagRepository.create({
+      const mainDiagEntity = mainDiagRepository.create({
         title: this.utilService.stringToLowerCaseTrim(validatedReq.title),
       });
 
       // Save first to get the ID
-      const savedMainDiag = await this.mainDiagRepository.save(mainDiagEntity);
+      const savedMainDiag = await mainDiagRepository.save(mainDiagEntity);
 
       // Load related entities and set relationships
       if (procUuids.length > 0) {
-        const procRepository = AppDataSource.getRepository(ProcCptEntity);
+        const procRepository = dataSource.getRepository(ProcCptEntity);
         const procEntities = await procRepository.find({
           where: { id: In(procUuids) },
         });
@@ -68,7 +67,7 @@ export class MainDiagProvider {
       }
 
       if (diagnosisUuids.length > 0) {
-        const diagnosisRepository = AppDataSource.getRepository(DiagnosisEntity);
+        const diagnosisRepository = dataSource.getRepository(DiagnosisEntity);
         const diagnosisEntities = await diagnosisRepository.find({
           where: { id: In(diagnosisUuids) },
         });
@@ -76,10 +75,10 @@ export class MainDiagProvider {
       }
 
       // Save with relationships
-      const finalMainDiag = await this.mainDiagRepository.save(savedMainDiag);
+      const finalMainDiag = await mainDiagRepository.save(savedMainDiag);
 
       // Load with relations for return
-      const result = await this.mainDiagRepository.findOne({
+      const result = await mainDiagRepository.findOne({
         where: { id: finalMainDiag.id },
         relations: ["procs", "diagnosis"],
       });
@@ -90,9 +89,10 @@ export class MainDiagProvider {
     }
   }
 
-  public async getAllMainDiags(): Promise<IMainDiagDoc[]> | never {
+  public async getAllMainDiags(dataSource: DataSource): Promise<IMainDiagDoc[]> | never {
     try {
-      const allMainDiags = await this.mainDiagRepository.find({
+      const mainDiagRepository = dataSource.getRepository(MainDiagEntity);
+      const allMainDiags = await mainDiagRepository.find({
         relations: ["procs", "diagnosis"],
         order: { createdAt: "DESC" },
       });
@@ -102,14 +102,15 @@ export class MainDiagProvider {
     }
   }
 
-  public async getMainDiagById(id: string): Promise<IMainDiagDoc | null> | never {
+  public async getMainDiagById(id: string, dataSource: DataSource): Promise<IMainDiagDoc | null> | never {
     try {
+      const mainDiagRepository = dataSource.getRepository(MainDiagEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
         throw new Error("Invalid mainDiag ID format");
       }
-      const mainDiag = await this.mainDiagRepository.findOne({
+      const mainDiag = await mainDiagRepository.findOne({
         where: { id },
         relations: ["procs", "diagnosis"],
       });
@@ -119,8 +120,9 @@ export class MainDiagProvider {
     }
   }
 
-  public async updateMainDiag(validatedReq: IMainDiagUpdateInput): Promise<IMainDiagDoc | null> | never {
+  public async updateMainDiag(validatedReq: IMainDiagUpdateInput, dataSource: DataSource): Promise<IMainDiagDoc | null> | never {
     try {
+      const mainDiagRepository = dataSource.getRepository(MainDiagEntity);
       const { id, ...updateData } = validatedReq;
       
       // Validate UUID format
@@ -130,7 +132,7 @@ export class MainDiagProvider {
       }
 
       // Fetch existing mainDiag with relations
-      const existingMainDiag = await this.mainDiagRepository.findOne({
+      const existingMainDiag = await mainDiagRepository.findOne({
         where: { id },
         relations: ["procs", "diagnosis"],
       });
@@ -146,7 +148,7 @@ export class MainDiagProvider {
 
       // Handle procs: append new ones to existing array
       if (updateData.procs && updateData.procs.length > 0) {
-        const procDocs = await this.procCptService.findByNumCodes(updateData.procs);
+        const procDocs = await this.procCptService.findByNumCodes(updateData.procs, dataSource);
         
         // Check if all requested numCodes were found
         const foundNumCodes = procDocs.map(doc => doc.numCode);
@@ -157,7 +159,7 @@ export class MainDiagProvider {
 
         // Get new proc entities
         const newProcUuids = procDocs.map(doc => doc.id);
-        const procRepository = AppDataSource.getRepository(ProcCptEntity);
+        const procRepository = dataSource.getRepository(ProcCptEntity);
         const newProcEntities = await procRepository.find({
           where: { id: In(newProcUuids) },
         }) as ProcCptEntity[];
@@ -170,7 +172,7 @@ export class MainDiagProvider {
 
       // Handle diagnosis: append new ones to existing array
       if (updateData.diagnosis && updateData.diagnosis.length > 0) {
-        const diagnosisDocs = await this.diagnosisService.findByIcdCodes(updateData.diagnosis);
+        const diagnosisDocs = await this.diagnosisService.findByIcdCodes(updateData.diagnosis, dataSource);
         
         // Check if all requested icdCodes were found
         const foundIcdCodes = diagnosisDocs.map(doc => doc.icdCode);
@@ -181,7 +183,7 @@ export class MainDiagProvider {
 
         // Get new diagnosis entities
         const newDiagnosisUuids = diagnosisDocs.map(doc => doc.id);
-        const diagnosisRepository = AppDataSource.getRepository(DiagnosisEntity);
+        const diagnosisRepository = dataSource.getRepository(DiagnosisEntity);
         const newDiagnosisEntities = await diagnosisRepository.find({
           where: { id: In(newDiagnosisUuids) },
         }) as DiagnosisEntity[];
@@ -193,10 +195,10 @@ export class MainDiagProvider {
       }
 
       // Save updated mainDiag
-      const updatedMainDiag = await this.mainDiagRepository.save(existingMainDiag);
+      const updatedMainDiag = await mainDiagRepository.save(existingMainDiag);
 
       // Load with relations for return
-      const result = await this.mainDiagRepository.findOne({
+      const result = await mainDiagRepository.findOne({
         where: { id: updatedMainDiag.id },
         relations: ["procs", "diagnosis"],
       });
@@ -207,14 +209,15 @@ export class MainDiagProvider {
     }
   }
 
-  public async deleteMainDiag(id: string): Promise<boolean> | never {
+  public async deleteMainDiag(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
+      const mainDiagRepository = dataSource.getRepository(MainDiagEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
         throw new Error("Invalid mainDiag ID format");
       }
-      const result = await this.mainDiagRepository.delete(id);
+      const result = await mainDiagRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);

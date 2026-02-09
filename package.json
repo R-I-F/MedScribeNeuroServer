@@ -7,9 +7,15 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "start:dev": "nodemon src/index.ts",
-    "migration:run": "ts-node src/migrations/runMigrations.ts",
-    "migration:check": "ts-node src/migrations/checkMigrations.ts",
-    "migration:revert": "ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:revert -d src/config/database.config.ts"
+    "migration:revert": "ts-node -r tsconfig-paths/register node_modules/typeorm/cli.js migration:revert -d src/config/database.config.ts",
+    "db:copy-kasr-to-aiven": "ts-node scripts/copy-db-kasr-to-aiven.ts",
+    "db:truncate-masr-el-dawly": "ts-node scripts/truncate-masr-el-dawly-tables.ts",
+    "db:migrate-default": "ts-node scripts/run-defaultdb-migrations.ts",
+    "db:migrate-institutions": "ts-node scripts/run-institution-migrations.ts",
+    "db:seed-institutions": "ts-node scripts/seed-institutions.ts",
+    "db:test-ka": "ts-node scripts/test-db-connection-ka.ts",
+    "db:test-md": "ts-node scripts/test-db-connection-md.ts",
+    "db:restore-subgoogleuid-from-mongo": "ts-node scripts/restore-subgoogleuid-from-mongo.ts"
   },
   "keywords": [],
   "author": "",

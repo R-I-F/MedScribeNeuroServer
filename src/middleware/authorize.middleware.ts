@@ -9,6 +9,7 @@ export interface JwtPayload {
   role: string;
   id?: string;  // User's UUID (new format)
   _id?: string; // User's MongoDB ObjectId as string (backward compatibility)
+  institutionId?: string; // Institution UUID for multi-tenant support
 }
 
 // Middleware to check if user has required role or higher
@@ -95,7 +96,13 @@ export const requireValidatorSupervisor = async (req: Request, res: Response, ne
       }
 
       const supervisorService = container.get<SupervisorService>(SupervisorService);
-      const supervisor = await supervisorService.getSupervisorById({ id: supervisorId });
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+          error: "Institution DataSource not resolved"
+        });
+      }
+      const supervisor = await supervisorService.getSupervisorById({ id: supervisorId }, dataSource);
       
       if (!supervisor) {
         return res.status(StatusCodes.NOT_FOUND).json({

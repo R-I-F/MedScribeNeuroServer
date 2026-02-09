@@ -18,7 +18,7 @@ export class ReportsController {
         endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
       };
 
-      const pdfBuffer = await this.reportsProvider.generateSupervisorsSubmissionCountReport(filters);
+      const pdfBuffer = await this.reportsProvider.generateSupervisorsSubmissionCountReport(filters, (req as any).institutionDataSource);
       return pdfBuffer;
     } catch (err: any) {
       throw new Error(err);
@@ -35,7 +35,7 @@ export class ReportsController {
         endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
       };
 
-      const pdfBuffer = await this.reportsProvider.generateCandidatesSubmissionCountReport(filters);
+      const pdfBuffer = await this.reportsProvider.generateCandidatesSubmissionCountReport(filters, (req as any).institutionDataSource);
       return pdfBuffer;
     } catch (err: any) {
       throw new Error(err);
@@ -56,7 +56,7 @@ export class ReportsController {
         groupBy: (req.query.groupBy as "title" | "alphaCode") || "title",
       };
 
-      const pdfBuffer = await this.reportsProvider.generateHospitalAnalysisReport(filters);
+      const pdfBuffer = await this.reportsProvider.generateHospitalAnalysisReport(filters, (req as any).institutionDataSource);
       return pdfBuffer;
     } catch (err: any) {
       throw new Error(err);
@@ -75,7 +75,7 @@ export class ReportsController {
         endDate: validated.endDate ? new Date(validated.endDate) : undefined,
       };
 
-      const pdfBuffer = await this.reportsProvider.generateCanceledEventsReport(filters);
+      const pdfBuffer = await this.reportsProvider.generateCanceledEventsReport(filters, (req as any).institutionDataSource);
       return pdfBuffer;
     } catch (err: any) {
       throw new Error(err);

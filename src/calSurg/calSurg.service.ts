@@ -1,19 +1,14 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
-import { AppDataSource } from "../config/database.config";
 import { CalSurgEntity } from "./calSurg.mDbSchema";
 import { Repository, Between, In, MoreThanOrEqual, LessThanOrEqual } from "typeorm";
 
 @injectable()
 export class CalSurgService {
-  private calSurgRepository: Repository<CalSurgEntity>;
-
-  constructor() {
-    this.calSurgRepository = AppDataSource.getRepository(CalSurgEntity);
-  }
-
-  public async createCalSurg(calSurgData: ICalSurg): Promise<ICalSurgDoc> | never {
+  public async createCalSurg(calSurgData: ICalSurg, dataSource: DataSource): Promise<ICalSurgDoc> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       // Map interface fields to entity fields (hospital/arabProc are UUIDs in interface, but entity uses hospitalId/arabProcId)
       const entityData: any = {
         timeStamp: calSurgData.timeStamp,
@@ -26,11 +21,11 @@ export class CalSurgService {
         google_uid: calSurgData.google_uid,
         formLink: calSurgData.formLink,
       };
-      const newCalSurg = this.calSurgRepository.create(entityData);
-      const savedCalSurg = await this.calSurgRepository.save(newCalSurg) as unknown as CalSurgEntity;
+      const newCalSurg = calSurgRepository.create(entityData);
+      const savedCalSurg = await calSurgRepository.save(newCalSurg) as unknown as CalSurgEntity;
       
       // Load with relations for return
-      const result = await this.calSurgRepository.findOne({
+      const result = await calSurgRepository.findOne({
         where: { id: savedCalSurg.id },
         relations: ["hospital", "arabProc"],
       });
@@ -41,8 +36,9 @@ export class CalSurgService {
     }
   }
 
-  public async createBulkCalSurg(calSurgData: ICalSurg[]): Promise<ICalSurgDoc[]> | never {
+  public async createBulkCalSurg(calSurgData: ICalSurg[], dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       // Map interface fields to entity fields
       const entityDataArray = calSurgData.map(data => ({
         timeStamp: data.timeStamp,
@@ -55,12 +51,12 @@ export class CalSurgService {
         google_uid: data.google_uid,
         formLink: data.formLink,
       }));
-      const newCalSurgs = this.calSurgRepository.create(entityDataArray);
-      const savedCalSurgs = await this.calSurgRepository.save(newCalSurgs);
+      const newCalSurgs = calSurgRepository.create(entityDataArray);
+      const savedCalSurgs = await calSurgRepository.save(newCalSurgs);
       
       // Load with relations for return
       const ids = savedCalSurgs.map(cs => cs.id);
-      const results = await this.calSurgRepository.find({
+      const results = await calSurgRepository.find({
         where: { id: In(ids) },
         relations: ["hospital", "arabProc"],
       });
@@ -71,15 +67,16 @@ export class CalSurgService {
     }
   }
 
-  public async getCalSurgById(calSurgId: string): Promise<ICalSurgDoc> | never {
+  public async getCalSurgById(calSurgId: string, dataSource: DataSource): Promise<ICalSurgDoc> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(calSurgId)) {
         throw new Error("Invalid calSurg ID format");
       }
       
-      const calSurg = await this.calSurgRepository.findOne({
+      const calSurg = await calSurgRepository.findOne({
         where: { id: calSurgId },
         relations: ["hospital", "arabProc"],
       });
@@ -94,9 +91,10 @@ export class CalSurgService {
     }
   }
 
-  public async getAllCalSurg(): Promise<ICalSurgDoc[]> | never {
+  public async getAllCalSurg(dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
-      const calSurgs = await this.calSurgRepository.find({
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
+      const calSurgs = await calSurgRepository.find({
         relations: ["hospital", "arabProc"],
         order: { procDate: "DESC" },
       });
@@ -107,9 +105,40 @@ export class CalSurgService {
     }
   }
 
-  public async getCalSurgByDateRange(startDate: Date, endDate: Date): Promise<ICalSurgDoc[]> | never {
+  /**
+   * Dashboard: calSurg within last 60 days, stripped of formLink and google_uid
+   */
+  public async getCalSurgDashboard(dataSource: DataSource): Promise<any[]> | never {
     try {
-      const calSurgs = await this.calSurgRepository.find({
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 60);
+      cutoff.setHours(0, 0, 0, 0);
+
+      const calSurgs = await calSurgRepository.find({
+        where: { procDate: MoreThanOrEqual(cutoff) },
+        relations: ["hospital", "arabProc"],
+        order: { procDate: "DESC" },
+      });
+
+      return calSurgs.map((cs) => {
+        const { formLink, google_uid, createdAt, updatedAt, ...rest } = cs as any;
+        return {
+          ...rest,
+          _id: rest.id ?? rest._id,
+          hospital: rest.hospital ? { _id: rest.hospital.id, engName: rest.hospital.engName, arabName: rest.hospital.arabName } : undefined,
+          arabProc: rest.arabProc ? { _id: rest.arabProc.id, title: rest.arabProc.title, numCode: rest.arabProc.numCode, alphaCode: rest.arabProc.alphaCode, description: rest.arabProc.description } : undefined,
+        };
+      });
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getCalSurgByDateRange(startDate: Date, endDate: Date, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+    try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
+      const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
         },
@@ -123,12 +152,13 @@ export class CalSurgService {
     }
   }
 
-  public async getCalSurgByMonth(year: number, month: number): Promise<ICalSurgDoc[]> | never {
+  public async getCalSurgByMonth(year: number, month: number, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const startDate = new Date(year, month - 1, 1); // month is 0-indexed
       const endDate = new Date(year, month, 0, 23, 59, 59, 999); // Last day of month
       
-      const calSurgs = await this.calSurgRepository.find({
+      const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
         },
@@ -142,15 +172,16 @@ export class CalSurgService {
     }
   }
 
-  public async getCalSurgByDay(date: Date): Promise<ICalSurgDoc[]> | never {
+  public async getCalSurgByDay(date: Date, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const startDate = new Date(date);
       startDate.setHours(0, 0, 0, 0);
       
       const endDate = new Date(date);
       endDate.setHours(23, 59, 59, 999);
       
-      const calSurgs = await this.calSurgRepository.find({
+      const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
         },
@@ -164,12 +195,13 @@ export class CalSurgService {
     }
   }
 
-  public async getCalSurgByYear(year: number): Promise<ICalSurgDoc[]> | never {
+  public async getCalSurgByYear(year: number, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const startDate = new Date(year, 0, 1); // January 1st
       const endDate = new Date(year, 11, 31, 23, 59, 59, 999); // December 31st
       
-      const calSurgs = await this.calSurgRepository.find({
+      const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
         },
@@ -191,8 +223,9 @@ export class CalSurgService {
     year?: number;
     startDate?: Date;
     endDate?: Date;
-  }): Promise<ICalSurgDoc[]> | never {
+  }, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const whereConditions: any = {};
 
       // Hospital filtering
@@ -218,7 +251,7 @@ export class CalSurgService {
         whereConditions.procDate = Between(startDate, endDate);
       }
 
-      let calSurgs = await this.calSurgRepository.find({
+      let calSurgs = await calSurgRepository.find({
         where: whereConditions,
         relations: ["hospital", "arabProc"],
         order: { procDate: "ASC" },
@@ -244,12 +277,13 @@ export class CalSurgService {
     }
   }
 
-  public async findCalSurgByGoogleUid(google_uid: string): Promise<ICalSurgDoc | null> | never {
+  public async findCalSurgByGoogleUid(google_uid: string, dataSource: DataSource): Promise<ICalSurgDoc | null> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       if (!google_uid || google_uid.trim() === "") {
         return null;
       }
-      const calSurg = await this.calSurgRepository.findOne({
+      const calSurg = await calSurgRepository.findOne({
         where: { google_uid: google_uid.trim() },
       });
       return calSurg as unknown as ICalSurgDoc | null;
@@ -258,13 +292,14 @@ export class CalSurgService {
     }
   }
 
-  public async findCalSurgsByGoogleUids(google_uids: string[]): Promise<ICalSurgDoc[]> | never {
+  public async findCalSurgsByGoogleUids(google_uids: string[], dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const uniqueUids = [...new Set(google_uids.filter(uid => uid && uid.trim() !== ""))];
       if (uniqueUids.length === 0) {
         return [];
       }
-      const calSurgs = await this.calSurgRepository.find({
+      const calSurgs = await calSurgRepository.find({
         where: { google_uid: In(uniqueUids) },
       });
       return calSurgs as unknown as ICalSurgDoc[];
@@ -273,8 +308,9 @@ export class CalSurgService {
     }
   }
 
-  public async updateCalSurg(id: string, updateData: Partial<ICalSurg>): Promise<ICalSurgDoc> | never {
+  public async updateCalSurg(id: string, updateData: Partial<ICalSurg>, dataSource: DataSource): Promise<ICalSurgDoc> | never {
     try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       // Validate UUID format
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
@@ -282,7 +318,7 @@ export class CalSurgService {
       }
 
       // Check if calSurg exists
-      const existingCalSurg = await this.calSurgRepository.findOne({
+      const existingCalSurg = await calSurgRepository.findOne({
         where: { id },
       });
 
@@ -303,10 +339,10 @@ export class CalSurgService {
       if (updateData.formLink !== undefined) entityUpdateData.formLink = updateData.formLink;
 
       // Update the entity
-      await this.calSurgRepository.update(id, entityUpdateData);
+      await calSurgRepository.update(id, entityUpdateData);
 
       // Load with relations for return
-      const updatedCalSurg = await this.calSurgRepository.findOne({
+      const updatedCalSurg = await calSurgRepository.findOne({
         where: { id },
         relations: ["hospital", "arabProc"],
       });
@@ -321,9 +357,10 @@ export class CalSurgService {
     }
   }
 
-  public async deleteCalSurg(id: string): Promise<boolean> | never {
+  public async deleteCalSurg(id: string, dataSource: DataSource): Promise<boolean> | never {
     try {
-      const result = await this.calSurgRepository.delete(id);
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
+      const result = await calSurgRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {
       throw new Error(err);

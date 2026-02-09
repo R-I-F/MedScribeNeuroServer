@@ -1,20 +1,36 @@
 import "reflect-metadata";
 import { DataSource, DataSourceOptions } from "typeorm";
 import * as dotenv from "dotenv";
+import * as fs from "fs";
+import * as path from "path";
 
 dotenv.config();
 
-// Database configuration using environment variables
-const dbConfig: DataSourceOptions = {
-  type: "mysql",
-  host: process.env.SQL_HOST!,
-  port: parseInt(process.env.SQL_PORT || "3306", 10),
-  username: process.env.SQL_USERNAME!,
-  password: process.env.SQL_PASSWORD!,
-  database: process.env.SQL_DB_NAME!,
-  synchronize: false, // NEVER set to true in production - use migrations instead
-  logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"], // NODE_ENV is optional
-  entities: [
+// Fallback DB = first institution on Aiven (kasr-el-ainy). Used when no institution context.
+// Multi-tenant: DataSourceManager loads institutions from defaultdb (institutions table).
+// Institution DB migrations: use runMigrations.ts (SQL_*_KA) or run-defaultdb-migrations.ts.
+function getDbConfig(): DataSourceOptions {
+  const sslCaPath = process.env.SSL_CA_PATH;
+  const sslOpts =
+    sslCaPath && fs.existsSync(path.resolve(process.cwd(), sslCaPath))
+      ? {
+          ssl: {
+            ca: fs.readFileSync(path.resolve(process.cwd(), sslCaPath), "utf8"),
+            rejectUnauthorized: true,
+          },
+        }
+      : {};
+
+  return {
+    type: "mysql",
+    host: process.env.SQL_HOST_DEFAULT!,
+    port: parseInt(process.env.SQL_PORT_DEFAULT || "3306", 10),
+    username: process.env.SQL_USERNAME_DEFAULT!,
+    password: process.env.SQL_PASSWORD_DEFAULT!,
+    database: process.env.SQL_DB_DEF_NAME_KA || "kasr-el-ainy",
+    synchronize: false, // NEVER set to true in production - use migrations instead
+    logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"], // NODE_ENV is optional
+    entities: [
     __dirname + "/../hospital/hospital.mDbSchema.ts",
     __dirname + "/../diagnosis/diagnosis.mDbSchema.ts",
     __dirname + "/../procCpt/procCpt.mDbSchema.ts",
@@ -38,14 +54,19 @@ const dbConfig: DataSourceOptions = {
     __dirname + "/../migrations/*.ts",
   ],
   subscribers: [],
-  connectTimeout: 10000, // 10 seconds as recommended
-  extra: {
-    connectionLimit: 10, // Connection pool limit
-  },
-};
+    connectTimeout: 10000, // 10 seconds as recommended
+    extra: {
+      connectionLimit: 10, // Connection pool limit
+    },
+    ...sslOpts,
+  };
+}
 
 // Create and export the DataSource instance
-export const AppDataSource = new DataSource(dbConfig);
+// NOTE: This AppDataSource is fallback when no institution context (e.g. registerCand without institutionId).
+// For multi-tenant support, use DataSourceManager.getInstance().getDataSource(institutionId)
+// to get institution-specific DataSource instances.
+export const AppDataSource = new DataSource(getDbConfig());
 
 // Initialize database connection
 export async function initializeDatabase(): Promise<void> {
@@ -73,14 +94,21 @@ export async function closeDatabase(): Promise<void> {
   }
 }
 
-// Validate environment variables
+// Validate environment variables for defaultdb bootstrap and fallback connection
 export function validateDatabaseConfig(): void {
-  const requiredVars = ["SQL_HOST", "SQL_PORT", "SQL_DB_NAME", "SQL_USERNAME", "SQL_PASSWORD"];
-  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+  const required = [
+    "SQL_HOST_DEFAULT",
+    "SQL_PORT_DEFAULT",
+    "SQL_DB_NAME_DEFAULT",
+    "SQL_USERNAME_DEFAULT",
+    "SQL_PASSWORD_DEFAULT",
+    "SSL_CA_PATH",
+  ];
+  const missing = required.filter((k) => !process.env[k]);
 
-  if (missingVars.length > 0) {
+  if (missing.length > 0) {
     throw new Error(
-      `Missing required database environment variables: ${missingVars.join(", ")}`
+      `Missing required database environment variables: ${missing.join(", ")}`
     );
   }
 }

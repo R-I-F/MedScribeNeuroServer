@@ -11,8 +11,9 @@ import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
-injectable()
+@injectable()
 export class DiagnosisRouter {
   public router: Router;
 
@@ -34,8 +35,9 @@ export class DiagnosisRouter {
     // GET endpoint - Get all diagnoses
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSuperAdminOrInstituteAdmin,
       async (req: Request, res: Response) => {
         try {
@@ -49,8 +51,9 @@ export class DiagnosisRouter {
 
     this.router.post(
       "/postBulk",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createBulkDiagnosisValidator,
       async (req: Request, res: Response) => {
@@ -70,8 +73,9 @@ export class DiagnosisRouter {
 
     this.router.post(
       "/post",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createDiagnosisValidator,
       async (req: Request, res: Response) => {
@@ -91,8 +95,9 @@ export class DiagnosisRouter {
 
     this.router.patch(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       updateDiagnosisValidator,
       async (req: Request, res: Response) => {
@@ -116,8 +121,9 @@ export class DiagnosisRouter {
 
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteDiagnosisValidator,
       async (req: Request, res: Response) => {

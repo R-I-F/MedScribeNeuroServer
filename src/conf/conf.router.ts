@@ -11,6 +11,7 @@ import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, requireCandidate, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class ConfRouter {
@@ -26,8 +27,9 @@ export class ConfRouter {
     // Create conf
     this.router.post(
       "/",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       authorize(UserRole.INSTITUTE_ADMIN, UserRole.SUPERVISOR, UserRole.CLERK, UserRole.SUPER_ADMIN),
       createConfValidator,
       async (req: Request, res: Response) => {
@@ -48,8 +50,9 @@ export class ConfRouter {
     // Get all confs
     this.router.get(
       "/",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       async (req: Request, res: Response) => {
         try {
@@ -64,8 +67,9 @@ export class ConfRouter {
     // Get conf by ID
     this.router.get(
       "/:id",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireCandidate,
       getConfByIdValidator,
       async (req: Request, res: Response) => {
@@ -90,8 +94,9 @@ export class ConfRouter {
     // Update conf
     this.router.patch(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       updateConfValidator,
       async (req: Request, res: Response) => {
@@ -116,8 +121,9 @@ export class ConfRouter {
     // Delete conf
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteConfValidator,
       async (req: Request, res: Response) => {

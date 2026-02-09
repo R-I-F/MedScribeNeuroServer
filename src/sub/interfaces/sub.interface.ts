@@ -166,11 +166,14 @@ export interface IFuncNeuro extends IDiagProc, INotesIntEvents {}
 
 export interface ICsf extends IDiagProc, INotesIntEvents {}
 
+export type TSubmissionType = "candidate" | "supervisor";
+
 export interface ISubBase {
   timeStamp: Date | never | undefined;
-  candDocId: string; // UUID (replaces Types.ObjectId)
+  submissionType?: TSubmissionType; // "candidate" (default) | "supervisor"
+  candDocId?: string | null; // UUID (required for candidate, null for supervisor)
   procDocId: string; // UUID (replaces Types.ObjectId)
-  supervisorDocId: string; // UUID (replaces Types.ObjectId)
+  supervisorDocId: string; // UUID (approver for candidate, surgeon for supervisor)
   roleInSurg: TRoleInSurg;
   assRoleDesc?: string;
   otherSurgRank: TOtherSurgRank;
@@ -181,8 +184,11 @@ export interface ISubBase {
   consUsed: TConsUsed;
   consDetails?: string;
   mainDiagDocId: string | undefined; // UUID (replaces Types.ObjectId)
-  subGoogleUid: string;
+  subGoogleUid?: string | null;
   subStatus: "approved" | "pending" | "rejected";
+  review?: string;
+  reviewedAt?: Date;
+  reviewedBy?: string;
   procCptDocId: string[]; // UUID[] (replaces Types.ObjectId[])
   icdDocId: string[]; // UUID[] (replaces Types.ObjectId[])
 }

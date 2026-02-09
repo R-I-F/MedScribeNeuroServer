@@ -17,11 +17,15 @@ export class ClerkController {
   ) {
     const validatedReq = matchedData(req) as Partial<IClerk>;
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       // Hash password before saving
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.clerkService.createClerk(validatedReq);
+      return await this.clerkService.createClerk(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -32,7 +36,11 @@ export class ClerkController {
     res: Response
   ) {
     try {
-      return await this.clerkService.getAllClerks();
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.clerkService.getAllClerks(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -44,7 +52,11 @@ export class ClerkController {
   ) {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      return await this.clerkService.getClerkById(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.clerkService.getClerkById(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -56,11 +68,15 @@ export class ClerkController {
   ) {
     const validatedReq = matchedData(req) as Partial<IClerk> & { id: string };
     try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
       // Hash password if it's being updated
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.clerkService.updateClerk(validatedReq);
+      return await this.clerkService.updateClerk(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -72,7 +88,11 @@ export class ClerkController {
   ) {
     const validatedReq = matchedData(req) as { id: string };
     try {
-      const deleted = await this.clerkService.deleteClerk(validatedReq);
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const deleted = await this.clerkService.deleteClerk(validatedReq, dataSource);
       return { message: "Clerk deleted successfully" };
     } catch (err: any) {
       throw new Error(err);

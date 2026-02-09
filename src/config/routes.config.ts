@@ -3,7 +3,10 @@ import { container } from "./container.config";
 // Using dynamic requires to avoid circular dependency with container.config.ts
 
 export function addRoutes(app: Application) {
-    // Using dynamic requires to avoid circular dependency with container.config.ts
+  // Using dynamic requires to avoid circular dependency with container.config.ts
+  const { InstitutionRouter } = require("../institution/institution.router");
+  const institutionRouter = container.get(InstitutionRouter) as any;
+
     const { HospitalRouter } = require("../hospital/hospital.router");
     const hospitalRouter = container.get(HospitalRouter) as any;
 
@@ -64,6 +67,10 @@ export function addRoutes(app: Application) {
   const { ClerkRouter } = require("../clerk/clerk.router");
   const clerkRouter = container.get(ClerkRouter) as any;
 
+  const { ActivityTimelineRouter } = require("../activityTimeline/activityTimeline.router");
+  const activityTimelineRouter = container.get(ActivityTimelineRouter) as any;
+
+  app.use("/institutions", institutionRouter.router);
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
@@ -84,6 +91,7 @@ export function addRoutes(app: Application) {
   app.use("/conf", confRouter.router);
   app.use("/event", eventRouter.router);
   app.use("/clerk", clerkRouter.router);
+  app.use("/activityTimeline", activityTimelineRouter.router);
 
   return app;
 }

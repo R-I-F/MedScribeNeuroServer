@@ -1,61 +1,55 @@
 import { inject, injectable } from "inversify";
+import { DataSource } from "typeorm";
 import { IClerk, IClerkDoc } from "./clerk.interface";
-import { AppDataSource } from "../config/database.config";
-import { ClerkEntity } from "./clerk.mDbSchema";
 import { ClerkProvider } from "./clerk.provider";
-import { Repository } from "typeorm";
 
 @injectable()
 export class ClerkService {
-  private clerkRepository: Repository<ClerkEntity>;
+  constructor(@inject(ClerkProvider) private clerkProvider: ClerkProvider) {}
 
-  constructor(@inject(ClerkProvider) private clerkProvider: ClerkProvider) {
-    this.clerkRepository = AppDataSource.getRepository(ClerkEntity);
-  }
-
-  public async createClerk(validatedReq: Partial<IClerk>): Promise<IClerkDoc> | never {
+  public async createClerk(validatedReq: Partial<IClerk>, dataSource: DataSource): Promise<IClerkDoc> | never {
     try {
-      return await this.clerkProvider.createClerk(validatedReq);
+      return await this.clerkProvider.createClerk(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllClerks(): Promise<IClerkDoc[]> | never {
+  public async getAllClerks(dataSource: DataSource): Promise<IClerkDoc[]> | never {
     try {
-      return await this.clerkProvider.getAllClerks();
+      return await this.clerkProvider.getAllClerks(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getClerkById(validatedReq: { id: string }): Promise<IClerkDoc | null> | never {
+  public async getClerkById(validatedReq: { id: string }, dataSource: DataSource): Promise<IClerkDoc | null> | never {
     try {
-      return await this.clerkProvider.getClerkById(validatedReq.id);
+      return await this.clerkProvider.getClerkById(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getClerkByEmail(email: string): Promise<IClerkDoc | null> | never {
+  public async getClerkByEmail(email: string, dataSource: DataSource): Promise<IClerkDoc | null> | never {
     try {
-      return await this.clerkProvider.getClerkByEmail(email);
+      return await this.clerkProvider.getClerkByEmail(email, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async updateClerk(validatedReq: Partial<IClerk> & { id: string }): Promise<IClerkDoc | null> | never {
+  public async updateClerk(validatedReq: Partial<IClerk> & { id: string }, dataSource: DataSource): Promise<IClerkDoc | null> | never {
     try {
-      return await this.clerkProvider.updateClerk(validatedReq);
+      return await this.clerkProvider.updateClerk(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async deleteClerk(validatedReq: { id: string }): Promise<boolean> | never {
+  public async deleteClerk(validatedReq: { id: string }, dataSource: DataSource): Promise<boolean> | never {
     try {
-      return await this.clerkProvider.deleteClerk(validatedReq.id);
+      return await this.clerkProvider.deleteClerk(validatedReq.id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

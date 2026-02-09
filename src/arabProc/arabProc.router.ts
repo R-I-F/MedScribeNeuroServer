@@ -10,6 +10,7 @@ import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import { UserRole } from "../types/role.types";
+import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
 export class ArabProcRouter {
@@ -31,8 +32,9 @@ export class ArabProcRouter {
 
     this.router.get(
       "/getAllArabProcs",
-      userBasedRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
       requireSuperAdminOrInstituteAdminOrClerk,
       async (req: Request, res: Response) => {
         try {
@@ -46,8 +48,9 @@ export class ArabProcRouter {
     );
     this.router.post(
       "/createArabProc",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createArabProcValidator,
       async (req: Request, res: Response) => {
@@ -66,8 +69,9 @@ export class ArabProcRouter {
 
     this.router.post(
       "/createArabProcFromExternal",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
@@ -91,8 +95,9 @@ export class ArabProcRouter {
 
     this.router.delete(
       "/:id",
-      userBasedStrictRateLimiter,
       extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
       requireSuperAdmin,
       deleteArabProcValidator,
       async (req: Request, res: Response) => {
