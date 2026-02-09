@@ -70,10 +70,14 @@ export class MailerService {
       throw new Error("Missing 'from' address for email.");
     }
 
-    if (this.useMailgunApi()) {
+    const useApi = this.useMailgunApi();
+    if (useApi) {
       return this.sendViaMailgunApi({ from: fromAddress ?? undefined, to, subject, text, html });
     }
 
+    console.warn(
+      "[MailerService] Using SMTP (MAILGUN_API_KEY + MAILGUN_DOMAIN not both set). On Railway set both to use Mailgun API and avoid connection timeout."
+    );
     return this.getTransporter().sendMail({
       from: fromAddress!,
       to,
