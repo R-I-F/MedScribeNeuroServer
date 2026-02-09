@@ -3,6 +3,24 @@ import { DataSource, DataSourceOptions } from "typeorm";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
+import { HospitalEntity } from "../hospital/hospital.mDbSchema";
+import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
+import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
+import { ArabProcEntity } from "../arabProc/arabProc.mDbSchema";
+import { MainDiagEntity } from "../mainDiag/mainDiag.mDbSchema";
+import { CalSurgEntity } from "../calSurg/calSurg.mDbSchema";
+import { CandidateEntity } from "../cand/cand.mDbSchema";
+import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
+import { InstituteAdminEntity } from "../instituteAdmin/instituteAdmin.mDbSchema";
+import { SuperAdminEntity } from "../superAdmin/superAdmin.mDbSchema";
+import { SubmissionEntity } from "../sub/sub.mDbSchema";
+import { LectureEntity } from "../lecture/lecture.mDbSchema";
+import { JournalEntity } from "../journal/journal.mDbSchema";
+import { ConfEntity } from "../conf/conf.mDbSchema";
+import { EventEntity } from "../event/event.mDbSchema";
+import { EventAttendanceEntity } from "../event/eventAttendance.mDbSchema";
+import { PasswordResetTokenEntity } from "../passwordReset/passwordReset.mDbSchema";
+import { ClerkEntity } from "../clerk/clerk.mDbSchema";
 
 dotenv.config();
 
@@ -31,29 +49,29 @@ function getDbConfig(): DataSourceOptions {
     synchronize: false, // NEVER set to true in production - use migrations instead
     logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"], // NODE_ENV is optional
     entities: [
-    __dirname + "/../hospital/hospital.mDbSchema.ts",
-    __dirname + "/../diagnosis/diagnosis.mDbSchema.ts",
-    __dirname + "/../procCpt/procCpt.mDbSchema.ts",
-    __dirname + "/../arabProc/arabProc.mDbSchema.ts",
-    __dirname + "/../mainDiag/mainDiag.mDbSchema.ts",
-    __dirname + "/../calSurg/calSurg.mDbSchema.ts",
-    __dirname + "/../cand/cand.mDbSchema.ts",
-    __dirname + "/../supervisor/supervisor.mDbSchema.ts",
-    __dirname + "/../instituteAdmin/instituteAdmin.mDbSchema.ts",
-    __dirname + "/../superAdmin/superAdmin.mDbSchema.ts",
-    __dirname + "/../sub/sub.mDbSchema.ts", // Added for Submissions
-    __dirname + "/../lecture/lecture.mDbSchema.ts", // Added for Lectures
-    __dirname + "/../journal/journal.mDbSchema.ts", // Added for Journals
-    __dirname + "/../conf/conf.mDbSchema.ts", // Added for Confs
-    __dirname + "/../event/event.mDbSchema.ts", // Added for Events
-    __dirname + "/../event/eventAttendance.mDbSchema.ts", // Added for Event Attendance
-    __dirname + "/../passwordReset/passwordReset.mDbSchema.ts", // Added for Password Reset Tokens
-    __dirname + "/../clerk/clerk.mDbSchema.ts", // Added for Clerks
-  ],
-  migrations: [
-    __dirname + "/../migrations/*.ts",
-  ],
-  subscribers: [],
+      HospitalEntity,
+      DiagnosisEntity,
+      ProcCptEntity,
+      ArabProcEntity,
+      MainDiagEntity,
+      CalSurgEntity,
+      CandidateEntity,
+      SupervisorEntity,
+      InstituteAdminEntity,
+      SuperAdminEntity,
+      SubmissionEntity,
+      LectureEntity,
+      JournalEntity,
+      ConfEntity,
+      EventEntity,
+      EventAttendanceEntity,
+      PasswordResetTokenEntity,
+      ClerkEntity,
+    ],
+    migrations: [
+      __dirname + "/../migrations/*.ts",
+    ],
+    subscribers: [],
     connectTimeout: 10000, // 10 seconds as recommended
     extra: {
       connectionLimit: 10, // Connection pool limit

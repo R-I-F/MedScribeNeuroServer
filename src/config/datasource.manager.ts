@@ -3,6 +3,24 @@ import { DataSource, DataSourceOptions } from "typeorm";
 import * as fs from "fs";
 import * as path from "path";
 import { getInstitutionById } from "../institution/institution.service";
+import { HospitalEntity } from "../hospital/hospital.mDbSchema";
+import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
+import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
+import { ArabProcEntity } from "../arabProc/arabProc.mDbSchema";
+import { MainDiagEntity } from "../mainDiag/mainDiag.mDbSchema";
+import { CalSurgEntity } from "../calSurg/calSurg.mDbSchema";
+import { CandidateEntity } from "../cand/cand.mDbSchema";
+import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
+import { InstituteAdminEntity } from "../instituteAdmin/instituteAdmin.mDbSchema";
+import { SuperAdminEntity } from "../superAdmin/superAdmin.mDbSchema";
+import { SubmissionEntity } from "../sub/sub.mDbSchema";
+import { LectureEntity } from "../lecture/lecture.mDbSchema";
+import { JournalEntity } from "../journal/journal.mDbSchema";
+import { ConfEntity } from "../conf/conf.mDbSchema";
+import { EventEntity } from "../event/event.mDbSchema";
+import { EventAttendanceEntity } from "../event/eventAttendance.mDbSchema";
+import { PasswordResetTokenEntity } from "../passwordReset/passwordReset.mDbSchema";
+import { ClerkEntity } from "../clerk/clerk.mDbSchema";
 
 /**
  * DataSource Manager - Singleton for managing multi-tenant database connections
@@ -93,24 +111,24 @@ export class DataSourceManager {
       username: institution.database.username,
       password: institution.database.password,
       entities: [
-        __dirname + "/../hospital/hospital.mDbSchema.ts",
-        __dirname + "/../diagnosis/diagnosis.mDbSchema.ts",
-        __dirname + "/../procCpt/procCpt.mDbSchema.ts",
-        __dirname + "/../arabProc/arabProc.mDbSchema.ts",
-        __dirname + "/../mainDiag/mainDiag.mDbSchema.ts",
-        __dirname + "/../calSurg/calSurg.mDbSchema.ts",
-        __dirname + "/../cand/cand.mDbSchema.ts",
-        __dirname + "/../supervisor/supervisor.mDbSchema.ts",
-        __dirname + "/../instituteAdmin/instituteAdmin.mDbSchema.ts",
-        __dirname + "/../superAdmin/superAdmin.mDbSchema.ts",
-        __dirname + "/../sub/sub.mDbSchema.ts",
-        __dirname + "/../lecture/lecture.mDbSchema.ts",
-        __dirname + "/../journal/journal.mDbSchema.ts",
-        __dirname + "/../conf/conf.mDbSchema.ts",
-        __dirname + "/../event/event.mDbSchema.ts",
-        __dirname + "/../event/eventAttendance.mDbSchema.ts",
-        __dirname + "/../passwordReset/passwordReset.mDbSchema.ts",
-        __dirname + "/../clerk/clerk.mDbSchema.ts",
+        HospitalEntity,
+        DiagnosisEntity,
+        ProcCptEntity,
+        ArabProcEntity,
+        MainDiagEntity,
+        CalSurgEntity,
+        CandidateEntity,
+        SupervisorEntity,
+        InstituteAdminEntity,
+        SuperAdminEntity,
+        SubmissionEntity,
+        LectureEntity,
+        JournalEntity,
+        ConfEntity,
+        EventEntity,
+        EventAttendanceEntity,
+        PasswordResetTokenEntity,
+        ClerkEntity,
       ],
       migrations: [__dirname + "/../migrations/*.ts"],
       synchronize: false, // NEVER set to true in production
