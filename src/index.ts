@@ -13,6 +13,7 @@ import { initializeDatabase, validateDatabaseConfig } from "./config/database.co
 const app: Express = express();
 dotenv.config();
 const port = process.env.PORT;
+console.log("[App] Process started", { PORT: port, NODE_ENV: process.env.NODE_ENV });
 
 // Trust proxy - use 1 (not true) to avoid ERR_ERL_PERMISSIVE_TRUST_PROXY.
 // With true, clients could spoof X-Forwarded-For and bypass IP-based rate limiting.
@@ -38,15 +39,16 @@ app.use(responseFormatter);
 
 async function bootstrap() {
   try {
-    // Initialize MariaDB connection
+    console.log("[App] Bootstrap starting...");
     validateDatabaseConfig();
+    console.log("[App] Database config OK, connecting...");
     await initializeDatabase();
-    
+    console.log("[App] Database connected, binding port...");
     app.listen(port, () => {
       console.log(`✅ Server running on port ${port}`);
     });
   } catch (err) {
-    console.error("Bootstrap error:", err);
+    console.error("[App] Bootstrap error:", err);
     process.exit(1);
   }
 }
