@@ -21,12 +21,9 @@ export class MailerService {
         pass: process.env.EMAIL_PASS,
       },
     });
-
-    this.transporter.verify((error) => {
-      if (error) {
-        console.error("[MailerService] Transporter verification failed:", error);
-      }
-    });
+    // No transporter.verify() at startup: SMTP is often blocked on PaaS (e.g. Railway),
+    // causing connection timeout and SIGTERM. App starts without verifying; send will
+    // still fail until you use Mailgun HTTP API if SMTP is blocked.
   }
 
   public async sendMail({ from, to, subject, text, html }: SendMailParams) {
