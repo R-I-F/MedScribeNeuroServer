@@ -27,7 +27,7 @@ app.use(cors({
   origin: allowedOrigin, // Specific origin required when credentials: true
   credentials: true, // Allow cookies/credentials - REQUIRED for httpOnly cookies
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Institution-Id"],
   optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 }));
 
