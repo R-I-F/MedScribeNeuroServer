@@ -151,8 +151,8 @@ export class PasswordResetProvider {
         return true; // Allow if user ID not found
       }
 
-      const oneHourAgo = Date.now() - 60 * 60 * 1000;
-      const tokenCount = await this.passwordResetService.countTokensByUserId(userId, oneHourAgo, dataSource);
+      const oneHourMs = 60 * 60 * 1000;
+      const tokenCount = await this.passwordResetService.countTokensByUserId(userId, oneHourMs, dataSource);
       // Allow if under the configured limit
       return tokenCount < limit;
     } catch (err: any) {
