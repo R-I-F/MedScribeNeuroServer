@@ -15,7 +15,8 @@
     "db:seed-institutions": "ts-node scripts/seed-institutions.ts",
     "db:test-ka": "ts-node scripts/test-db-connection-ka.ts",
     "db:test-md": "ts-node scripts/test-db-connection-md.ts",
-    "db:restore-subgoogleuid-from-mongo": "ts-node scripts/restore-subgoogleuid-from-mongo.ts"
+    "db:restore-subgoogleuid-from-mongo": "ts-node scripts/restore-subgoogleuid-from-mongo.ts",
+    "db:reset-supervisor-passwords": "ts-node scripts/reset-supervisor-passwords.ts"
   },
   "keywords": [],
   "author": "",

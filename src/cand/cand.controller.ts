@@ -2,8 +2,9 @@ import { Request, Response } from "express";
 import { matchedData } from "express-validator";
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
+import bcryptjs from "bcryptjs";
 import { CandService } from "./cand.service";
-import { ICandDoc, ICandCensoredDoc } from "./cand.interface";
+import { ICand, ICandDoc, ICandCensoredDoc } from "./cand.interface";
 import { AppDataSource } from "../config/database.config";
 import { toCensoredCand } from "../utils/censored.mapper";
 import { UserRole } from "../types/role.types";
@@ -65,6 +66,42 @@ export class CandController {
         return candidates.map(toCensoredCand);
       }
       return candidates;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleUpdateCand(
+    req: Request,
+    res: Response
+  ): Promise<ICandDoc | null> | never {
+    const validatedReq = matchedData(req) as Partial<ICand> & { id: string };
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const callerRole = jwtPayload?.role as UserRole | undefined;
+    const callerId = jwtPayload?.id ?? jwtPayload?._id;
+    const targetId = req.params.id || validatedReq.id;
+
+    try {
+      // Candidates may only update their own profile, and only regDeg, regNum, phoneNum
+      if (callerRole === UserRole.CANDIDATE) {
+        if (callerId !== targetId) {
+          throw new Error("Forbidden: Candidates can only update their own profile");
+        }
+        const restrictedPayload: Partial<ICand> & { id: string } = {
+          id: targetId,
+          ...(validatedReq.regDeg !== undefined && { regDeg: validatedReq.regDeg }),
+          ...(validatedReq.regNum !== undefined && { regNum: validatedReq.regNum }),
+          ...(validatedReq.phoneNum !== undefined && { phoneNum: validatedReq.phoneNum }),
+        };
+        return await this.candService.updateCand(restrictedPayload, dataSource);
+      }
+
+      // Institute admin and super admin: allow all fields
+      if (validatedReq.password) {
+        validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
+      }
+      return await this.candService.updateCand(validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

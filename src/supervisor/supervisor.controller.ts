@@ -75,13 +75,31 @@ export class SupervisorController {
   }
 
   public async handleUpdateSupervisor(
-    req: Request, 
+    req: Request,
     res: Response
   ) {
     const validatedReq = matchedData(req) as Partial<ISupervisor> & { id: string };
     const dataSource = (req as any).institutionDataSource || AppDataSource;
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const callerRole = jwtPayload?.role as UserRole | undefined;
+    const callerId = jwtPayload?.id ?? jwtPayload?._id;
+    const targetId = req.params.id || validatedReq.id;
+
     try {
-      // Hash password if it's being updated
+      // Supervisors may only update their own profile, and only phoneNum and position
+      if (callerRole === UserRole.SUPERVISOR) {
+        if (callerId !== targetId) {
+          throw new Error("Forbidden: Supervisors can only update their own profile");
+        }
+        const restrictedPayload: Partial<ISupervisor> & { id: string } = {
+          id: targetId,
+          ...(validatedReq.phoneNum !== undefined && { phoneNum: validatedReq.phoneNum }),
+          ...(validatedReq.position !== undefined && { position: validatedReq.position }),
+        };
+        return await this.supervisorService.updateSupervisor(restrictedPayload, dataSource);
+      }
+
+      // Institute admin and super admin: allow all fields
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }

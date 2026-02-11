@@ -7,6 +7,7 @@ import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
 import { InstituteAdminService } from "../instituteAdmin/instituteAdmin.service";
+import { ClerkService } from "../clerk/clerk.service";
 import { MailerService } from "../mailer/mailer.service";
 import { TUserRole } from "../types/role.types";
 import { IPasswordResetTokenDoc } from "./passwordReset.interface";
@@ -22,6 +23,7 @@ export class PasswordResetProvider {
     @inject(SupervisorService) private supervisorService: SupervisorService,
     @inject(SuperAdminService) private superAdminService: SuperAdminService,
     @inject(InstituteAdminService) private instituteAdminService: InstituteAdminService,
+    @inject(ClerkService) private clerkService: ClerkService,
     @inject(MailerService) private mailerService: MailerService
   ) {}
 
@@ -33,7 +35,8 @@ export class PasswordResetProvider {
   }
 
   /**
-   * Find user by email across all user collections
+   * Find user by email for forgot-password. Includes candidate, supervisor, instituteAdmin, clerk.
+   * SuperAdmin is intentionally excluded: forgot/reset password is not offered for superAdmins.
    */
   public async findUserByEmail(email: string, dataSource?: DataSource): Promise<{
     user: any;
@@ -55,16 +58,16 @@ export class PasswordResetProvider {
         return { user: supervisor, role: "supervisor" as TUserRole };
       }
 
-      // Try superAdmin
-      const superAdmin = await this.superAdminService.getSuperAdminByEmail(email, dataSource);
-      if (superAdmin) {
-        return { user: superAdmin, role: "superAdmin" as TUserRole };
-      }
-
       // Try instituteAdmin
       const instituteAdmin = await this.instituteAdminService.getInstituteAdminByEmail(email, dataSource);
       if (instituteAdmin) {
         return { user: instituteAdmin, role: "instituteAdmin" as TUserRole };
+      }
+
+      // Try clerk (superAdmin intentionally not included)
+      const clerk = await this.clerkService.getClerkByEmail(email, dataSource);
+      if (clerk) {
+        return { user: clerk, role: "clerk" as TUserRole };
       }
 
       return null;
@@ -106,12 +109,25 @@ export class PasswordResetProvider {
         case "instituteAdmin":
           const instituteAdmin = await this.instituteAdminService.getInstituteAdminById({ id: userId }, dataSource);
           return instituteAdmin;
+        case "clerk":
+          const clerk = await this.clerkService.getClerkById({ id: userId }, dataSource);
+          return clerk;
         default:
           throw new Error("Invalid role");
       }
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * Max password reset tokens per user per hour. From env FORGOT_PASSWORD_RATE_LIMIT_PER_HOUR (default 3).
+   */
+  private getForgotPasswordRateLimitPerHour(): number {
+    const raw = process.env.FORGOT_PASSWORD_RATE_LIMIT_PER_HOUR;
+    if (raw == null || raw === "") return 3;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : 3;
   }
 
   /**
@@ -122,8 +138,8 @@ export class PasswordResetProvider {
       if (!dataSource) {
         throw new Error("DataSource is required for password reset operations");
       }
-      // Check if there are more than 3 tokens created in the last hour for this email
-      // We'll need to find tokens by userId, but we need to find user first
+      const limit = this.getForgotPasswordRateLimitPerHour();
+      // Find user first so we can count tokens by userId
       const userData = await this.findUserByEmail(email, dataSource);
       if (!userData) {
         return true; // Allow if user doesn't exist (security: don't reveal)
@@ -137,18 +153,18 @@ export class PasswordResetProvider {
 
       const oneHourAgo = Date.now() - 60 * 60 * 1000;
       const tokenCount = await this.passwordResetService.countTokensByUserId(userId, oneHourAgo, dataSource);
-      
-      // Allow if less than 3 tokens in the last hour
-      return tokenCount < 3;
+      // Allow if under the configured limit
+      return tokenCount < limit;
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
   /**
-   * Create password reset token and send email
+   * Create password reset token and send email.
+   * @param institutionId - If provided, included in the reset link so the frontend reset page can skip the institution selector.
    */
-  public async createPasswordResetToken(email: string, dataSource?: DataSource): Promise<void> | never {
+  public async createPasswordResetToken(email: string, dataSource?: DataSource, institutionId?: string): Promise<void> | never {
     try {
       if (!dataSource) {
         throw new Error("DataSource is required for password reset operations");
@@ -156,14 +172,16 @@ export class PasswordResetProvider {
       // Find user by email
       const userData = await this.findUserByEmail(email, dataSource);
       if (!userData) {
+        console.log("[ForgotPassword] No user found for email in this institution", { email, institutionId: institutionId ?? "missing" });
         // Don't reveal if user exists (security best practice)
         return;
       }
 
-      // Check application-level rate limit (3 tokens per hour per user)
-      // This provides defense in depth beyond router-level rate limiting
+      // Check application-level rate limit (configurable via FORGOT_PASSWORD_RATE_LIMIT_PER_HOUR)
       const isWithinRateLimit = await this.checkRateLimit(email, dataSource);
       if (!isWithinRateLimit) {
+        const limit = this.getForgotPasswordRateLimitPerHour();
+        console.log("[ForgotPassword] Rate limit exceeded (" + limit + "/hour per user)", { email, institutionId: institutionId ?? "missing" });
         // Don't reveal rate limit exceeded (security: don't reveal user exists)
         // Return silently to prevent email enumeration
         return;
@@ -173,6 +191,7 @@ export class PasswordResetProvider {
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
       const userId = user.id || (user._id ? user._id.toString() : null);
       if (!userId) {
+        console.log("[ForgotPassword] User has no id", { email, role, institutionId: institutionId ?? "missing" });
         return;
       }
 
@@ -191,21 +210,26 @@ export class PasswordResetProvider {
         used: false,
       }, dataSource);
 
-      // Generate reset link
+      // Generate reset link (include institutionId so ResetPasswordPage does not need to show institution selector)
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-      const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+      const resetLink = institutionId
+        ? `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}&institutionId=${encodeURIComponent(institutionId)}`
+        : `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
-      // Send email
+      // Send email to the stored address from the DB (not the request email), so the exact address we have on file is used
+      const toAddress = (user as any).email ?? email;
       const emailHtml = this.getPasswordResetEmailHtml(user.fullName || "User", resetLink);
       const emailText = this.getPasswordResetEmailText(user.fullName || "User", resetLink);
 
       await this.mailerService.sendMail({
-        to: email,
+        to: toAddress,
         subject: "Password Reset Request - MedScribe Neuro",
         html: emailHtml,
         text: emailText,
       });
+      console.log("[ForgotPassword] Email sent successfully", { to: toAddress });
     } catch (err: any) {
+      console.error("[ForgotPassword] Provider error:", err?.message ?? err);
       throw new Error(err);
     }
   }
@@ -297,6 +321,12 @@ export class PasswordResetProvider {
           break;
         case "instituteAdmin":
           await this.instituteAdminService.updateInstituteAdmin({
+            id: userId,
+            password: hashedPassword,
+          }, dataSource);
+          break;
+        case "clerk":
+          await this.clerkService.updateClerk({
             id: userId,
             password: hashedPassword,
           }, dataSource);
@@ -443,7 +473,7 @@ export class PasswordResetProvider {
   }
 
   /**
-   * Get HTML email template for password reset
+   * Get HTML email template for password reset (styled per EMAIL_STYLE_GUIDE.md)
    */
   private getPasswordResetEmailHtml(userName: string, resetLink: string): string {
     return `
@@ -454,21 +484,37 @@ export class PasswordResetProvider {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Password Reset Request</title>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px;">
-    <h2 style="color: #2c3e50;">Password Reset Request</h2>
-    <p>Hello ${userName},</p>
-    <p>We received a request to reset your password for your MedScribe Neuro account.</p>
-    <p>Click the button below to reset your password:</p>
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="${resetLink}" style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
-    </div>
-    <p>Or copy and paste this link into your browser:</p>
-    <p style="word-break: break-all; color: #3498db;">${resetLink}</p>
-    <p><strong>This link will expire in 1 hour.</strong></p>
-    <p style="color: #e74c3c; font-size: 14px;"><strong>Security Notice:</strong> If you did not request this password reset, please ignore this email. Your password will remain unchanged.</p>
-    <p style="margin-top: 30px; font-size: 12px; color: #7f8c8d;">This is an automated message. Please do not reply to this email.</p>
-  </div>
+<body style="margin: 0; padding: 24px 16px; background-color: #eff6ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 480px; margin: 0 auto;">
+    <tr>
+      <td style="padding: 24px 0 8px; text-align: center;">
+        <span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 14px; font-weight: 600; border-radius: 9999px;">NeuroLogBook</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 16px 0; font-size: 24px; font-weight: 700; color: #111827; text-align: center;">Password reset request</td>
+    </tr>
+    <tr>
+      <td style="padding: 24px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <p style="margin: 0 0 16px; font-size: 16px; color: #4b5563; line-height: 1.5;">Hello ${userName},</p>
+        <p style="margin: 0 0 16px; font-size: 16px; color: #4b5563; line-height: 1.5;">We received a request to reset your password. Click the button below to choose a new password.</p>
+        <p style="margin: 0 0 20px; text-align: center;">
+          <a href="${resetLink}" style="display: inline-block; padding: 12px 24px; background: linear-gradient(to right, #2563eb, #0d9488); color: #ffffff; font-weight: 600; font-size: 16px; text-decoration: none; border-radius: 8px;">Reset password</a>
+        </p>
+        <p style="margin: 0 0 16px; font-size: 14px; color: #6b7280; line-height: 1.5;">Or copy this link into your browser:</p>
+        <p style="margin: 0 0 16px; font-size: 14px; word-break: break-all;"><a href="${resetLink}" style="color: #2563eb;">${resetLink}</a></p>
+        <p style="margin: 0; font-size: 14px; color: #6b7280;">This link expires in 1 hour.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding-top: 16px; padding-bottom: 8px; padding-left: 0; padding-right: 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color: #dbeafe; border: 1px solid #bfdbfe; border-radius: 8px;"><tr><td style="padding: 16px; font-size: 14px; color: #1d4ed8; line-height: 1.5;"><strong>Security:</strong> If you did not request this, ignore this email. Your password will not change.</td></tr></table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 16px 0 0; font-size: 12px; color: #6b7280; text-align: center;">NeuroLogBook — The intelligent logbook for medical training and practice.</td>
+    </tr>
+  </table>
 </body>
 </html>
     `.trim();
@@ -479,20 +525,20 @@ export class PasswordResetProvider {
    */
   private getPasswordResetEmailText(userName: string, resetLink: string): string {
     return `
-Password Reset Request - MedScribe Neuro
+Password reset request — NeuroLogBook
 
 Hello ${userName},
 
-We received a request to reset your password for your MedScribe Neuro account.
+We received a request to reset your password. Click the link below to choose a new password:
 
-Click the link below to reset your password:
 ${resetLink}
 
-This link will expire in 1 hour.
+This link expires in 1 hour.
 
-Security Notice: If you did not request this password reset, please ignore this email. Your password will remain unchanged.
+Security: If you did not request this, ignore this email. Your password will not change.
 
-This is an automated message. Please do not reply to this email.
+—
+NeuroLogBook — The intelligent logbook for medical training and practice.
     `.trim();
   }
 

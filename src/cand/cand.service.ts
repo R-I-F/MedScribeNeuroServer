@@ -66,12 +66,27 @@ export class CandService {
     }
   }
 
+  /** Canonical email: lowercase, trim, dots removed from local part (Gmail-style equivalence). */
+  private static canonicalEmail(email: string): string {
+    const n = (email || "").trim().toLowerCase();
+    const at = n.indexOf("@");
+    if (at <= 0) return n;
+    return n.slice(0, at).replace(/\./g, "") + n.slice(at);
+  }
+
   public async getCandByEmail(email: string, dataSource: DataSource): Promise<ICandDoc | null> | never {
     try {
       const candRepository = dataSource.getRepository(CandidateEntity);
-      const cand = await candRepository.findOne({
-        where: { email },
-      });
+      const normalized = (email || "").trim().toLowerCase();
+      if (!normalized) return null;
+      const canonical = CandService.canonicalEmail(email);
+      const cand = await candRepository
+        .createQueryBuilder("c")
+        .where(
+          "LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', -1)) = :canonical)",
+          { normalized, canonical }
+        )
+        .getOne();
       return cand as unknown as ICandDoc | null;
     } catch (err: any) {
       throw new Error(err);
@@ -158,6 +173,25 @@ export class CandService {
         where: { id },
       });
       return updatedCandidate as unknown as ICandDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async updateCand(
+    validatedReq: Partial<ICand> & { id: string },
+    dataSource: DataSource
+  ): Promise<ICandDoc | null> | never {
+    try {
+      const candRepository = dataSource.getRepository(CandidateEntity);
+      const { id, ...updateData } = validatedReq;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        throw new Error("Invalid candidate ID format");
+      }
+      await candRepository.update(id, updateData);
+      const updated = await candRepository.findOne({ where: { id } });
+      return updated as unknown as ICandDoc | null;
     } catch (err: any) {
       throw new Error(err);
     }

@@ -8,7 +8,7 @@ Use this guide to style transactional emails (e.g. submission review links, noti
 
 - **App name:** NeuroLogBook (no space; “Neuro” + “LogBook”).
 - **Logo:** Use the same logo as the web app if available (e.g. `/logo.svg`). In email, prefer a hosted image URL or a simple text treatment.
-- **Tagline (optional):** “The Intelligent Standard for Neurosurgery Records.”
+- **Tagline (optional):** “The intelligent logbook for medical training and practice.”
 
 ---
 
@@ -176,7 +176,7 @@ background: linear-gradient(to right, #2563eb, #0d9488);
     </td>
   </tr>
   <tr>
-    <td style="padding: 16px 0 0; font-size: 12px; color: #6b7280; text-align: center;">NeuroLogBook — The Intelligent Standard for Neurosurgery Records.</td>
+    <td style="padding: 16px 0 0; font-size: 12px; color: #6b7280; text-align: center;">NeuroLogBook — The intelligent logbook for medical training and practice.</td>
   </tr>
 </table>
 ```

@@ -92,20 +92,24 @@ export class PasswordResetController {
   }
 
   public async handleForgotPassword(req: Request, res: Response) {
+    const validatedData = matchedData(req) as { email: string };
+    const institutionId = (req as any).institutionId as string | undefined;
+
     try {
       const dataSource = (req as any).institutionDataSource;
       if (!dataSource) {
+        console.error("[ForgotPassword] No DataSource resolved for institutionId:", institutionId);
         throw new Error("Institution DataSource not resolved");
       }
-      const validatedData = matchedData(req) as { email: string };
-      
+
       // Always return success message (security best practice)
-      await this.passwordResetProvider.createPasswordResetToken(validatedData.email, dataSource);
+      await this.passwordResetProvider.createPasswordResetToken(validatedData.email, dataSource, institutionId);
 
       return {
         message: "If an account with that email exists, a password reset link has been sent",
       };
     } catch (err: any) {
+      console.error("[ForgotPassword] Error (email not sent):", err?.message ?? err);
       // Even on error, return success message to prevent email enumeration
       return {
         message: "If an account with that email exists, a password reset link has been sent",

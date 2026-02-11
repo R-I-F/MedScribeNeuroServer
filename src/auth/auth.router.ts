@@ -17,6 +17,7 @@ import extractJWT from "../middleware/extractJWT";
 import IAuth, { IRegisterCandPayload } from "./auth.interface";
 import { setAuthCookies, clearAuthCookies } from "../utils/cookie.utils";
 import { AuthTokenService } from "./authToken.service";
+import { UserRole } from "../types/role.types";
 import { PasswordResetController } from "../passwordReset/passwordReset.controller";
 import { userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
 import { DataSourceManager } from "../config/datasource.manager";
@@ -144,13 +145,21 @@ export class AuthRouter {
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
-            
-            // Return user, role, and token (token included for testing purposes only)
-            res.status(StatusCodes.OK).json({
+
+            // Base response; add role-specific extra data
+            const loginResponse: Record<string, unknown> = {
               user: resp.user,
               role: resp.role,
-              token: resp.token  // TEMPORARY: For testing token generation
-            });
+              token: resp.token,  // TEMPORARY: For testing token generation
+            };
+            if (resp.role === UserRole.CANDIDATE) {
+              loginResponse.regDeg = resp.user.regDeg;
+              loginResponse.rank = resp.user.rank;
+            } else if (resp.role === UserRole.SUPERVISOR) {
+              loginResponse.position = resp.user.position;
+            }
+
+            res.status(StatusCodes.OK).json(loginResponse);
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
@@ -526,33 +535,58 @@ export class AuthRouter {
       }
     );
 
-    // DISABLED: See docs/DISABLED_ROUTES.md. Forgot password (no auth, rate limited).
+    // Forgot password (no auth, rate limited). Requires institutionId or X-Institution-Id for multi-tenancy.
     this.router.post(
       "/forgotPassword",
       strictRateLimiter,
       institutionResolver,
       forgotPasswordValidator,
       async (req: Request, res: Response) => {
-        return res.status(StatusCodes.GONE).json({
-          error: "This endpoint is disabled.",
-          code: "ENDPOINT_DISABLED",
-          reference: "docs/DISABLED_ROUTES.md",
-        });
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        try {
+          const response = await this.passwordResetController.handleForgotPassword(req, res);
+          return res.status(StatusCodes.OK).json(response);
+        } catch (err: any) {
+          return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+            error: err?.message ?? "Failed to process forgot password request",
+          });
+        }
       }
     );
 
-    // DISABLED: See docs/DISABLED_ROUTES.md. Reset password (no auth, uses token from email).
+    // Reset password (no auth, uses token from email). Requires institutionId or X-Institution-Id for multi-tenancy.
     this.router.post(
       "/resetPassword",
       strictRateLimiter,
       institutionResolver,
       resetPasswordValidator,
       async (req: Request, res: Response) => {
-        return res.status(StatusCodes.GONE).json({
-          error: "This endpoint is disabled.",
-          code: "ENDPOINT_DISABLED",
-          reference: "docs/DISABLED_ROUTES.md",
-        });
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        try {
+          const response = await this.passwordResetController.handleResetPassword(req, res);
+          return res.status(StatusCodes.OK).json(response);
+        } catch (err: any) {
+          const msg = err?.message ?? "";
+          if (
+            msg.includes("Invalid") ||
+            msg.includes("expired") ||
+            msg.includes("already been used") ||
+            msg.includes("Token")
+          ) {
+            return res.status(StatusCodes.BAD_REQUEST).json({
+              error: msg,
+            });
+          }
+          return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+            error: err?.message ?? "Failed to reset password",
+          });
+        }
       }
     );
   }

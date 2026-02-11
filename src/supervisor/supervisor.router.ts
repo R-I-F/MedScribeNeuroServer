@@ -147,7 +147,11 @@ export class SupervisorRouter {
               res.status(StatusCodes.NOT_FOUND).json({ error: "Supervisor not found" });
             }
           } catch (err: any) {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            if (err?.message?.includes("Forbidden:")) {
+              res.status(StatusCodes.FORBIDDEN).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());

@@ -45,12 +45,27 @@ export class ClerkProvider {
     }
   }
 
+  /** Canonical email: lowercase, trim, dots removed from local part (Gmail-style equivalence). */
+  private static canonicalEmail(email: string): string {
+    const n = (email || "").trim().toLowerCase();
+    const at = n.indexOf("@");
+    if (at <= 0) return n;
+    return n.slice(0, at).replace(/\./g, "") + n.slice(at);
+  }
+
   public async getClerkByEmail(email: string, dataSource: DataSource): Promise<IClerkDoc | null> | never {
     try {
       const clerkRepository = dataSource.getRepository(ClerkEntity);
-      const clerk = await clerkRepository.findOne({
-        where: { email },
-      });
+      const normalized = (email || "").trim().toLowerCase();
+      if (!normalized) return null;
+      const canonical = ClerkProvider.canonicalEmail(email);
+      const clerk = await clerkRepository
+        .createQueryBuilder("c")
+        .where(
+          "LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', -1)) = :canonical)",
+          { normalized, canonical }
+        )
+        .getOne();
       return clerk as unknown as IClerkDoc | null;
     } catch (err: any) {
       throw new Error(err);

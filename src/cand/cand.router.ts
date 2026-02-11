@@ -5,6 +5,7 @@ import { createFromExternalValidator } from "../validators/createFromExternal.va
 import { resetCandidatePasswordValidator } from "../validators/resetCandidatePassword.validator";
 import { getCandByIdValidator } from "../validators/getCandById.validator";
 import { deleteCandValidator } from "../validators/deleteCand.validator";
+import { updateCandValidator } from "../validators/updateCand.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
@@ -32,6 +33,13 @@ export class CandRouter{
       UserRole.INSTITUTE_ADMIN,
       UserRole.CLERK,
       UserRole.SUPERVISOR,
+      UserRole.CANDIDATE
+    );
+
+    // PUT /:id: allows superAdmin, instituteAdmin, candidate (candidate can only edit self; admins full control)
+    const requireSuperAdminOrInstituteAdminOrCandidate = authorize(
+      UserRole.SUPER_ADMIN,
+      UserRole.INSTITUTE_ADMIN,
       UserRole.CANDIDATE
     );
 
@@ -75,6 +83,38 @@ export class CandRouter{
           } catch (err: any) {
             if (err.message.includes("not found")) {
               res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Update candidate
+    // Accessible to: superAdmin, instituteAdmin (full control); candidate (own profile only: regDeg, regNum, phoneNum)
+    this.router.put(
+      "/:id",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdminOrCandidate,
+      updateCandValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.candController.handleUpdateCand(req, res);
+            if (resp) {
+              res.status(StatusCodes.OK).json(resp);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "Candidate not found" });
+            }
+          } catch (err: any) {
+            if (err?.message?.includes("Forbidden:")) {
+              res.status(StatusCodes.FORBIDDEN).json({ error: err.message });
             } else {
               res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
             }

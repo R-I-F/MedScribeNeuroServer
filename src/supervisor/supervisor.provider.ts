@@ -53,12 +53,27 @@ export class SupervisorProvider {
     }
   }
 
+  /** Canonical email for lookup: lowercase, trim, dots removed from local part (Gmail-style equivalence). */
+  private static canonicalEmail(email: string): string {
+    const n = (email || "").trim().toLowerCase();
+    const at = n.indexOf("@");
+    if (at <= 0) return n;
+    return n.slice(0, at).replace(/\./g, "") + n.slice(at);
+  }
+
   public async getSupervisorByEmail(email: string, dataSource: DataSource): Promise<ISupervisorDoc | null> | never {
     try {
       const supervisorRepository = dataSource.getRepository(SupervisorEntity);
-      const supervisor = await supervisorRepository.findOne({
-        where: { email },
-      });
+      const normalized = (email || "").trim().toLowerCase();
+      if (!normalized) return null;
+      const canonical = SupervisorProvider.canonicalEmail(email);
+      const supervisor = await supervisorRepository
+        .createQueryBuilder("s")
+        .where(
+          "LOWER(TRIM(s.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(s.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(s.email)), '@', -1)) = :canonical)",
+          { normalized, canonical }
+        )
+        .getOne();
       return supervisor as unknown as ISupervisorDoc | null;
     } catch (err: any) {
       throw new Error(err);

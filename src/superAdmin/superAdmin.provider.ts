@@ -48,9 +48,12 @@ export class SuperAdminProvider {
   public async getSuperAdminByEmail(email: string, dataSource: DataSource): Promise<ISuperAdminDoc | null> | never {
     try {
       const superAdminRepository = dataSource.getRepository(SuperAdminEntity);
-      const superAdmin = await superAdminRepository.findOne({
-        where: { email },
-      });
+      const normalized = (email || "").trim().toLowerCase();
+      if (!normalized) return null;
+      const superAdmin = await superAdminRepository
+        .createQueryBuilder("s")
+        .where("LOWER(TRIM(s.email)) = :email", { email: normalized })
+        .getOne();
       return superAdmin as unknown as ISuperAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);

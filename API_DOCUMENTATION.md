@@ -390,8 +390,6 @@ The following routes are **disabled**: they remain registered but return **410 G
 |--------|------|--------|
 | GET | `/auth/get/all` | Returned all users; unauthenticated. |
 | POST | `/auth/resetCandPass` | Bulk reset candidate passwords. |
-| POST | `/auth/forgotPassword` | Request password reset email. |
-| POST | `/auth/resetPassword` | Reset password with token from email. |
 | POST | `/cand/createCandsFromExternal` | Create candidates from external source. |
 | POST | `/calSurg/postAllFromExternal` | Create calendar surgeries from external. |
 | POST | `/sub/postAllFromExternal` | Import submissions from external. |
@@ -616,7 +614,8 @@ Shared login endpoint for candidates and supervisors. The system automatically d
 - `password` (string, required): User's password
 - `institutionId` (string, UUID, **required**): The UUID of the institution. Get available institutions from `GET /institutions`. **Required** because each institution has its own candidates and supervisors stored in institution-specific databases.
 
-**Response (200 OK) - Candidate:**
+**Response (200 OK) - Candidate:**  
+The response includes role-specific extra fields at the top level of `data`: `regDeg` and `rank`.
 ```json
 {
   "status": "success",
@@ -636,12 +635,15 @@ Shared login endpoint for candidates and supervisors. The system automatically d
       "role": "candidate"
     },
     "role": "candidate",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "regDeg": "msc",
+    "rank": "professor"
   }
 }
 ```
 
-**Response (200 OK) - Supervisor:**
+**Response (200 OK) - Supervisor:**  
+The response includes a role-specific extra field at the top level of `data`: `position`.
 ```json
 {
   "status": "success",
@@ -659,7 +661,8 @@ Shared login endpoint for candidates and supervisors. The system automatically d
       "position": "professor"
     },
     "role": "supervisor",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "position": "professor"
   }
 }
 ```
@@ -711,6 +714,7 @@ Shared login endpoint for candidates and supervisors. The system automatically d
 - The `token` field in the response is included for testing purposes only.
 - This endpoint only accepts Candidate and Supervisor credentials. Admins and clerks must use their respective isolated login endpoints.
 - The system automatically determines the user type (Candidate or Supervisor) based on the email provided.
+- **Role-specific extra data:** For **candidates**, `data` also includes top-level `regDeg` and `rank`. For **supervisors**, `data` also includes top-level `position`. These duplicate the values inside `user` for convenience.
 - **Data trim:** The `user` object excludes `google_uid`, `createdAt`, and `updatedAt` for reduced payload size.
 
 ---
@@ -1362,15 +1366,15 @@ Logs out the user by clearing authentication cookies.
 ### Forgot Password
 **POST** `/auth/forgotPassword`
 
-**Status:** DISABLED — returns `410 Gone`. See [Disabled Routes](#disabled-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
+**Status:** ✅ **ENABLED**
 
-**Authentication Required:** No (when re-enabled)
+**Authentication Required:** No
 
 **Rate Limit:** 
 - Router-level: 50 requests per 15 minutes per IP address
 - Application-level: Maximum 3 password reset tokens per user per hour
 
-Allows users to request a password reset link via email. The system searches for the email across all user collections (candidate, supervisor, superAdmin, instituteAdmin).
+Allows users to request a password reset link via email. The system searches for the email in **candidate, supervisor, instituteAdmin, and clerk** only. **SuperAdmins cannot use forgot/reset password** (they must use the authenticated change-password flow).
 
 **Request Body:**
 ```json
@@ -1410,11 +1414,12 @@ Allows users to request a password reset link via email. The system searches for
 ```
 
 **Notes:**
-- Email is searched across all user collections (candidate, supervisor, superAdmin, instituteAdmin)
+- **Multi-tenancy:** Requires `institutionId` (in request body or query) or `X-Institution-Id` header so the request is scoped to the correct institution.
+- Email is searched in candidate, supervisor, instituteAdmin, and clerk only (not superAdmin)
 - If user exists, a secure reset token is generated and sent via email
 - Reset link expires in 1 hour
 - Always returns success message to prevent email enumeration attacks
-- Reset link format: `{FRONTEND_URL}/reset-password?token={token}`
+- **Reset link format:** `{FRONTEND_URL}/reset-password?token={token}&institutionId={institutionId}` — the backend includes `institutionId` in the email link (from the request that triggered the reset), so the Reset Password page does not need to show an institution selector when the user opens the link.
 - **Rate Limiting**: Two-layer protection:
   - Router-level: 50 requests per 15 minutes per IP address (prevents rapid-fire abuse)
   - Application-level: Maximum 3 password reset tokens per user per hour (prevents token flooding per user)
@@ -1425,9 +1430,9 @@ Allows users to request a password reset link via email. The system searches for
 ### Reset Password
 **POST** `/auth/resetPassword`
 
-**Status:** DISABLED — returns `410 Gone`. See [Disabled Routes](#disabled-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
+**Status:** ✅ **ENABLED**
 
-**Authentication Required:** No (uses token from email when re-enabled)
+**Authentication Required:** No (uses token from email)
 
 **Rate Limit:** 50 requests per 15 minutes per IP address
 
@@ -1500,6 +1505,7 @@ Allows users to reset their password using a token received via email from the f
 ```
 
 **Notes:**
+- **Multi-tenancy:** Requires `institutionId` (in request body or query) or `X-Institution-Id` header so the request is scoped to the correct institution.
 - Token is obtained from the password reset email link
 - Token expires after 1 hour
 - Token can only be used once
@@ -6114,6 +6120,113 @@ Cookie: auth_token=<token>
 
 ---
 
+### Update Candidate
+**PUT** `/cand/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, or Candidate)
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Candidate UUID (must be a valid UUID format)
+
+**Description:**  
+Updates a candidate's information. Access and allowed fields depend on the caller:
+
+- **Super Admin, Institute Admin:** Can update any candidate. All request body fields below are allowed.
+- **Candidate:** Can update **only their own** profile (the `:id` in the URL must match the authenticated user's ID). Only **`regDeg`**, **`regNum`**, and **`phoneNum`** may be sent; all other fields are ignored. Attempting to update another candidate returns **403 Forbidden**.
+
+**Request Body (Super Admin / Institute Admin – all optional):**
+```json
+{
+  "email": "candidate@example.com",
+  "password": "newPassword123",
+  "fullName": "John Doe",
+  "phoneNum": "+1234567890",
+  "regNum": "REG123456",
+  "nationality": "Egyptian",
+  "rank": "professor",
+  "regDeg": "msc",
+  "approved": false
+}
+```
+
+**Request Body (Candidate – own profile only; only these three fields are accepted):**
+```json
+{
+  "regDeg": "msc",
+  "regNum": "REG123456",
+  "phoneNum": "+1234567890"
+}
+```
+
+**Request Body Fields:**
+- `email`: Candidate email address (Super Admin / Institute Admin only)
+- `password`: Candidate password, min 8 characters (Super Admin / Institute Admin only)
+- `fullName`: Full name (Super Admin / Institute Admin only)
+- `phoneNum`: Phone number (min 11 characters). Allowed for **all roles** when updating own profile (Candidate) or any profile (admins).
+- `regNum`: Registration number (Super Admin / Institute Admin only; Candidate may update own)
+- `nationality`: Nationality (Super Admin / Institute Admin only)
+- `rank`: Rank – one of `professor`, `assistant professor`, `lecturer`, `assistant lecturer`, `resident`, `guest`, `other`, `none` (Super Admin / Institute Admin only)
+- `regDeg`: Registration degree – one of `msc`, `doctor of medicine (md)`, `egyptian fellowship`, `self registration`, `other` (Super Admin / Institute Admin only; Candidate may update own)
+- `approved`: Approval status (boolean) (Super Admin / Institute Admin only)
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "candidate@example.com",
+    "fullName": "John Doe",
+    "phoneNum": "+1234567890",
+    "regNum": "REG123456",
+    "nationality": "Egyptian",
+    "rank": "professor",
+    "regDeg": "msc",
+    "approved": false,
+    "role": "candidate"
+  }
+}
+```
+
+**Error Response (403 Forbidden – Candidate updating another candidate):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Candidates can only update their own profile"
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Candidate not found"
+}
+```
+
+**Notes:**
+- When admins send `password`, it is hashed before storage.
+- Candidates can only change their own `regDeg`, `regNum`, and `phoneNum`.
+
+---
+
 ### Reset Candidate Password
 **PATCH** `/cand/:id/resetPassword`
 
@@ -6794,9 +6907,12 @@ Cookie: auth_token=<token>
 - `id` (required): Supervisor UUID (must be a valid UUID format)
 
 **Description:**  
-Updates a supervisor's information. This endpoint is accessible to Super Admins, Institute Admins, and Supervisors.
+Updates a supervisor's information. Access and allowed fields depend on the caller:
 
-**Request Body:**
+- **Super Admin, Institute Admin:** Can update any supervisor. All request body fields below are allowed.
+- **Supervisor:** Can update **only their own** profile (the `:id` in the URL must match the authenticated user's ID). Only **`phoneNum`** and **`position`** may be sent; all other fields are ignored. Attempting to update another supervisor returns **403 Forbidden**.
+
+**Request Body (Super Admin / Institute Admin – all optional):**
 ```json
 {
   "fullName": "Dr. Jane Smith Updated",
@@ -6806,16 +6922,24 @@ Updates a supervisor's information. This endpoint is accessible to Super Admins,
 }
 ```
 
-**Request Body Fields (all optional):**
-- `email`: Supervisor email address
-- `password`: Supervisor password (min 8 characters)
-- `fullName`: Supervisor full name
-- `phoneNum`: Supervisor phone number (min 11 digits)
-- `approved`: Approval status (boolean)
-- `canValidate`: Whether supervisor can validate submissions (boolean)
+**Request Body (Supervisor – own profile only; only these two fields are accepted):**
+```json
+{
+  "phoneNum": "+9876543210",
+  "position": "Assistant Professor"
+}
+```
+
+**Request Body Fields:**
+- `email`: Supervisor email address (Super Admin / Institute Admin only)
+- `password`: Supervisor password, min 8 characters (Super Admin / Institute Admin only)
+- `fullName`: Supervisor full name (Super Admin / Institute Admin only)
+- `phoneNum`: Supervisor phone number (min 11 characters). Allowed for **all roles** when updating own profile (Supervisor) or any profile (admins).
+- `approved`: Approval status (boolean) (Super Admin / Institute Admin only)
+- `canValidate`: Whether supervisor can validate submissions (boolean) (Super Admin / Institute Admin only)
   - `true`: Validator supervisor (can validate submissions AND participate in events)
   - `false`: Academic supervisor (can ONLY participate in events, cannot validate)
-- `position`: Supervisor's academic position
+- `position`: Supervisor's academic position. Allowed for **all roles** when updating own profile (Supervisor) or any profile (admins).
   - Valid values: `"Professor"`, `"Assistant Professor"`, `"Lecturer"`, `"Assistant Lecturer"`, `"Guest Doctor"`, `"unknown"`
 
 **Response (200 OK):**
@@ -6833,6 +6957,16 @@ Updates a supervisor's information. This endpoint is accessible to Super Admins,
     "role": "supervisor",
     "position": "Assistant Professor"
   }
+}
+```
+
+**Error Response (403 Forbidden – Supervisor updating another supervisor):**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Supervisors can only update their own profile"
 }
 ```
 
@@ -12706,8 +12840,8 @@ All PDF reports include MedScribe branding in the header:
 | `/auth/resetCandPass` | **DISABLED** | Returns 410 Gone. See [Disabled Routes](#disabled-routes). |
 | `/auth/requestPasswordChangeEmail` | Yes | All user types (candidate, supervisor, superAdmin, instituteAdmin) |
 | `/auth/changePassword` | Yes | All user types (candidate, supervisor, superAdmin, instituteAdmin) |
-| `/auth/forgotPassword` | **DISABLED** | Returns 410 Gone. See [Disabled Routes](#disabled-routes). |
-| `/auth/resetPassword` | **DISABLED** | Returns 410 Gone. See [Disabled Routes](#disabled-routes). |
+| `/auth/forgotPassword` | No | Unauthenticated; requires `institutionId` or `X-Institution-Id`. Available for candidate, supervisor, instituteAdmin, clerk; **not** for superAdmin. |
+| `/auth/resetPassword` | No | Unauthenticated; requires `institutionId` or `X-Institution-Id`; uses token from email. Same roles as forgot password (no superAdmin). |
 | `/superAdmin/*` | Yes | Super Admin |
 | `/instituteAdmin/*` | Yes | Super Admin (POST /, DELETE /:id) / Institute Admin or Super Admin (GET /, GET /:id, PUT /:id, dashboard endpoints) |
 | `/clerk/*` | Yes | Super Admin or Institute Admin (all endpoints) |
@@ -12758,7 +12892,7 @@ All PDF reports include MedScribe branding in the header:
 | `/conf` (POST) | Yes | Institute Admin, Supervisor, Clerk, or Super Admin |
 | `/conf/:id` (PATCH) | Yes | Super Admin only |
 | `/conf/:id` (DELETE) | Yes | Super Admin only |
-| `/supervisor/*` | Yes | Super Admin (POST /, POST /resetPasswords, DELETE /:id) / Super Admin, Institute Admin, Supervisor, Candidate (GET /, GET /:id) / Super Admin, Institute Admin, Supervisor (PUT /:id) / Supervisor (GET /candidates) |
+| `/supervisor/*` | Yes | Super Admin (POST /, POST /resetPasswords, DELETE /:id) / Super Admin, Institute Admin, Supervisor, Candidate (GET /, GET /:id) / Super Admin, Institute Admin, Supervisor (PUT /:id – Supervisor own profile only: phoneNum, position; admins full control) / Supervisor (GET /candidates) |
 | `/sub/*` | Yes / DISABLED | **DISABLED:** POST /postAllFromExternal, PATCH /updateStatusFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other routes: Super Admin (DELETE /:id) / Candidate, Supervisor, Institute Admin, Super Admin (GET /candidate/stats, GET /candidate/submissions, GET /candidate/submissions/:id, GET /cptAnalytics, GET /icdAnalytics, GET /supervisorAnalytics, GET /submissionRanking) / Supervisor (POST /supervisor/submissions, GET /supervisor/submissions, GET /supervisor/submissions/:id, GET /supervisor/own/submissions, GET /supervisor/candidates/:candidateId/submissions, PATCH /supervisor/submissions/:id/review) / Institute Admin, Super Admin (GET /supervisor/own/submissions) |
 | `/sub/candidate/stats` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
 | `/sub/candidate/submissions` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
@@ -12777,7 +12911,7 @@ All PDF reports include MedScribe branding in the header:
 | `/sub/submissions/:id/generateSurgicalNotes` | ⚠️ DISABLED | ~~Institute Admin or Super Admin~~ (Endpoint disabled) |
 | `/sub/:id` (DELETE) | Yes | Super Admin |
 | `/supervisor/candidates` | Yes | Supervisor |
-| `/cand/*` | Partial / DISABLED | **DISABLED:** POST /createCandsFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin or Institute Admin (GET /, GET /:id) / Super Admin (PATCH /:id/resetPassword, DELETE /:id) |
+| `/cand/*` | Partial / DISABLED | **DISABLED:** POST /createCandsFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin or Institute Admin (GET /, GET /:id) / Super Admin, Institute Admin, Candidate (PUT /:id – Candidate own profile only: regDeg, regNum, phoneNum; admins full control) / Super Admin (PATCH /:id/resetPassword, DELETE /:id) |
 | `/calSurg/*` | Partial / DISABLED | **DISABLED:** POST /postAllFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin, Institute Admin, Clerk, Supervisor, or Candidate (GET /dashboard, GET /getById, GET /getAll) / Super Admin, Institute Admin, or Clerk (POST /, PATCH /:id, DELETE /:id) |
 | `/diagnosis/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postBulk, POST /post, PATCH /:id, DELETE /:id) |
 | `/procCpt/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postAllFromExternal, POST /upsert, DELETE /:id) |

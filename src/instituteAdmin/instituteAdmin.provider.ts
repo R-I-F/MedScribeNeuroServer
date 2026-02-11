@@ -69,12 +69,27 @@ export class InstituteAdminProvider {
     }
   }
 
+  /** Canonical email: lowercase, trim, dots removed from local part (Gmail-style equivalence). */
+  private static canonicalEmail(email: string): string {
+    const n = (email || "").trim().toLowerCase();
+    const at = n.indexOf("@");
+    if (at <= 0) return n;
+    return n.slice(0, at).replace(/\./g, "") + n.slice(at);
+  }
+
   public async getInstituteAdminByEmail(email: string, dataSource: DataSource): Promise<IInstituteAdminDoc | null> | never {
     try {
       const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
-      const instituteAdmin = await instituteAdminRepository.findOne({
-        where: { email },
-      });
+      const normalized = (email || "").trim().toLowerCase();
+      if (!normalized) return null;
+      const canonical = InstituteAdminProvider.canonicalEmail(email);
+      const instituteAdmin = await instituteAdminRepository
+        .createQueryBuilder("i")
+        .where(
+          "LOWER(TRIM(i.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(i.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(i.email)), '@', -1)) = :canonical)",
+          { normalized, canonical }
+        )
+        .getOne();
       return instituteAdmin as unknown as IInstituteAdminDoc | null;
     } catch (err: any) {
       throw new Error(err);

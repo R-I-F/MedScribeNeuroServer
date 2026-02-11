@@ -18,6 +18,9 @@ dist/
 
 # Local / deployment-agnostic scripts and docs (not for version control)
 scripts/
+scripts/drop-test-submissions.ts
+scripts/drop-event.ts
 docs/DISABLED_ROUTES.md
 docs/SENSITIVE_DATA_AUDIT.md
+docs/LOGIN_ROUTES.md
 API_DOCUMENTATION.md
