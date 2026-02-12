@@ -70,6 +70,24 @@ export function addRoutes(app: Application) {
   const { ActivityTimelineRouter } = require("../activityTimeline/activityTimeline.router");
   const activityTimelineRouter = container.get(ActivityTimelineRouter) as any;
 
+  const { AdditionalQuestionsRouter } = require("../additionalQuestions/additionalQuestions.router");
+  const additionalQuestionsRouter = container.get(AdditionalQuestionsRouter) as any;
+
+  const { ConsumablesRouter } = require("../consumables/consumables.router");
+  const consumablesRouter = container.get(ConsumablesRouter) as any;
+
+  const { EquipmentRouter } = require("../equipment/equipment.router");
+  const equipmentRouter = container.get(EquipmentRouter) as any;
+
+  const { PositionsRouter } = require("../positions/positions.router");
+  const positionsRouter = container.get(PositionsRouter) as any;
+
+  const { ApproachesRouter } = require("../approaches/approaches.router");
+  const approachesRouter = container.get(ApproachesRouter) as any;
+
+  const { RegionsRouter } = require("../regions/regions.router");
+  const regionsRouter = container.get(RegionsRouter) as any;
+
   app.use("/institutions", institutionRouter.router);
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
@@ -92,6 +110,12 @@ export function addRoutes(app: Application) {
   app.use("/event", eventRouter.router);
   app.use("/clerk", clerkRouter.router);
   app.use("/activityTimeline", activityTimelineRouter.router);
+  app.use("/additionalQuestions", additionalQuestionsRouter.router);
+  app.use("/consumables", consumablesRouter.router);
+  app.use("/equipment", equipmentRouter.router);
+  app.use("/positions", positionsRouter.router);
+  app.use("/approaches", approachesRouter.router);
+  app.use("/regions", regionsRouter.router);
 
   return app;
 }

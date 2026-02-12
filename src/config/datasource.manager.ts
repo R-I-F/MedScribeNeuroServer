@@ -21,6 +21,12 @@ import { EventEntity } from "../event/event.mDbSchema";
 import { EventAttendanceEntity } from "../event/eventAttendance.mDbSchema";
 import { PasswordResetTokenEntity } from "../passwordReset/passwordReset.mDbSchema";
 import { ClerkEntity } from "../clerk/clerk.mDbSchema";
+import { AdditionalQuestionEntity } from "../additionalQuestions/additionalQuestions.mDbSchema";
+import { ConsumableEntity } from "../consumables/consumables.mDbSchema";
+import { EquipmentEntity } from "../equipment/equipment.mDbSchema";
+import { PositionEntity } from "../positions/positions.mDbSchema";
+import { ApproachEntity } from "../approaches/approaches.mDbSchema";
+import { RegionEntity } from "../regions/regions.mDbSchema";
 
 /**
  * DataSource Manager - Singleton for managing multi-tenant database connections
@@ -129,6 +135,12 @@ export class DataSourceManager {
         EventAttendanceEntity,
         PasswordResetTokenEntity,
         ClerkEntity,
+        AdditionalQuestionEntity,
+        ConsumableEntity,
+        EquipmentEntity,
+        PositionEntity,
+        ApproachEntity,
+        RegionEntity,
       ],
       migrations: [__dirname + "/../migrations/*.ts"],
       synchronize: false, // NEVER set to true in production

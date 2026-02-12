@@ -5,6 +5,8 @@ node_modules/
 # Build output
 dist/
 
+# TypeORM migrations (local / generated; not for version control)
+src/migrations/
 
 # Environment files (secrets)
 .env
@@ -20,7 +22,14 @@ dist/
 scripts/
 scripts/drop-test-submissions.ts
 scripts/drop-event.ts
+scripts/import-calSurg-from-external.ts
+scripts/import-sub-from-external.ts
+scripts/import-event-attendance-from-external.ts
+scripts/run-institution-migrations.ts
+scripts/run-defaultdb-migrations.ts
 docs/DISABLED_ROUTES.md
 docs/SENSITIVE_DATA_AUDIT.md
 docs/LOGIN_ROUTES.md
 API_DOCUMENTATION.md
+MDb_DOCUMENTATION.md
+MODULE_SECURITY_AUDIT_TEMPLATE.md

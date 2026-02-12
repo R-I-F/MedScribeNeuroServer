@@ -8,4 +8,5 @@ export interface IInstitutionResponse {
   name: string; // e.g., "Cairo University"
   isAcademic: boolean;
   isPractical: boolean;
+  department: string;
 }

@@ -23,6 +23,7 @@ export class InstitutionController {
         name: inst.name,
         isAcademic: inst.isAcademic,
         isPractical: inst.isPractical,
+        department: inst.department,
       }));
 
       return publicInstitutions;

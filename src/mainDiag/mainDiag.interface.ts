@@ -1,3 +1,5 @@
+import { IAdditionalQuestionDoc } from "../additionalQuestions/additionalQuestions.interface";
+
 export interface IMainDiag {
   title: string;
   procs: string[]; // Array of UUIDs (replaces Types.ObjectId[])
@@ -8,6 +10,8 @@ export interface IMainDiagDoc extends IMainDiag {
   id: string; // UUID (replaces _id from MongoDB)
   createdAt: Date;
   updatedAt: Date;
+  /** Populated from additional_questions when fetching (GET); null if no row exists for this mainDiag */
+  additionalQuestions?: IAdditionalQuestionDoc | null;
 }
 
 // Input interface for creating mainDiag with codes

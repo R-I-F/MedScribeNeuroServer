@@ -4,7 +4,7 @@
 
 **⚠️ MULTI-TENANCY ARCHITECTURE:** This API implements a multi-tenant architecture where each institution has its own isolated database. All API requests are automatically routed to the correct institution's database based on the `institutionId` in the JWT token or `X-Institution-Id` header. See the [Multi-Tenancy Architecture](#multi-tenancy-architecture) section for details.
 
-**📋 Frontend Reports:** For frontend alignment on specific features, see [FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md](./FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md) (supervisor submissions) and [FRONTEND_INSTITUTION_ENDPOINT_REPORT.md](./FRONTEND_INSTITUTION_ENDPOINT_REPORT.md) (institutions endpoint).
+**📋 Frontend Reports:** For frontend alignment on specific features, see [FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md](./FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md) (supervisor submissions), [FRONTEND_INSTITUTION_ENDPOINT_REPORT.md](./FRONTEND_INSTITUTION_ENDPOINT_REPORT.md) (institutions endpoint), and [FRONTEND_CPT_ICD_ANALYTICS_REPORT.md](./FRONTEND_CPT_ICD_ANALYTICS_REPORT.md) (CPT & ICD role-based analytics).
 
 **🆔 IDs and database:** All entity IDs in the API are **UUIDs** (strings). The backend uses **MariaDB** with **TypeORM**; request and response examples use `id` (UUID) for entities. Legacy references to "ObjectId" or "MongoId" in this document have been updated to UUID where applicable.
 
@@ -417,16 +417,22 @@ The following routes are **disabled**: they remain registered but return **410 G
 11. [Diagnosis](#diagnosis)
 12. [Procedure CPT](#procedure-cpt)
 13. [Main Diagnosis](#main-diagnosis)
-14. [Arabic Procedures](#arabic-procedures)
-15. [Hospitals](#hospitals)
-16. [Mailer](#mailer)
-17. [External Service](#external-service)
-18. [Lectures](#lectures)
-19. [Journals](#journals)
-20. [Conferences](#conferences)
-21. [Events](#events)
-22. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
-23. [Error Responses](#error-responses)
+14. [Additional Questions](#additional-questions-additionalquestions)
+15. [Consumables](#consumables-consumables)
+16. [Equipment](#equipment-equipment)
+17. [Positions](#positions-positions)
+18. [Approaches](#approaches-approaches)
+19. [Regions](#regions-regions)
+20. [Arabic Procedures](#arabic-procedures)
+21. [Hospitals](#hospitals)
+22. [Mailer](#mailer)
+23. [External Service](#external-service)
+24. [Lectures](#lectures)
+25. [Journals](#journals)
+26. [Conferences](#conferences)
+27. [Events](#events)
+28. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
+29. [Error Responses](#error-responses)
 
 ---
 
@@ -4193,7 +4199,7 @@ Cookie: auth_token=<token>
 
 **Rate Limit:** 200 requests per 15 minutes per user
 
-Returns CPT-based analytics for the logged-in user's **approved** submissions. Categories submissions by CPT code, with count and percentage of total approved submissions for each code.
+Returns CPT-based analytics for the logged-in user's **approved** submissions. Categories submissions by CPT code, with **role-based** count and percentage for each code. Each item includes a total (count, percentage) and a `byRole` breakdown by surgery role.
 
 **Who sees what:** Identity and role are taken from the JWT. **Candidates** see analytics for approved submissions that belong to their candidate ID and have **submission type = candidate** (submissions they created via `POST /sub/candidate/submissions`). **Supervisors** see analytics for approved submissions that belong to their supervisor ID and have **submission type = supervisor** (submissions they created via `POST /sub/supervisor/submissions`). Institute admins and super admins have no user-scoped submissions and receive empty analytics.
 
@@ -4219,27 +4225,42 @@ Cookie: auth_token=<token>
         "cptCode": "61070",
         "alphaCode": "ABC",
         "title": "Craniotomy for tumor",
-        "count": 5,
-        "percentage": 41.67
+        "total": { "count": 5, "percentage": 41.67 },
+        "byRole": [
+          { "role": "Operator", "count": 3, "percentage": 60 },
+          { "role": "Operator (Assisted)", "count": 1, "percentage": 20 },
+          { "role": "Assistant", "count": 1, "percentage": 20 }
+        ]
       },
       {
         "cptCode": "61850",
         "alphaCode": "XYZ",
         "title": "Implantation of neurostimulator",
-        "count": 3,
-        "percentage": 25
+        "total": { "count": 3, "percentage": 25 },
+        "byRole": [
+          { "role": "Operator", "count": 2, "percentage": 66.67 },
+          { "role": "Observer", "count": 1, "percentage": 33.33 }
+        ]
       }
     ]
   }
 }
 ```
 
-**Response schema:** `data` has `totalApprovedSubmissions` (number) and `items` (array). Use `data.items` for the analytics list.
+**Response schema:** `data` has `totalApprovedSubmissions` (number) and `items` (array). Each item has:
+- `cptCode`, `alphaCode`, `title`: procedure identifiers
+- `total`: `{ count, percentage }` — total submissions with this CPT; percentage of all approved submissions
+- `byRole`: array of `{ role, count, percentage }` — breakdown by surgery role; percentage is within this CPT (roles sum to 100% per code). Only roles with count > 0 are included.
+
+**Role labels:** `role` in `byRole` uses display labels: `"Operator"`, `"Operator (Assisted)"`, `"Supervising"`, `"Assistant"`, `"Observer"`. Unmapped values appear as stored (e.g. `"Other"`).
 
 **Notes:**
-- `count`: number of approved submissions that contain this CPT code
-- `percentage`: (count / totalApprovedSubmissions) × 100, rounded to two decimal places
-- `items` are sorted by `count` descending
+- `total.count`: number of approved submissions that contain this CPT code
+- `total.percentage`: (total.count / totalApprovedSubmissions) × 100, rounded to two decimal places
+- `byRole[].percentage`: (count / total.count for this CPT) × 100
+- `items` are sorted by `total.count` descending
+
+**Frontend alignment:** See [FRONTEND_CPT_ICD_ANALYTICS_REPORT.md](./FRONTEND_CPT_ICD_ANALYTICS_REPORT.md).
 
 ---
 
@@ -4250,7 +4271,7 @@ Cookie: auth_token=<token>
 
 **Rate Limit:** 200 requests per 15 minutes per user
 
-Returns ICD-based analytics for the logged-in user's **approved** submissions. Categories submissions by ICD code, with count and percentage of total approved submissions for each code.
+Returns ICD-based analytics for the logged-in user's **approved** submissions. Categories submissions by ICD code, with **role-based** count and percentage for each code. Each item includes a total (count, percentage) and a `byRole` breakdown by surgery role.
 
 **Who sees what:** Identity and role are taken from the JWT. **Candidates** see analytics for approved submissions that belong to their candidate ID and have **submission type = candidate** (submissions they created via `POST /sub/candidate/submissions`). **Supervisors** see analytics for approved submissions that belong to their supervisor ID and have **submission type = supervisor** (submissions they created via `POST /sub/supervisor/submissions`). Institute admins and super admins receive empty analytics when they have no user-scoped submissions.
 
@@ -4275,26 +4296,41 @@ Cookie: auth_token=<token>
       {
         "icdCode": "G30.9",
         "icdName": "Alzheimer disease, unspecified",
-        "count": 4,
-        "percentage": 33.33
+        "total": { "count": 4, "percentage": 33.33 },
+        "byRole": [
+          { "role": "Operator", "count": 2, "percentage": 50 },
+          { "role": "Supervising", "count": 1, "percentage": 25 },
+          { "role": "Assistant", "count": 1, "percentage": 25 }
+        ]
       },
       {
         "icdCode": "C71.1",
         "icdName": "Malignant neoplasm of frontal lobe",
-        "count": 2,
-        "percentage": 16.67
+        "total": { "count": 2, "percentage": 16.67 },
+        "byRole": [
+          { "role": "Operator (Assisted)", "count": 1, "percentage": 50 },
+          { "role": "Observer", "count": 1, "percentage": 50 }
+        ]
       }
     ]
   }
 }
 ```
 
-**Response schema:** `data` has `totalApprovedSubmissions` (number) and `items` (array). Use `data.items` for the analytics list.
+**Response schema:** `data` has `totalApprovedSubmissions` (number) and `items` (array). Each item has:
+- `icdCode`, `icdName`: diagnosis identifiers
+- `total`: `{ count, percentage }` — total submissions with this ICD; percentage of all approved submissions
+- `byRole`: array of `{ role, count, percentage }` — breakdown by surgery role; percentage is within this ICD (roles sum to 100% per code). Only roles with count > 0 are included.
+
+**Role labels:** `role` in `byRole` uses display labels: `"Operator"`, `"Operator (Assisted)"`, `"Supervising"`, `"Assistant"`, `"Observer"`. Unmapped values appear as stored (e.g. `"Other"`).
 
 **Notes:**
-- `count`: number of approved submissions that contain this ICD code
-- `percentage`: (count / totalApprovedSubmissions) × 100, rounded to two decimal places
-- `items` are sorted by `count` descending
+- `total.count`: number of approved submissions that contain this ICD code
+- `total.percentage`: (total.count / totalApprovedSubmissions) × 100, rounded to two decimal places
+- `byRole[].percentage`: (count / total.count for this ICD) × 100
+- `items` are sorted by `total.count` descending
+
+**Frontend alignment:** See [FRONTEND_CPT_ICD_ANALYTICS_REPORT.md](./FRONTEND_CPT_ICD_ANALYTICS_REPORT.md).
 
 ---
 
@@ -8837,7 +8873,7 @@ Cookie: auth_token=<token>
 ```
 
 **Description:**  
-Returns all main diagnoses in the system. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
+Returns all main diagnoses in the system. Each main diagnosis includes its related additional-questions configuration (which optional questions are enabled for that main diagnosis). This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
 
 **Response (200 OK):**
 ```json
@@ -8865,6 +8901,15 @@ Returns all main diagnoses in the system. This endpoint is accessible to all aut
           "icdName": "Anoxic brain damage"
         }
       ],
+      "additionalQuestions": {
+        "mainDiagDocId": "507f1f77bcf86cd799439011",
+        "spOrCran": 0,
+        "pos": 1,
+        "approach": 1,
+        "region": 1,
+        "clinPres": 0,
+        "intEvents": 1
+      },
       "createdAt": "2025-12-01T14:00:00.000Z",
       "updatedAt": "2025-12-01T14:00:00.000Z"
     }
@@ -8872,7 +8917,7 @@ Returns all main diagnoses in the system. This endpoint is accessible to all aut
 }
 ```
 
-**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs.
+**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs. The `additionalQuestions` field is populated from the `additional_questions` table (one row per main diagnosis); it is `null` when no row exists for that main diagnosis. The flags (`spOrCran`, `pos`, `approach`, `region`, `clinPres`, `intEvents`) indicate which optional questions are enabled (0 or 1).
 
 **Error Response (401 Unauthorized):**
 ```json
@@ -8926,7 +8971,7 @@ Cookie: auth_token=<token>
 - `id` (required): Main Diagnosis UUID (must be a valid UUID format)
 
 **Description:**  
-Returns a specific main diagnosis by ID. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
+Returns a specific main diagnosis by ID, including its related additional-questions configuration. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
 
 **Response (200 OK):**
 ```json
@@ -8953,13 +8998,22 @@ Returns a specific main diagnosis by ID. This endpoint is accessible to all auth
         "icdName": "Anoxic brain damage"
       }
     ],
+    "additionalQuestions": {
+      "mainDiagDocId": "507f1f77bcf86cd799439011",
+      "spOrCran": 0,
+      "pos": 1,
+      "approach": 1,
+      "region": 1,
+      "clinPres": 0,
+      "intEvents": 1
+    },
     "createdAt": "2025-12-01T14:00:00.000Z",
     "updatedAt": "2025-12-01T14:00:00.000Z"
   }
 }
 ```
 
-**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs.
+**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs. The `additionalQuestions` field is populated from the `additional_questions` table; it is `null` when no row exists for this main diagnosis. The flags (`spOrCran`, `pos`, `approach`, `region`, `clinPres`, `intEvents`) indicate which optional questions are enabled (0 or 1).
 
 **Error Response (400 Bad Request - Invalid UUID):**
 ```json
@@ -9243,6 +9297,419 @@ Deletes a main diagnosis from the system. The `id` parameter must be a valid UUI
 - The `id` parameter is validated to ensure it's a valid UUID format before processing
 - Returns 404 if the main diagnosis with the specified ID does not exist
 - All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+
+---
+
+## Additional Questions (`/additionalQuestions`)
+
+**⚠️ Multi-Tenancy Note:** All additional questions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access additional questions from their own institution.
+
+These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+
+### Rate Limiting
+
+- **GET** `/additionalQuestions`, **GET** `/additionalQuestions/:mainDiagDocId`: 200 requests per 15 minutes per user
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+---
+
+### Get All Additional Questions
+**GET** `/additionalQuestions`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns all additional-question records (one per main diagnosis). Each record indicates which optional questions (e.g. spine/cranial, position, approach, region, clinical presentation, intraoperative events) are enabled for that main diagnosis.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "mainDiagDocId": "550e8400-e29b-41d4-a716-446655440000",
+      "spOrCran": 0,
+      "pos": 0,
+      "approach": 0,
+      "region": 0,
+      "clinPres": 0,
+      "intEvents": 0
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `mainDiagDocId` (string, UUID): Main diagnosis ID (primary key)
+- `spOrCran`, `pos`, `approach`, `region`, `clinPres`, `intEvents` (number, 0 or 1): Flags for which additional questions are enabled
+
+**Error Responses:** 401 Unauthorized, 403 Forbidden, 429 Too Many Requests (same format as other endpoints)
+
+---
+
+### Get Additional Question by Main Diagnosis ID
+**GET** `/additionalQuestions/:mainDiagDocId`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `mainDiagDocId` (required): Main Diagnosis UUID (must be a valid UUID format)
+
+**Description:**  
+Returns the additional-question configuration for a specific main diagnosis.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "mainDiagDocId": "550e8400-e29b-41d4-a716-446655440000",
+    "spOrCran": 0,
+    "pos": 0,
+    "approach": 0,
+    "region": 0,
+    "clinPres": 0,
+    "intEvents": 0
+  }
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Additional question not found"
+}
+```
+
+**Error Response (400 Bad Request - Invalid UUID):** Validation errors array. **Other errors:** 401 Unauthorized, 403 Forbidden, 429 Too Many Requests.
+
+---
+
+## Consumables (`/consumables`)
+
+**⚠️ Multi-Tenancy Note:** All consumables endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access consumables from their own institution.
+
+These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+
+### Rate Limiting
+
+- **GET** `/consumables`, **GET** `/consumables/:id`: 200 requests per 15 minutes per user
+
+**Rate Limit Response (429 Too Many Requests):** Same format as above.
+
+---
+
+### Get All Consumables
+**GET** `/consumables`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Description:**  
+Returns all consumables (reference list, e.g. artificial dural graft, bone cement, pedicle screws, etc.).
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "consumables": "artificial dural graft"
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "consumables": "bone cement"
+    }
+  ]
+}
+```
+
+**Response Fields:** `id` (string, UUID), `consumables` (string). **Error Responses:** 401, 403, 429.
+
+---
+
+### Get Consumable by ID
+**GET** `/consumables/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**URL Parameters:** `id` (required): Consumable UUID
+
+**Description:**  
+Returns a single consumable by ID.
+
+**Response (200 OK):** Single object with `id`, `consumables`. **404 Not Found** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+
+---
+
+## Equipment (`/equipment`)
+
+**⚠️ Multi-Tenancy Note:** All equipment endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access equipment from their own institution.
+
+These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+
+### Rate Limiting
+
+- **GET** `/equipment`, **GET** `/equipment/:id`: 200 requests per 15 minutes per user
+
+---
+
+### Get All Equipment
+**GET** `/equipment`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Description:**  
+Returns all equipment (reference list, e.g. endoscope, microscope, high speed drill, neuronavigation, etc.).
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "equipment": "endoscope"
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "equipment": "microscope"
+    }
+  ]
+}
+```
+
+**Response Fields:** `id` (string, UUID), `equipment` (string). **Error Responses:** 401, 403, 429.
+
+---
+
+### Get Equipment by ID
+**GET** `/equipment/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**URL Parameters:** `id` (required): Equipment UUID
+
+**Response (200 OK):** Single object with `id`, `equipment`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+
+---
+
+## Positions (`/positions`)
+
+**⚠️ Multi-Tenancy Note:** All positions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access positions from their own institution.
+
+These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+
+### Rate Limiting
+
+- **GET** `/positions`, **GET** `/positions/:id`: 200 requests per 15 minutes per user
+
+---
+
+### Get All Positions
+**GET** `/positions`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Description:**  
+Returns all positions (reference list, e.g. supine, prone, lateral, concorde, other).
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "position": "supine"
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "position": "prone"
+    }
+  ]
+}
+```
+
+**Response Fields:** `id` (string, UUID), `position` (string). **Error Responses:** 401, 403, 429.
+
+---
+
+### Get Position by ID
+**GET** `/positions/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**URL Parameters:** `id` (required): Position UUID
+
+**Response (200 OK):** Single object with `id`, `position`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+
+---
+
+## Approaches (`/approaches`)
+
+**⚠️ Multi-Tenancy Note:** All approaches endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access approaches from their own institution.
+
+These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+
+### Rate Limiting
+
+- **GET** `/approaches`, **GET** `/approaches/:id`: 200 requests per 15 minutes per user
+
+---
+
+### Get All Approaches
+**GET** `/approaches`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Description:**  
+Returns all approaches (reference list, e.g. pterional, endonasal, suboccipital, retrosigmoid, laminectomy, etc.).
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "approach": "pterional"
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "approach": "endonasal"
+    }
+  ]
+}
+```
+
+**Response Fields:** `id` (string, UUID), `approach` (string). **Error Responses:** 401, 403, 429.
+
+---
+
+### Get Approach by ID
+**GET** `/approaches/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**URL Parameters:** `id` (required): Approach UUID
+
+**Response (200 OK):** Single object with `id`, `approach`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+
+---
+
+## Regions (`/regions`)
+
+**⚠️ Multi-Tenancy Note:** All regions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access regions from their own institution.
+
+These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+
+### Rate Limiting
+
+- **GET** `/regions`, **GET** `/regions/:id`: 200 requests per 15 minutes per user
+
+---
+
+### Get All Regions
+**GET** `/regions`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Description:**  
+Returns all regions (reference list, e.g. craniocervical, cervical, dorsal, lumbar).
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "region": "craniocervical"
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "region": "cervical"
+    }
+  ]
+}
+```
+
+**Response Fields:** `id` (string, UUID), `region` (string). **Error Responses:** 401, 403, 429.
+
+---
+
+### Get Region by ID
+**GET** `/regions/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**URL Parameters:** `id` (required): Region UUID
+
+**Response (200 OK):** Single object with `id`, `region`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
 
 ---
 

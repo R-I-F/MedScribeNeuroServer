@@ -5,6 +5,7 @@ import { MainDiagEntity } from "./mainDiag.mDbSchema";
 import { ProcCptService } from "../procCpt/procCpt.service";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
 import { UtilService } from "../utils/utils.service";
+import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQuestions.provider";
 import { Repository, In } from "typeorm";
 import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
 import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
@@ -14,7 +15,8 @@ export class MainDiagProvider {
   constructor(
     @inject(ProcCptService) private procCptService: ProcCptService,
     @inject(DiagnosisService) private diagnosisService: DiagnosisService,
-    @inject(UtilService) private utilService: UtilService
+    @inject(UtilService) private utilService: UtilService,
+    @inject(AdditionalQuestionsProvider) private additionalQuestionsProvider: AdditionalQuestionsProvider
   ) {}
 
   public async createMainDiag(validatedReq: IMainDiagInput, dataSource: DataSource): Promise<IMainDiagDoc> | never {
@@ -96,7 +98,16 @@ export class MainDiagProvider {
         relations: ["procs", "diagnosis"],
         order: { createdAt: "DESC" },
       });
-      return allMainDiags as unknown as IMainDiagDoc[];
+      const additionalQuestionsList = await this.additionalQuestionsProvider.getAll(dataSource);
+      const aqByMainDiagId = new Map(
+        additionalQuestionsList.map((aq) => [aq.mainDiagDocId, aq])
+      );
+      const result: IMainDiagDoc[] = allMainDiags.map((md) => {
+        const doc = md as unknown as IMainDiagDoc;
+        doc.additionalQuestions = aqByMainDiagId.get(md.id) ?? null;
+        return doc;
+      });
+      return result;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -114,7 +125,10 @@ export class MainDiagProvider {
         where: { id },
         relations: ["procs", "diagnosis"],
       });
-      return mainDiag as unknown as IMainDiagDoc | null;
+      if (!mainDiag) return null;
+      const doc = mainDiag as unknown as IMainDiagDoc;
+      doc.additionalQuestions = await this.additionalQuestionsProvider.getByMainDiagDocId(id, dataSource) ?? null;
+      return doc;
     } catch (err: any) {
       throw new Error(err);
     }

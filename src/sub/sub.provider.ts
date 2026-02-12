@@ -34,6 +34,23 @@ import { UserRole } from "../types/role.types";
 /** Frontend path for supervisor submission review (base URL from FRONTEND_URL env). */
 const SUBMISSION_REVIEW_PATH = "/dashboard/a-ins/supervisor/submissions";
 
+/** Role in surgery: raw value (lowercase) → display label for analytics */
+const ROLE_LABELS: Record<string, string> = {
+  operator: "Operator",
+  "operator with supervisor scrubbed (assisted)": "Operator (Assisted)",
+  "supervising, teaching a junior colleague (scrubbed)": "Supervising",
+  assistant: "Assistant",
+  "observer (scrubbed)": "Observer",
+};
+
+const ROLE_ORDER = ["Operator", "Operator (Assisted)", "Supervising", "Assistant", "Observer"];
+
+function getRoleLabel(roleInSurg: string | undefined): string {
+  if (!roleInSurg || typeof roleInSurg !== "string") return "Other";
+  const normalized = roleInSurg.trim().toLowerCase();
+  return ROLE_LABELS[normalized] ?? roleInSurg.trim();
+}
+
 @injectable()
 export class SubProvider {
   // UUID validation regex
@@ -781,7 +798,16 @@ export class SubProvider {
     userId: string,
     role: string,
     dataSource: DataSource
-  ): Promise<{ totalApprovedSubmissions: number; items: { cptCode: string; alphaCode: string; title: string; count: number; percentage: number }[] }> | never {
+  ): Promise<{
+    totalApprovedSubmissions: number;
+    items: {
+      cptCode: string;
+      alphaCode: string;
+      title: string;
+      total: { count: number; percentage: number };
+      byRole: { role: string; count: number; percentage: number }[];
+    }[];
+  }> | never {
     try {
       let approved: ISubDoc[] = [];
       if (role === UserRole.CANDIDATE) {
@@ -789,35 +815,51 @@ export class SubProvider {
       } else if (role === UserRole.SUPERVISOR) {
         approved = await this.subService.getSubsBySupervisorIdAndStatus(userId, "approved", dataSource);
       }
-      const total = approved.length;
-      const map = new Map<string, { alphaCode: string; title: string; count: number }>();
+      const totalApproved = approved.length;
+      // map: cptCode -> { alphaCode, title, byRoleLabel: { roleLabel: count } }
+      const map = new Map<string, { alphaCode: string; title: string; byRole: Record<string, number> }>();
       for (const sub of approved) {
         const procs = (sub as any).procCpts ?? [];
+        const roleLabel = getRoleLabel((sub as any).roleInSurg);
         const seen = new Set<string>();
         for (const p of procs) {
           const code = p?.numCode ?? String(p);
           if (!code || seen.has(code)) continue;
           seen.add(code);
-          const cur = map.get(code);
-          const alpha = p?.alphaCode ?? "";
-          const title = p?.title ?? "";
-          if (cur) {
-            cur.count += 1;
-          } else {
-            map.set(code, { alphaCode: alpha, title, count: 1 });
+          let cur = map.get(code);
+          if (!cur) {
+            cur = { alphaCode: p?.alphaCode ?? "", title: p?.title ?? "", byRole: {} };
+            map.set(code, cur);
           }
+          cur.byRole[roleLabel] = (cur.byRole[roleLabel] ?? 0) + 1;
         }
       }
       const items = Array.from(map.entries())
-        .map(([cptCode, v]) => ({
-          cptCode,
-          alphaCode: v.alphaCode,
-          title: v.title,
-          count: v.count,
-          percentage: total > 0 ? Math.round((v.count / total) * 10000) / 100 : 0,
-        }))
-        .sort((a, b) => b.count - a.count);
-      return { totalApprovedSubmissions: total, items };
+        .map(([cptCode, v]) => {
+          const totalCount = Object.values(v.byRole).reduce((a, b) => a + b, 0);
+          const totalPct = totalApproved > 0 ? Math.round((totalCount / totalApproved) * 10000) / 100 : 0;
+          const byRole = ROLE_ORDER.map((r) => {
+            const count = v.byRole[r] ?? 0;
+            const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+            return { role: r, count, percentage: pct };
+          }).filter((x) => x.count > 0);
+          // Append any roles not in ROLE_ORDER (e.g. "Other")
+          for (const [roleLabel, count] of Object.entries(v.byRole)) {
+            if (!ROLE_ORDER.includes(roleLabel)) {
+              const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+              byRole.push({ role: roleLabel, count, percentage: pct });
+            }
+          }
+          return {
+            cptCode,
+            alphaCode: v.alphaCode,
+            title: v.title,
+            total: { count: totalCount, percentage: totalPct },
+            byRole,
+          };
+        })
+        .sort((a, b) => b.total.count - a.total.count);
+      return { totalApprovedSubmissions: totalApproved, items };
     } catch (err: any) {
       throw new Error(err);
     }
@@ -827,7 +869,15 @@ export class SubProvider {
     userId: string,
     role: string,
     dataSource: DataSource
-  ): Promise<{ totalApprovedSubmissions: number; items: { icdCode: string; icdName: string; count: number; percentage: number }[] }> | never {
+  ): Promise<{
+    totalApprovedSubmissions: number;
+    items: {
+      icdCode: string;
+      icdName: string;
+      total: { count: number; percentage: number };
+      byRole: { role: string; count: number; percentage: number }[];
+    }[];
+  }> | never {
     try {
       let approved: ISubDoc[] = [];
       if (role === UserRole.CANDIDATE) {
@@ -835,33 +885,50 @@ export class SubProvider {
       } else if (role === UserRole.SUPERVISOR) {
         approved = await this.subService.getSubsBySupervisorIdAndStatus(userId, "approved", dataSource);
       }
-      const total = approved.length;
-      const map = new Map<string, { icdName: string; count: number }>();
+      const totalApproved = approved.length;
+      // map: icdCode -> { icdName, byRole: { roleLabel: count } }
+      const map = new Map<string, { icdName: string; byRole: Record<string, number> }>();
       for (const sub of approved) {
         const icds = (sub as any).icds ?? [];
+        const roleLabel = getRoleLabel((sub as any).roleInSurg);
         const seen = new Set<string>();
         for (const d of icds) {
           const code = d?.icdCode ?? String(d);
           if (!code || seen.has(code)) continue;
           seen.add(code);
-          const cur = map.get(code);
-          const name = d?.icdName ?? "";
-          if (cur) {
-            cur.count += 1;
-          } else {
-            map.set(code, { icdName: name, count: 1 });
+          let cur = map.get(code);
+          if (!cur) {
+            cur = { icdName: d?.icdName ?? "", byRole: {} };
+            map.set(code, cur);
           }
+          cur.byRole[roleLabel] = (cur.byRole[roleLabel] ?? 0) + 1;
         }
       }
       const items = Array.from(map.entries())
-        .map(([icdCode, v]) => ({
-          icdCode,
-          icdName: v.icdName,
-          count: v.count,
-          percentage: total > 0 ? Math.round((v.count / total) * 10000) / 100 : 0,
-        }))
-        .sort((a, b) => b.count - a.count);
-      return { totalApprovedSubmissions: total, items };
+        .map(([icdCode, v]) => {
+          const totalCount = Object.values(v.byRole).reduce((a, b) => a + b, 0);
+          const totalPct = totalApproved > 0 ? Math.round((totalCount / totalApproved) * 10000) / 100 : 0;
+          const byRole = ROLE_ORDER.map((r) => {
+            const count = v.byRole[r] ?? 0;
+            const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+            return { role: r, count, percentage: pct };
+          }).filter((x) => x.count > 0);
+          // Append any roles not in ROLE_ORDER (e.g. "Other")
+          for (const [roleLabel, count] of Object.entries(v.byRole)) {
+            if (!ROLE_ORDER.includes(roleLabel)) {
+              const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+              byRole.push({ role: roleLabel, count, percentage: pct });
+            }
+          }
+          return {
+            icdCode,
+            icdName: v.icdName,
+            total: { count: totalCount, percentage: totalPct },
+            byRole,
+          };
+        })
+        .sort((a, b) => b.total.count - a.total.count);
+      return { totalApprovedSubmissions: totalApproved, items };
     } catch (err: any) {
       throw new Error(err);
     }

@@ -23,6 +23,9 @@ export class InstitutionEntity {
   @Column({ type: "boolean", default: true })
   isActive!: boolean;
 
+  @Column({ type: "varchar", length: 100, default: "neurosurgery" })
+  department!: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

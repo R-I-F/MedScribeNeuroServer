@@ -110,6 +110,36 @@ import { ActivityTimelineController } from "../activityTimeline/activityTimeline
 import { ActivityTimelineRouter } from "../activityTimeline/activityTimeline.router";
 import { ActivityTimelineProvider } from "../activityTimeline/activityTimeline.provider";
 
+import { AdditionalQuestionsController } from "../additionalQuestions/additionalQuestions.controller";
+import { AdditionalQuestionsRouter } from "../additionalQuestions/additionalQuestions.router";
+import { AdditionalQuestionsService } from "../additionalQuestions/additionalQuestions.service";
+import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQuestions.provider";
+
+import { ConsumablesController } from "../consumables/consumables.controller";
+import { ConsumablesRouter } from "../consumables/consumables.router";
+import { ConsumablesService } from "../consumables/consumables.service";
+import { ConsumablesProvider } from "../consumables/consumables.provider";
+
+import { EquipmentController } from "../equipment/equipment.controller";
+import { EquipmentRouter } from "../equipment/equipment.router";
+import { EquipmentService } from "../equipment/equipment.service";
+import { EquipmentProvider } from "../equipment/equipment.provider";
+
+import { PositionsController } from "../positions/positions.controller";
+import { PositionsRouter } from "../positions/positions.router";
+import { PositionsService } from "../positions/positions.service";
+import { PositionsProvider } from "../positions/positions.provider";
+
+import { ApproachesController } from "../approaches/approaches.controller";
+import { ApproachesRouter } from "../approaches/approaches.router";
+import { ApproachesService } from "../approaches/approaches.service";
+import { ApproachesProvider } from "../approaches/approaches.provider";
+
+import { RegionsController } from "../regions/regions.controller";
+import { RegionsRouter } from "../regions/regions.router";
+import { RegionsService } from "../regions/regions.service";
+import { RegionsProvider } from "../regions/regions.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -222,3 +252,33 @@ container.bind(InstitutionRouter).toSelf().inTransientScope();
 container.bind(ActivityTimelineProvider).toSelf().inTransientScope();
 container.bind(ActivityTimelineController).toSelf().inTransientScope();
 container.bind(ActivityTimelineRouter).toSelf().inTransientScope();
+
+container.bind(AdditionalQuestionsController).toSelf().inTransientScope();
+container.bind(AdditionalQuestionsRouter).toSelf().inTransientScope();
+container.bind(AdditionalQuestionsService).toSelf().inTransientScope();
+container.bind(AdditionalQuestionsProvider).toSelf().inTransientScope();
+
+container.bind(ConsumablesController).toSelf().inTransientScope();
+container.bind(ConsumablesRouter).toSelf().inTransientScope();
+container.bind(ConsumablesService).toSelf().inTransientScope();
+container.bind(ConsumablesProvider).toSelf().inTransientScope();
+
+container.bind(EquipmentController).toSelf().inTransientScope();
+container.bind(EquipmentRouter).toSelf().inTransientScope();
+container.bind(EquipmentService).toSelf().inTransientScope();
+container.bind(EquipmentProvider).toSelf().inTransientScope();
+
+container.bind(PositionsController).toSelf().inTransientScope();
+container.bind(PositionsRouter).toSelf().inTransientScope();
+container.bind(PositionsService).toSelf().inTransientScope();
+container.bind(PositionsProvider).toSelf().inTransientScope();
+
+container.bind(ApproachesController).toSelf().inTransientScope();
+container.bind(ApproachesRouter).toSelf().inTransientScope();
+container.bind(ApproachesService).toSelf().inTransientScope();
+container.bind(ApproachesProvider).toSelf().inTransientScope();
+
+container.bind(RegionsController).toSelf().inTransientScope();
+container.bind(RegionsRouter).toSelf().inTransientScope();
+container.bind(RegionsService).toSelf().inTransientScope();
+container.bind(RegionsProvider).toSelf().inTransientScope();

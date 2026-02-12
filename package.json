@@ -16,7 +16,10 @@
     "db:test-ka": "ts-node scripts/test-db-connection-ka.ts",
     "db:test-md": "ts-node scripts/test-db-connection-md.ts",
     "db:restore-subgoogleuid-from-mongo": "ts-node scripts/restore-subgoogleuid-from-mongo.ts",
-    "db:reset-supervisor-passwords": "ts-node scripts/reset-supervisor-passwords.ts"
+    "db:reset-supervisor-passwords": "ts-node scripts/reset-supervisor-passwords.ts",
+    "db:import-calSurg-from-external": "ts-node scripts/import-calSurg-from-external.ts",
+    "db:import-sub-from-external": "ts-node scripts/import-sub-from-external.ts",
+    "db:import-event-attendance-from-external": "ts-node scripts/import-event-attendance-from-external.ts"
   },
   "keywords": [],
   "author": "",

@@ -34,7 +34,10 @@ function getDefaultDbConfig(): DataSourceOptions {
     synchronize: false,
     logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     entities: [InstitutionEntity],
-    migrations: [__dirname + "/../migrations/1735000060000-CreateInstitutionsTable.ts"],
+    migrations: [
+      __dirname + "/../migrations/1735000060000-CreateInstitutionsTable.ts",
+      __dirname + "/../migrations/1735000060001-AddDepartmentToInstitutions.ts",
+    ],
     subscribers: [],
     connectTimeout: 10000,
     extra: {

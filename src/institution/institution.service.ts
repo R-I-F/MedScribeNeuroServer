@@ -19,6 +19,7 @@ export interface IInstitution {
   isActive: boolean;
   isAcademic: boolean;
   isPractical: boolean;
+  department: string;
 }
 
 let cache: IInstitution[] | null = null;
@@ -44,6 +45,7 @@ function entityToInstitution(entity: InstitutionEntity): IInstitution {
     isActive: entity.isActive,
     isAcademic: entity.isAcademic,
     isPractical: entity.isPractical,
+    department: entity.department,
   };
 }
 
