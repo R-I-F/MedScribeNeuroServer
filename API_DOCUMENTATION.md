@@ -423,16 +423,18 @@ The following routes are **disabled**: they remain registered but return **410 G
 17. [Positions](#positions-positions)
 18. [Approaches](#approaches-approaches)
 19. [Regions](#regions-regions)
-20. [Arabic Procedures](#arabic-procedures)
-21. [Hospitals](#hospitals)
-22. [Mailer](#mailer)
-23. [External Service](#external-service)
-24. [Lectures](#lectures)
-25. [Journals](#journals)
-26. [Conferences](#conferences)
-27. [Events](#events)
-28. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
-29. [Error Responses](#error-responses)
+20. [References](#references-references)
+21. [Candidate Dashboard](#candidate-dashboard-candidate-dashboard)
+22. [Arabic Procedures](#arabic-procedures)
+23. [Hospitals](#hospitals)
+24. [Mailer](#mailer)
+25. [External Service](#external-service)
+26. [Lectures](#lectures)
+27. [Journals](#journals)
+28. [Conferences](#conferences)
+29. [Events](#events)
+30. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
+31. [Error Responses](#error-responses)
 
 ---
 
@@ -9710,6 +9712,135 @@ Returns all regions (reference list, e.g. craniocervical, cervical, dorsal, lumb
 **URL Parameters:** `id` (required): Region UUID
 
 **Response (200 OK):** Single object with `id`, `region`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+
+---
+
+## References (`/references`)
+
+This endpoint is implemented by the **bundler** module. The path remains **GET** `/references`.
+
+**⚠️ Multi-Tenancy Note:** The references endpoint automatically routes to the institution's database based on the `institutionId` in the JWT token. Users only receive reference data for their own institution.
+
+**GET** `/references` returns a single response that aggregates the same data as **GET** `/consumables`, **GET** `/equipment`, **GET** `/approaches`, **GET** `/regions`, and **GET** `/positions`. Use this endpoint to reduce round-trips when the front end needs all five reference lists (e.g. on dashboard load). The response is **cached per institution** on the server; cache is invalidated only on server restart.
+
+These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+
+### Rate Limiting
+
+- **GET** `/references`: 200 requests per 15 minutes per user
+
+**Rate Limit Response (429 Too Many Requests):** Same format as elsewhere (status, statusCode, message, error).
+
+---
+
+### Get All References (Aggregated)
+**GET** `/references`
+
+**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Institution context:** Send `X-Institution-Id` header or ensure the JWT contains `institutionId` (e.g. after login with institution).
+
+**Description:**  
+Returns all reference lists in one response: consumables, equipment, approaches, regions, and positions. Equivalent to calling the five separate endpoints but in a single request. Data is cached per institution on the server until the process restarts.
+
+**Response (200 OK):**
+```json
+{
+  "consumables": [
+    { "id": "550e8400-e29b-41d4-a716-446655440000", "consumables": "artificial dural graft" },
+    { "id": "660e8400-e29b-41d4-a716-446655440001", "consumables": "bone cement" }
+  ],
+  "equipment": [
+    { "id": "750e8400-e29b-41d4-a716-446655440002", "equipment": "endoscope" },
+    { "id": "860e8400-e29b-41d4-a716-446655440003", "equipment": "microscope" }
+  ],
+  "approaches": [
+    { "id": "950e8400-e29b-41d4-a716-446655440004", "approach": "anterior" },
+    { "id": "a60e8400-e29b-41d4-a716-446655440005", "approach": "posterior" }
+  ],
+  "regions": [
+    { "id": "b50e8400-e29b-41d4-a716-446655440006", "region": "craniocervical" },
+    { "id": "c60e8400-e29b-41d4-a716-446655440007", "region": "cervical" }
+  ],
+  "positions": [
+    { "id": "d50e8400-e29b-41d4-a716-446655440008", "position": "prone" },
+    { "id": "e60e8400-e29b-41d4-a716-446655440009", "position": "supine" }
+  ]
+}
+```
+
+**Response Fields:**
+- `consumables`: Array of `{ id: string (UUID), consumables: string }`
+- `equipment`: Array of `{ id: string (UUID), equipment: string }`
+- `approaches`: Array of `{ id: string (UUID), approach: string }`
+- `regions`: Array of `{ id: string (UUID), region: string }`
+- `positions`: Array of `{ id: string (UUID), position: string }`
+
+**Error Responses:** 400 (missing institution context), 401 Unauthorized, 403 Forbidden, 429 Too Many Requests, 500 Internal Server Error.
+
+---
+
+## Candidate Dashboard (`/candidate/dashboard`)
+
+This endpoint is implemented by the **bundler** module (same module as GET /references). The bundler module provides aggregated responses to reduce round-trips: **GET /references** (five reference lists) and **GET /candidate/dashboard** (nine candidate dashboard payloads).
+
+**⚠️ Multi-Tenancy Note:** The dashboard bundle uses the institution's database based on the `institutionId` in the JWT token or `X-Institution-Id` header. Data is scoped to the candidate and institution.
+
+**GET** `/candidate/dashboard` returns a single response that aggregates the same data as nine candidate endpoints: **GET** `/sub/candidate/stats`, **GET** `/event/candidate/points`, **GET** `/sub/candidate/submissions`, **GET** `/sub/cptAnalytics`, **GET** `/sub/icdAnalytics`, **GET** `/sub/supervisorAnalytics`, **GET** `/activityTimeline`, **GET** `/sub/submissionRanking`, and **GET** `/event/academicRanking`. Use this endpoint to reduce round-trips when the front end needs all dashboard data for a candidate in one load.
+
+**Access:** Logged-in **candidates only**, and only when the institution is **academic and practical** (`isAcademic` and `isPractical` both true). Other roles or institutions receive **403 Forbidden**; the front end can fall back to calling the nine endpoints individually. There is **no server-side caching**; data is per-candidate and subject to change. The front end may cache the response (e.g. refetch every 15 minutes).
+
+### Rate Limiting
+
+- **GET** `/candidate/dashboard`: 200 requests per 15 minutes per user
+
+**Rate Limit Response (429 Too Many Requests):** Same format as elsewhere (status, statusCode, message, error).
+
+---
+
+### Get Candidate Dashboard (Aggregated)
+**GET** `/candidate/dashboard`
+
+**Requires:** Authentication (Candidate only). Institution must be active and both academic and practical.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**Institution context:** Send `X-Institution-Id` header or ensure the JWT contains `institutionId` (e.g. after login with institution).
+
+**Description:**  
+Returns all candidate dashboard data in one response: stats, points, submissions, CPT/ICD/supervisor analytics, activity timeline, submission ranking, and academic ranking. Equivalent to calling the nine listed endpoints in a single request. No server-side caching; the front end may cache (e.g. refetch every 15 minutes).
+
+**Response (200 OK):** A single JSON object with nine keys, each matching the corresponding endpoint response. The body is returned directly (no top-level `status`/`data` wrapper):
+
+- `stats` – same as GET /sub/candidate/stats
+- `points` – same as GET /event/candidate/points
+- `submissions` – same as GET /sub/candidate/submissions
+- `cptAnalytics` – same as GET /sub/cptAnalytics
+- `icdAnalytics` – same as GET /sub/icdAnalytics
+- `supervisorAnalytics` – same as GET /sub/supervisorAnalytics
+- `activityTimeline` – same as GET /activityTimeline (object with `items` array)
+- `submissionRanking` – same as GET /sub/submissionRanking
+- `academicRanking` – same as GET /event/academicRanking
+
+**Error Responses:** 400 (missing institution context), 401 Unauthorized, 403 Forbidden (not a candidate, or institution not academic and practical), 404 Not Found (institution not found), 429 Too Many Requests, 500 Internal Server Error. On 403 with message that the dashboard is only for academic and practical institutions, the front end should fall back to calling the nine endpoints individually.
 
 ---
 

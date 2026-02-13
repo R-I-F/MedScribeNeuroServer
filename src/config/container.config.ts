@@ -140,6 +140,11 @@ import { RegionsRouter } from "../regions/regions.router";
 import { RegionsService } from "../regions/regions.service";
 import { RegionsProvider } from "../regions/regions.provider";
 
+import { BundlerController } from "../bundler/bundler.controller";
+import { BundlerRouter } from "../bundler/bundler.router";
+import { BundlerService } from "../bundler/bundler.service";
+import { BundlerProvider } from "../bundler/bundler.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -282,3 +287,8 @@ container.bind(RegionsController).toSelf().inTransientScope();
 container.bind(RegionsRouter).toSelf().inTransientScope();
 container.bind(RegionsService).toSelf().inTransientScope();
 container.bind(RegionsProvider).toSelf().inTransientScope();
+
+container.bind(BundlerController).toSelf().inTransientScope();
+container.bind(BundlerRouter).toSelf().inTransientScope();
+container.bind(BundlerService).toSelf().inTransientScope();
+container.bind(BundlerProvider).toSelf().inTransientScope();

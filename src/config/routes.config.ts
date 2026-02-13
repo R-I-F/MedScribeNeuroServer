@@ -88,6 +88,9 @@ export function addRoutes(app: Application) {
   const { RegionsRouter } = require("../regions/regions.router");
   const regionsRouter = container.get(RegionsRouter) as any;
 
+  const { BundlerRouter } = require("../bundler/bundler.router");
+  const bundlerRouter = container.get(BundlerRouter) as any;
+
   app.use("/institutions", institutionRouter.router);
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
@@ -116,6 +119,8 @@ export function addRoutes(app: Application) {
   app.use("/positions", positionsRouter.router);
   app.use("/approaches", approachesRouter.router);
   app.use("/regions", regionsRouter.router);
+  app.use("/references", bundlerRouter.router);
+  app.use("/candidate", bundlerRouter.router);
 
   return app;
 }
