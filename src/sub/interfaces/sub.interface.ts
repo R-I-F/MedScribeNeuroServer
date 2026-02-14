@@ -15,6 +15,8 @@ export type TOtherSurgRank =
 | "resident (cairo university)" 
 | "guest specialist" 
 | "guest resident" 
+| "consultant" 
+| "specialist" 
 | "other";
 
 export type TInsUsed = 

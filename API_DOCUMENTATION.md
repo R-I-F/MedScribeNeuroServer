@@ -3966,7 +3966,7 @@ Cookie: auth_token=<token>
 | `supervisorDocId` | string (UUID) | Yes | Supervisor ID |
 | `mainDiagDocId` | string (UUID) | Yes | Main diagnosis ID |
 | `roleInSurg` | string | Yes | One of: `operator`, `operator with supervisor scrubbed (assisted)`, `supervising, teaching a junior colleague (scrubbed)`, `assistant`, `observer (Scrubbed)` |
-| `otherSurgRank` | string | Yes | e.g. `professor`, `assistant professor`, `lecturer`, etc. |
+| `otherSurgRank` | string | Yes | One of: `professor`, `assistant professor`, `lecturer`, `assistant lecturer`, `resident (cairo university)`, `guest specialist`, `guest resident`, `consultant`, `specialist`, `other` |
 | `otherSurgName` | string | Yes | Name of other surgeon (max 255 chars) |
 | `isItRevSurg` | boolean | Yes | Whether it is a revision surgery |
 | `insUsed` | string | Yes | Instrument used (e.g. `microscope`, `endoscope`, `none`) |
@@ -4092,7 +4092,7 @@ Cookie: auth_token=<token>
 | `procDocId` | string (UUID) | Yes | Calendar procedure ID (calSurg) |
 | `mainDiagDocId` | string (UUID) | Yes | Main diagnosis ID |
 | `roleInSurg` | string | Yes | One of: `operator`, `operator with supervisor scrubbed (assisted)`, `supervising, teaching a junior colleague (scrubbed)`, `assistant`, `observer (Scrubbed)` |
-| `otherSurgRank` | string | Yes | e.g. `professor`, `assistant professor`, `lecturer`, etc. |
+| `otherSurgRank` | string | Yes | One of: `professor`, `assistant professor`, `lecturer`, `assistant lecturer`, `resident (cairo university)`, `guest specialist`, `guest resident`, `consultant`, `specialist`, `other` |
 | `otherSurgName` | string | Yes | Name of other surgeon (max 255 chars) |
 | `isItRevSurg` | boolean | Yes | Whether it is a revision surgery |
 | `insUsed` | string | Yes | Instrument used (e.g. `microscope`, `endoscope`, `none`) |
@@ -9793,13 +9793,16 @@ Returns all reference lists in one response: consumables, equipment, approaches,
 
 ## Candidate Dashboard (`/candidate/dashboard`)
 
-This endpoint is implemented by the **bundler** module (same module as GET /references). The bundler module provides aggregated responses to reduce round-trips: **GET /references** (five reference lists) and **GET /candidate/dashboard** (nine candidate dashboard payloads).
+This endpoint is implemented by the **bundler** module (same module as GET /references). The bundler module provides aggregated responses to reduce round-trips: **GET /references** (five reference lists) and **GET /candidate/dashboard** (candidate dashboard bundle).
 
 **⚠️ Multi-Tenancy Note:** The dashboard bundle uses the institution's database based on the `institutionId` in the JWT token or `X-Institution-Id` header. Data is scoped to the candidate and institution.
 
-**GET** `/candidate/dashboard` returns a single response that aggregates the same data as nine candidate endpoints: **GET** `/sub/candidate/stats`, **GET** `/event/candidate/points`, **GET** `/sub/candidate/submissions`, **GET** `/sub/cptAnalytics`, **GET** `/sub/icdAnalytics`, **GET** `/sub/supervisorAnalytics`, **GET** `/activityTimeline`, **GET** `/sub/submissionRanking`, and **GET** `/event/academicRanking`. Use this endpoint to reduce round-trips when the front end needs all dashboard data for a candidate in one load.
+**GET** `/candidate/dashboard` returns a single response whose **shape depends on the institution type**:
 
-**Access:** Logged-in **candidates only**, and only when the institution is **academic and practical** (`isAcademic` and `isPractical` both true). Other roles or institutions receive **403 Forbidden**; the front end can fall back to calling the nine endpoints individually. There is **no server-side caching**; data is per-candidate and subject to change. The front end may cache the response (e.g. refetch every 15 minutes).
+- **Academic and practical** (`isAcademic: true`, `isPractical: true`): full bundle — same data as nine endpoints (stats, points, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking, academicRanking).
+- **Practical only** (`isPractical: true`, `isAcademic: false`): practical bundle — seven keys (stats, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking). No `points` or `academicRanking`.
+
+**Access:** Logged-in **candidates only**, and only when the institution has **practical** enabled (`isPractical` true). Institutions with `isPractical: false` receive **403 Forbidden**. There is **no server-side caching**; data is per-candidate and subject to change. The front end may cache the response (e.g. refetch every 15 minutes). For frontend usage by institution type, see [Candidate dashboard for practical institutions](./docs/FRONTEND_CANDIDATE_DASHBOARD_PRACTICAL.md).
 
 ### Rate Limiting
 
@@ -9812,7 +9815,7 @@ This endpoint is implemented by the **bundler** module (same module as GET /refe
 ### Get Candidate Dashboard (Aggregated)
 **GET** `/candidate/dashboard`
 
-**Requires:** Authentication (Candidate only). Institution must be active and both academic and practical.
+**Requires:** Authentication (Candidate only). Institution must be active and have `isPractical: true`.
 
 **Headers:**
 ```
@@ -9826,9 +9829,15 @@ Cookie: auth_token=<token>
 **Institution context:** Send `X-Institution-Id` header or ensure the JWT contains `institutionId` (e.g. after login with institution).
 
 **Description:**  
-Returns all candidate dashboard data in one response: stats, points, submissions, CPT/ICD/supervisor analytics, activity timeline, submission ranking, and academic ranking. Equivalent to calling the nine listed endpoints in a single request. No server-side caching; the front end may cache (e.g. refetch every 15 minutes).
+Returns candidate dashboard data in one response. The response **shape depends on the institution**:
 
-**Response (200 OK):** A single JSON object with nine keys, each matching the corresponding endpoint response. The body is returned directly (no top-level `status`/`data` wrapper):
+1. **Full bundle (academic + practical):** When the institution has both `isAcademic` and `isPractical` true, the response has **nine** keys (equivalent to calling the nine endpoints in one request).
+2. **Practical-only bundle:** When the institution has `isPractical: true` and `isAcademic: false`, the response has **seven** keys (no event points or academic ranking).
+
+No server-side caching; the front end may cache (e.g. refetch every 15 minutes).
+
+**Response (200 OK) – Full bundle** (institution is academic and practical):  
+A single JSON object with nine keys (body returned directly; no top-level `status`/`data` wrapper):
 
 - `stats` – same as GET /sub/candidate/stats
 - `points` – same as GET /event/candidate/points
@@ -9840,7 +9849,18 @@ Returns all candidate dashboard data in one response: stats, points, submissions
 - `submissionRanking` – same as GET /sub/submissionRanking
 - `academicRanking` – same as GET /event/academicRanking
 
-**Error Responses:** 400 (missing institution context), 401 Unauthorized, 403 Forbidden (not a candidate, or institution not academic and practical), 404 Not Found (institution not found), 429 Too Many Requests, 500 Internal Server Error. On 403 with message that the dashboard is only for academic and practical institutions, the front end should fall back to calling the nine endpoints individually.
+**Response (200 OK) – Practical-only bundle** (institution is practical, not academic):  
+A single JSON object with **seven** keys (no `points`, no `academicRanking`):
+
+- `stats` – same as GET /sub/candidate/stats
+- `submissions` – same as GET /sub/candidate/submissions
+- `cptAnalytics` – same as GET /sub/cptAnalytics
+- `icdAnalytics` – same as GET /sub/icdAnalytics
+- `supervisorAnalytics` – same as GET /sub/supervisorAnalytics
+- `activityTimeline` – same as GET /activityTimeline (object with `items` array)
+- `submissionRanking` – same as GET /sub/submissionRanking
+
+**Error Responses:** 400 (missing institution context), 401 Unauthorized, 403 Forbidden (not a candidate, or institution does not have practical enabled), 404 Not Found (institution not found), 429 Too Many Requests, 500 Internal Server Error. On 403 with message that the dashboard is only for institutions with practical training, the front end should fall back to calling the individual endpoints.
 
 ---
 

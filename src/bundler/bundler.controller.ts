@@ -3,7 +3,7 @@ import { inject, injectable } from "inversify";
 import { StatusCodes } from "http-status-codes";
 import { getInstitutionById } from "../institution/institution.service";
 import { BundlerService } from "./bundler.service";
-import { IBundlerDoc, ICandidateDashboardDoc } from "./bundler.interface";
+import { IBundlerDoc, ICandidateDashboardDoc, IPracticalCandidateDashboardDoc } from "./bundler.interface";
 
 @injectable()
 export class BundlerController {
@@ -24,7 +24,7 @@ export class BundlerController {
   public async handleGetCandidateDashboard(
     req: Request,
     res: Response
-  ): Promise<ICandidateDashboardDoc | void> {
+  ): Promise<ICandidateDashboardDoc | IPracticalCandidateDashboardDoc | void> {
     const institutionId = (req as any).institutionId as string | undefined;
     if (!institutionId) {
       res.status(StatusCodes.BAD_REQUEST).json({ error: "Institution ID not resolved" });
@@ -39,13 +39,13 @@ export class BundlerController {
       res.status(StatusCodes.FORBIDDEN).json({ error: "Institution is not active" });
       return;
     }
-    if (!institution.isAcademic || !institution.isPractical) {
+    if (!institution.isPractical) {
       res.status(StatusCodes.FORBIDDEN).json({
         error:
-          "Dashboard bundle is only available for candidates in academic and practical institutions. Use the individual endpoints instead.",
+          "Dashboard bundle is only available for institutions with practical training. Use the individual endpoints instead.",
       });
       return;
     }
-    return await this.bundlerService.getCandidateDashboard(req, res);
+    return await this.bundlerService.getCandidateDashboard(req, res, institution);
   }
 }

@@ -18,6 +18,8 @@ const OTHER_SURG_RANK = [
   "resident (cairo university)",
   "guest specialist",
   "guest resident",
+  "consultant",
+  "specialist",
   "other",
 ] as const;
 

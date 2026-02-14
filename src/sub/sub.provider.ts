@@ -31,8 +31,8 @@ import { MailerService } from "../mailer/mailer.service";
 import { AiAgentProvider } from "../aiAgent/aiAgent.provider";
 import { UserRole } from "../types/role.types";
 
-/** Frontend path for supervisor submission review (base URL from FRONTEND_URL env). */
-const SUBMISSION_REVIEW_PATH = "/dashboard/a-ins/supervisor/submissions";
+/** Frontend path for supervisor submission review (base URL from FRONTEND_URL env). Note: "a-ins" was removed from supervisor dashboard routes on the frontend. */
+const SUBMISSION_REVIEW_PATH = "/dashboard/supervisor/submissions";
 
 /** Role in surgery: raw value (lowercase) → display label for analytics */
 const ROLE_LABELS: Record<string, string> = {

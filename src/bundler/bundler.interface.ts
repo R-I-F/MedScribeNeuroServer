@@ -14,6 +14,7 @@ export interface IBundlerDoc {
 
 /**
  * Combined response for GET /candidate/dashboard (candidate dashboard bundle).
+ * Full bundle: when institution is both academic and practical.
  * Each key matches the corresponding single endpoint response.
  */
 export interface ICandidateDashboardDoc {
@@ -26,4 +27,18 @@ export interface ICandidateDashboardDoc {
   activityTimeline: { items: unknown[] };
   submissionRanking: unknown;
   academicRanking: unknown;
+}
+
+/**
+ * Practical-only dashboard bundle for institutions with isPractical: true, isAcademic: false.
+ * Same endpoint GET /candidate/dashboard returns this shape when institution is practical-only.
+ */
+export interface IPracticalCandidateDashboardDoc {
+  stats: unknown;
+  submissions: unknown;
+  cptAnalytics: unknown;
+  icdAnalytics: unknown;
+  supervisorAnalytics: unknown;
+  activityTimeline: { items: unknown[] };
+  submissionRanking: unknown;
 }

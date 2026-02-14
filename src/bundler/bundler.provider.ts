@@ -1,7 +1,7 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
 import { Request, Response } from "express";
-import { IBundlerDoc, ICandidateDashboardDoc } from "./bundler.interface";
+import { IBundlerDoc, ICandidateDashboardDoc, IPracticalCandidateDashboardDoc } from "./bundler.interface";
 import { ConsumablesProvider } from "../consumables/consumables.provider";
 import { EquipmentProvider } from "../equipment/equipment.provider";
 import { ApproachesProvider } from "../approaches/approaches.provider";
@@ -112,6 +112,41 @@ export class BundlerProvider {
       activityTimeline: activityTimeline as { items: unknown[] },
       submissionRanking,
       academicRanking,
+    };
+  }
+
+  /**
+   * Practical-only dashboard bundle: stats, submissions, cpt/icd/supervisor analytics,
+   * activity timeline, submission ranking. No points or academic ranking.
+   * No server-side caching.
+   */
+  public async getCandidateDashboardPractical(req: Request, res: Response): Promise<IPracticalCandidateDashboardDoc> {
+    const [
+      stats,
+      submissions,
+      cptAnalytics,
+      icdAnalytics,
+      supervisorAnalytics,
+      activityTimeline,
+      submissionRanking,
+    ] = await Promise.all([
+      this.subController.handleGetCandidateSubmissionsStats(req, res),
+      this.subController.handleGetCandidateSubmissions(req, res),
+      this.subController.handleGetCptAnalytics(req, res),
+      this.subController.handleGetIcdAnalytics(req, res),
+      this.subController.handleGetSupervisorAnalytics(req, res),
+      this.activityTimelineController.handleGetActivityTimeline(req, res),
+      this.subController.handleGetSubmissionRanking(req, res),
+    ]);
+
+    return {
+      stats,
+      submissions,
+      cptAnalytics,
+      icdAnalytics,
+      supervisorAnalytics,
+      activityTimeline: activityTimeline as { items: unknown[] },
+      submissionRanking,
     };
   }
 }
