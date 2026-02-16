@@ -36,9 +36,10 @@ export class CandidateEntity {
 
   @Column({ 
     type: "enum", 
-    enum: Object.values(RegDegree)
+    enum: Object.values(RegDegree),
+    nullable: true,
   })
-  regDeg!: RegDegree;
+  regDeg!: RegDegree | null;
 
   @Column({ type: "varchar", length: 255, nullable: true })
   google_uid?: string;

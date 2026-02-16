@@ -9,12 +9,13 @@ import { ClerkService } from "../clerk/clerk.service";
 import { AuthTokenService } from "./authToken.service";
 import { ICandDoc } from "../cand/cand.interface";
 import { JwtPayload } from "../middleware/authorize.middleware";
-import IAuth, { IRegisterCandPayload } from "./auth.interface";
+import IAuth, { IRegisterCandPayload, IRegisterSupervisorPayload } from "./auth.interface";
 import { UserRole } from "../types/role.types";
 import { DataSourceManager } from "../config/datasource.manager";
 import { getInstitutionById } from "../institution/institution.service";
 import { CandidateEntity } from "../cand/cand.mDbSchema";
 import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
+import { ISupervisorDoc } from "../supervisor/supervisor.interface";
 import { SuperAdminEntity } from "../superAdmin/superAdmin.mDbSchema";
 import { InstituteAdminEntity } from "../instituteAdmin/instituteAdmin.mDbSchema";
 import { ClerkEntity } from "../clerk/clerk.mDbSchema";
@@ -37,7 +38,7 @@ export class AuthController {
     };
   }
 
-  public async registerCand(payload: IRegisterCandPayload, dataSource?: DataSource) {
+  public async registerCand(payload: IRegisterCandPayload, dataSource: DataSource) {
     const {
       email,
       password,
@@ -51,39 +52,77 @@ export class AuthController {
     } = payload;
 
     try {
-      // Validate institution if provided
-      if (institutionId) {
-        const institution = await getInstitutionById(institutionId);
-        if (!institution || !institution.isActive) {
-          throw new Error(`Invalid or inactive institution: ${institutionId}`);
-        }
+      // Institution ID is required; default DB is for other configurations only
+      if (!institutionId) {
+        throw new Error("institutionId is required for candidate registration");
+      }
+      const institution = await getInstitutionById(institutionId);
+      if (!institution || !institution.isActive) {
+        throw new Error(`Invalid or inactive institution: ${institutionId}`);
       }
 
-      // If DataSource provided, use it; otherwise use default (backward compatibility)
-      const targetDataSource = dataSource || (await import("../config/database.config")).AppDataSource;
-      
       const encPass = await bcryptjs.hash(password, 10);
 
-      // Use DataSource to create candidate in institution's database
-      const candRepository = targetDataSource.getRepository(CandidateEntity);
+      // Use institution DataSource only (never fall back to default DB)
+      const candRepository = dataSource.getRepository(CandidateEntity);
       const newCand = candRepository.create({
         email,
         password: encPass,
         fullName,
         phoneNum,
-        approved: false,
+        approved: false, // Default: unapproved until institution approves
+        role: UserRole.CANDIDATE, // Default role for registration
         regNum,
         nationality,
         rank,
-        regDeg,
+        regDeg: regDeg != null && String(regDeg).trim() !== "" ? regDeg : null, // Optional for non-academic institutions
       });
+      newCand.termsAcceptedAt = new Date(); // Terms accepted at signup via frontend
       const savedCand = await candRepository.save(newCand);
 
       return this.sanitizeCandidate(savedCand as unknown as ICandDoc);
     } catch (err: any) {
       throw new Error(err?.message ?? "Failed to register candidate");
     }
-  };
+  }
+
+  /**
+   * Register a new supervisor in the institution's database.
+   * Supervisor is created with approved: false. Institution ID is required.
+   */
+  public async registerSupervisor(payload: IRegisterSupervisorPayload, dataSource: DataSource) {
+    const { email, password, fullName, phoneNum, institutionId, position } = payload;
+
+    try {
+      if (!institutionId) {
+        throw new Error("institutionId is required for supervisor registration");
+      }
+      const institution = await getInstitutionById(institutionId);
+      if (!institution || !institution.isActive) {
+        throw new Error(`Invalid or inactive institution: ${institutionId}`);
+      }
+
+      const encPass = await bcryptjs.hash(password, 10);
+
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
+      const newSupervisor = supervisorRepository.create({
+        email,
+        password: encPass,
+        fullName,
+        phoneNum,
+        approved: false, // Default: unapproved until institution approves
+        role: UserRole.SUPERVISOR, // Default role for registration
+        canValidate: false, // Default: no validation rights until granted by admin
+        ...(position != null && String(position).trim() !== "" && { position: position as any }),
+      });
+      newSupervisor.termsAcceptedAt = new Date(); // Terms accepted at signup via frontend
+      const savedSupervisor = await supervisorRepository.save(newSupervisor);
+
+      return this.sanitizeSupervisor(savedSupervisor as unknown as ISupervisorDoc);
+    } catch (err: any) {
+      throw new Error(err?.message ?? "Failed to register supervisor");
+    }
+  }
   
   /**
    * Candidate and Supervisor login - shared endpoint
@@ -555,6 +594,19 @@ export class AuthController {
 
     const { password, __v, ...rest } = candidateObject;
     // Ensure 'id' is present (convert _id to id if needed for backward compatibility)
+    if (rest._id && !rest.id) {
+      rest.id = typeof rest._id === "string" ? rest._id : rest._id.toString();
+    }
+    return rest;
+  }
+
+  private sanitizeSupervisor(supervisor: ISupervisorDoc) {
+    const supervisorObject =
+      typeof (supervisor as any).toObject === "function"
+        ? (supervisor as any).toObject()
+        : supervisor;
+
+    const { password, __v, ...rest } = supervisorObject;
     if (rest._id && !rest.id) {
       rest.id = typeof rest._id === "string" ? rest._id : rest._id.toString();
     }

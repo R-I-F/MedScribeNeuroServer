@@ -4,6 +4,7 @@ export enum SupervisorPosition {
   LECTURER = "Lecturer",
   ASSISTANT_LECTURER = "Assistant Lecturer",
   GUEST_DOCTOR = "Guest Doctor",
+  CONSULTANT = "Consultant",
   UNKNOWN = "unknown",
 }
 

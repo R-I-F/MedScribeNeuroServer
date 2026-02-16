@@ -6,6 +6,7 @@ import { resetCandidatePasswordValidator } from "../validators/resetCandidatePas
 import { getCandByIdValidator } from "../validators/getCandById.validator";
 import { deleteCandValidator } from "../validators/deleteCand.validator";
 import { updateCandValidator } from "../validators/updateCand.validator";
+import { updateCandidateApprovedValidator } from "../validators/updateCandidateApproved.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
@@ -41,6 +42,12 @@ export class CandRouter{
       UserRole.SUPER_ADMIN,
       UserRole.INSTITUTE_ADMIN,
       UserRole.CANDIDATE
+    );
+
+    // PUT /:id/approved: only superAdmin, instituteAdmin (institution-scoped via dataSource)
+    const requireSuperAdminOrInstituteAdmin = authorize(
+      UserRole.SUPER_ADMIN,
+      UserRole.INSTITUTE_ADMIN
     );
 
     // Get all candidates
@@ -86,6 +93,34 @@ export class CandRouter{
             } else {
               res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
             }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Update candidate approved status
+    // Accessible to: superAdmin, instituteAdmin only. Institution-scoped (same institution as admin).
+    this.router.put(
+      "/:id/approved",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      updateCandidateApprovedValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.candController.handleUpdateCandidateApproved(req, res);
+            if (resp) {
+              res.status(StatusCodes.OK).json(resp);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "Candidate not found" });
+            }
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());

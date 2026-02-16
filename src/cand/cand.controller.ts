@@ -71,6 +71,28 @@ export class CandController {
     }
   }
 
+  /**
+   * Update candidate approved status. Only super admin and institute admin.
+   * Institution-scoped: dataSource is the institution's DB from JWT/context.
+   */
+  public async handleUpdateCandidateApproved(
+    req: Request,
+    res: Response
+  ): Promise<ICandDoc | null> | never {
+    const id = req.params.id;
+    const validatedReq = matchedData(req) as { approved: boolean };
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    try {
+      const updated = await this.candService.updateCand(
+        { id, approved: validatedReq.approved },
+        dataSource
+      );
+      return updated;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async handleUpdateCand(
     req: Request,
     res: Response

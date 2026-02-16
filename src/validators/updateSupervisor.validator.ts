@@ -68,8 +68,8 @@ export const updateSupervisorValidator = checkSchema({
     in: ["body"],
     optional: true,
     isIn: {
-      options: [["Professor", "Assistant Professor", "Lecturer", "Assistant Lecturer", "Guest Doctor", "unknown"]],
-      errorMessage: "position must be one of: Professor, Assistant Professor, Lecturer, Assistant Lecturer, Guest Doctor, unknown",
+      options: [["Professor", "Assistant Professor", "Lecturer", "Assistant Lecturer", "Guest Doctor", "Consultant", "unknown"]],
+      errorMessage: "position must be one of: Professor, Assistant Professor, Lecturer, Assistant Lecturer, Guest Doctor, Consultant, unknown",
     },
     trim: true,
   },

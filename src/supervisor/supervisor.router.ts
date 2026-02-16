@@ -4,6 +4,7 @@ import { SupervisorController } from "./supervisor.controller";
 import { createSupervisorValidator } from "../validators/createSupervisor.validator";
 import { getSupervisorByIdValidator } from "../validators/getSupervisorById.validator";
 import { updateSupervisorValidator } from "../validators/updateSupervisor.validator";
+import { updateSupervisorApprovedValidator } from "../validators/updateSupervisorApproved.validator";
 import { deleteSupervisorValidator } from "../validators/deleteSupervisor.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
@@ -32,6 +33,12 @@ export class SupervisorRouter {
       UserRole.SUPER_ADMIN,
       UserRole.INSTITUTE_ADMIN,
       UserRole.SUPERVISOR
+    );
+
+    // PUT /:id/approved: only superAdmin, instituteAdmin (institution-scoped via dataSource)
+    const requireSuperAdminOrInstituteAdmin = authorize(
+      UserRole.SUPER_ADMIN,
+      UserRole.INSTITUTE_ADMIN
     );
 
     // Create supervisor
@@ -113,6 +120,34 @@ export class SupervisorRouter {
         if (result.isEmpty()) {
           try {
             const resp = await this.supervisorController.handleGetSupervisorById(req, res);
+            if (resp) {
+              res.status(StatusCodes.OK).json(resp);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "Supervisor not found" });
+            }
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Update supervisor approved status
+    // Accessible to: superAdmin, instituteAdmin only. Institution-scoped (same institution as admin).
+    this.router.put(
+      "/:id/approved",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      updateSupervisorApprovedValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.supervisorController.handleUpdateSupervisorApproved(req, res);
             if (resp) {
               res.status(StatusCodes.OK).json(resp);
             } else {

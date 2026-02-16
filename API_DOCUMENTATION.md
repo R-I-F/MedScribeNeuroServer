@@ -1008,7 +1008,12 @@ Isolated login endpoint for clerks. This endpoint is separate from regular user 
 ### Register Candidate
 **POST** `/auth/registerCand`
 
-Registers a new candidate user. No authentication required.
+Registers a new candidate user in the specified institution's database. No authentication required. **Institution ID is required**—the default database is used only for other configurations, not for candidate registration. **`regDeg` is optional** and may be omitted or null for non-academic institutions.
+
+**Defaults (set by server, not accepted in request body):**
+- `role`: **`"candidate"`**
+- `approved`: **`false`** (0)
+- `termsAcceptedAt`: **current date/time** (set when the user accepts terms at signup in the frontend)
 
 **Request Body:**
 ```json
@@ -1033,8 +1038,18 @@ Registers a new candidate user. No authentication required.
 - `regNum` (string, required): Registration number
 - `nationality` (string, required): Candidate's nationality
 - `rank` (string, required): Candidate's rank
-- `regDeg` (string, required): Registration degree
+- `regDeg` (string, optional): Registration degree. Omit or set to `null` for non-academic institutions; when provided must be one of: `msc`, `doctor of medicine (md)`, `egyptian fellowship`, `self registration`, `other`.
 - `institutionId` (string, UUID, required): The UUID of the institution the candidate is registering for. Get available institutions from `GET /institutions`.
+
+Do not send `role` or `approved`; they are set by the server (`role: "candidate"`, `approved: false`).
+
+**Response (400 Bad Request)** — when `institutionId` is missing, invalid, or the institution is inactive:
+```json
+{
+  "error": "institutionId is required. Provide a valid institutionId in the request body, query, or X-Institution-Id header."
+}
+```
+Validation may also return 400 if `institutionId` is not a valid UUID.
 
 **Response (201 Created):**
 ```json
@@ -1054,6 +1069,55 @@ Registers a new candidate user. No authentication required.
     "approved": false,
     "role": "candidate"
   }
+}
+```
+
+---
+
+### Register Supervisor
+**POST** `/auth/registerSupervisor`
+
+Registers a new supervisor in the specified institution's database. No authentication required. **Institution ID is required.** Rate limited by IP (50 requests per 15 minutes per IP).
+
+**Defaults (set by server, not accepted in request body):**
+- `role`: **`"supervisor"`**
+- `approved`: **`false`** (0)
+- `canValidate`: **`false`** (0) — no validation rights until an admin grants them
+- `termsAcceptedAt`: **current date/time** (set when the user accepts terms at signup in the frontend)
+
+**Request Body:**
+```json
+{
+  "email": "supervisor@example.com",
+  "password": "securePassword123",
+  "fullName": "Jane Smith",
+  "phoneNum": "+1234567890",
+  "institutionId": "550e8400-e29b-41d4-a716-446655440000",
+  "position": "Professor"
+}
+```
+
+**Request Body Fields:**
+- `email` (string, required): Supervisor's email address
+- `password` (string, required): At least 8 characters (will be hashed)
+- `fullName` (string, required): Supervisor's full name
+- `phoneNum` (string, required): Supervisor's phone number
+- `institutionId` (string, UUID, required): Institution UUID. Get from `GET /institutions`.
+- `position` (string, optional): Supervisor's position. When provided must be one of: `Professor`, `Assistant Professor`, `Lecturer`, `Assistant Lecturer`, `Guest Doctor`, `Consultant`, `unknown`. If omitted, stored as `unknown`.
+
+Do not send `role`, `approved`, or `canValidate`; they are set by the server (`role: "supervisor"`, `approved: false`, `canValidate: false`).
+
+**Response (400 Bad Request)** — when `institutionId` is missing or invalid: same shape as Register Candidate.
+
+**Response (201 Created):**
+```json
+{
+  "id": "uuid",
+  "email": "supervisor@example.com",
+  "fullName": "Jane Smith",
+  "phoneNum": "+1234567890",
+  "approved": false,
+  "role": "supervisor"
 }
 ```
 
@@ -6158,6 +6222,43 @@ Cookie: auth_token=<token>
 
 ---
 
+### Update Candidate Approved
+**PUT** `/cand/:id/approved`
+
+**Requires:** Authentication (Super Admin or Institute Admin only)
+
+**Rate Limit:** 200 requests per 15 minutes per user (user-based)
+
+**Institution-scoped:** Super admins and institute admins can only update the `approved` status of candidates in their **same institution**. The institution is determined by the JWT (or `X-Institution-Id` header); the candidate must exist in that institution's database.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Candidate UUID
+
+**Request Body:**
+```json
+{
+  "approved": true
+}
+```
+- `approved` (boolean, required): New approval status for the candidate.
+
+**Response (200 OK):** Returns the updated candidate document (same shape as GET `/cand/:id`).
+
+**Response (404 Not Found):** Candidate not found in the institution.
+
+**Response (403 Forbidden):** Caller is not Super Admin or Institute Admin.
+
+---
+
 ### Update Candidate
 **PUT** `/cand/:id`
 
@@ -6214,7 +6315,7 @@ Updates a candidate's information. Access and allowed fields depend on the calle
 - `phoneNum`: Phone number (min 11 characters). Allowed for **all roles** when updating own profile (Candidate) or any profile (admins).
 - `regNum`: Registration number (Super Admin / Institute Admin only; Candidate may update own)
 - `nationality`: Nationality (Super Admin / Institute Admin only)
-- `rank`: Rank – one of `professor`, `assistant professor`, `lecturer`, `assistant lecturer`, `resident`, `guest`, `other`, `none` (Super Admin / Institute Admin only)
+- `rank`: Rank – one of `professor`, `assistant professor`, `lecturer`, `assistant lecturer`, `resident`, `guest`, `specialist`, `other`, `none` (Super Admin / Institute Admin only)
 - `regDeg`: Registration degree – one of `msc`, `doctor of medicine (md)`, `egyptian fellowship`, `self registration`, `other` (Super Admin / Institute Admin only; Candidate may update own)
 - `approved`: Approval status (boolean) (Super Admin / Institute Admin only)
 
@@ -6571,7 +6672,7 @@ interface ISupervisor {
   approved: boolean;
   role: "supervisor";
   canValidate?: boolean; // true = validator (default), false = academic only
-  position?: "Professor" | "Assistant Professor" | "Lecturer" | "Assistant Lecturer" | "Guest Doctor" | "unknown"; // Supervisor's academic position (defaults to "unknown")
+  position?: "Professor" | "Assistant Professor" | "Lecturer" | "Assistant Lecturer" | "Guest Doctor" | "Consultant" | "Specialist" | "unknown"; // Supervisor's academic position (defaults to "unknown")
 }
 
 // Censored response (GET /supervisor and GET /supervisor/:id for Clerk, Supervisor, Candidate):
@@ -6925,6 +7026,43 @@ Returns a specific supervisor by ID. This endpoint is accessible to Super Admins
 
 ---
 
+### Update Supervisor Approved
+**PUT** `/supervisor/:id/approved`
+
+**Requires:** Authentication (Super Admin or Institute Admin only)
+
+**Rate Limit:** 200 requests per 15 minutes per user (user-based)
+
+**Institution-scoped:** Super admins and institute admins can only update the `approved` status of supervisors in their **same institution**. The institution is determined by the JWT (or `X-Institution-Id` header); the supervisor must exist in that institution's database.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `id` (required): Supervisor UUID
+
+**Request Body:**
+```json
+{
+  "approved": true
+}
+```
+- `approved` (boolean, required): New approval status for the supervisor.
+
+**Response (200 OK):** Returns the updated supervisor document (same shape as GET `/supervisor/:id` for admins).
+
+**Response (404 Not Found):** Supervisor not found in the institution.
+
+**Response (403 Forbidden):** Caller is not Super Admin or Institute Admin.
+
+---
+
 ### Update Supervisor
 **PUT** `/supervisor/:id`
 
@@ -6978,7 +7116,7 @@ Updates a supervisor's information. Access and allowed fields depend on the call
   - `true`: Validator supervisor (can validate submissions AND participate in events)
   - `false`: Academic supervisor (can ONLY participate in events, cannot validate)
 - `position`: Supervisor's academic position. Allowed for **all roles** when updating own profile (Supervisor) or any profile (admins).
-  - Valid values: `"Professor"`, `"Assistant Professor"`, `"Lecturer"`, `"Assistant Lecturer"`, `"Guest Doctor"`, `"unknown"`
+  - Valid values: `"Professor"`, `"Assistant Professor"`, `"Lecturer"`, `"Assistant Lecturer"`, `"Guest Doctor"`, `"Consultant"`, `"Specialist"`, `"unknown"`
 
 **Response (200 OK):**
 ```json
@@ -13454,6 +13592,7 @@ All PDF reports include MedScribe branding in the header:
 | `/auth/instituteAdmin/login` | No | - (Institute Admin login, requires `institutionId` in request body) |
 | `/auth/clerk/login` | No | - (Clerk login, requires `institutionId` in request body) |
 | `/auth/registerCand` | No | - (Requires `institutionId` in request body) |
+| `/auth/registerSupervisor` | No | - (Requires `institutionId`; IP rate limited) |
 | `/auth/get/all` | **DISABLED** | Returns 410 Gone. See [Disabled Routes](#disabled-routes). |
 | `/auth/resetCandPass` | **DISABLED** | Returns 410 Gone. See [Disabled Routes](#disabled-routes). |
 | `/auth/requestPasswordChangeEmail` | Yes | All user types (candidate, supervisor, superAdmin, instituteAdmin) |
@@ -13510,7 +13649,7 @@ All PDF reports include MedScribe branding in the header:
 | `/conf` (POST) | Yes | Institute Admin, Supervisor, Clerk, or Super Admin |
 | `/conf/:id` (PATCH) | Yes | Super Admin only |
 | `/conf/:id` (DELETE) | Yes | Super Admin only |
-| `/supervisor/*` | Yes | Super Admin (POST /, POST /resetPasswords, DELETE /:id) / Super Admin, Institute Admin, Supervisor, Candidate (GET /, GET /:id) / Super Admin, Institute Admin, Supervisor (PUT /:id – Supervisor own profile only: phoneNum, position; admins full control) / Supervisor (GET /candidates) |
+| `/supervisor/*` | Yes | Super Admin (POST /, POST /resetPasswords, DELETE /:id) / Super Admin, Institute Admin, Supervisor, Candidate (GET /, GET /:id) / **Super Admin, Institute Admin only** (PUT /:id/approved – update supervisor approved status; institution-scoped) / Super Admin, Institute Admin, Supervisor (PUT /:id – Supervisor own profile only: phoneNum, position; admins full control) / Supervisor (GET /candidates) |
 | `/sub/*` | Yes / DISABLED | **DISABLED:** POST /postAllFromExternal, PATCH /updateStatusFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other routes: Super Admin (DELETE /:id) / Candidate, Supervisor, Institute Admin, Super Admin (GET /candidate/stats, GET /candidate/submissions, GET /candidate/submissions/:id, GET /cptAnalytics, GET /icdAnalytics, GET /supervisorAnalytics, GET /submissionRanking) / Supervisor (POST /supervisor/submissions, GET /supervisor/submissions, GET /supervisor/submissions/:id, GET /supervisor/own/submissions, GET /supervisor/candidates/:candidateId/submissions, PATCH /supervisor/submissions/:id/review) / Institute Admin, Super Admin (GET /supervisor/own/submissions) |
 | `/sub/candidate/stats` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
 | `/sub/candidate/submissions` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
@@ -13529,7 +13668,7 @@ All PDF reports include MedScribe branding in the header:
 | `/sub/submissions/:id/generateSurgicalNotes` | ⚠️ DISABLED | ~~Institute Admin or Super Admin~~ (Endpoint disabled) |
 | `/sub/:id` (DELETE) | Yes | Super Admin |
 | `/supervisor/candidates` | Yes | Supervisor |
-| `/cand/*` | Partial / DISABLED | **DISABLED:** POST /createCandsFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin or Institute Admin (GET /, GET /:id) / Super Admin, Institute Admin, Candidate (PUT /:id – Candidate own profile only: regDeg, regNum, phoneNum; admins full control) / Super Admin (PATCH /:id/resetPassword, DELETE /:id) |
+| `/cand/*` | Partial / DISABLED | **DISABLED:** POST /createCandsFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin or Institute Admin (GET /, GET /:id) / **Super Admin, Institute Admin only** (PUT /:id/approved – update candidate approved status; institution-scoped) / Super Admin, Institute Admin, Candidate (PUT /:id – Candidate own profile only: regDeg, regNum, phoneNum; admins full control) / Super Admin (PATCH /:id/resetPassword, DELETE /:id) |
 | `/calSurg/*` | Partial / DISABLED | **DISABLED:** POST /postAllFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin, Institute Admin, Clerk, Supervisor, or Candidate (GET /dashboard, GET /getById, GET /getAll) / Super Admin, Institute Admin, or Clerk (POST /, PATCH /:id, DELETE /:id) |
 | `/diagnosis/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postBulk, POST /post, PATCH /:id, DELETE /:id) |
 | `/procCpt/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postAllFromExternal, POST /upsert, DELETE /:id) |

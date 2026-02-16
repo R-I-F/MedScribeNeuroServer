@@ -8,6 +8,7 @@ export enum Rank {
   AssistantLecturer = "assistant lecturer",
   Resident = "resident",
   Guest = "guest",
+  Specialist = "specialist",
   Other = "other",
   None = "none",
 }
@@ -25,7 +26,7 @@ export interface ICand extends User {
   regNum: string;
   nationality: string;
   rank: Rank;
-  regDeg: RegDegree;  
+  regDeg?: RegDegree | null; // Optional for non-academic institutions
   google_uid?: string;
   role?: TUserRole;
   termsAcceptedAt?: Date;
@@ -43,7 +44,7 @@ export interface ICandCensoredDoc {
   fullName: string;
   regNum: string;
   rank: Rank;
-  regDeg: RegDegree;
+  regDeg?: RegDegree | null;
   approved: boolean;
   role?: TUserRole;
 }

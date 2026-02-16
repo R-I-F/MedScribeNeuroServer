@@ -29,7 +29,7 @@ export async function institutionResolver(
 
     // Allow bypass for auth endpoints that handle institution selection during request
     if (req.path.startsWith("/auth/")) {
-      const authEndpoints = ["/auth/login", "/auth/loginCand", "/auth/registerCand"];
+      const authEndpoints = ["/auth/login", "/auth/loginCand", "/auth/registerCand", "/auth/registerSupervisor"];
       if (authEndpoints.some(endpoint => req.path === endpoint || req.path.startsWith(endpoint + "/"))) {
         // Institution will be resolved during login/register
         return next();

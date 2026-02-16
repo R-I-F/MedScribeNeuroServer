@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { DataSource } from "typeorm";
 import { AuthController } from "./auth.controller";
 import { createCandValidator } from "../validators/createCand.validator";
+import { registerSupervisorValidator } from "../validators/registerSupervisor.validator";
 import { matchedData, validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import { loginValidator } from "../validators/login.validator";
@@ -14,7 +15,7 @@ import { changePasswordValidator } from "../validators/changePassword.validator"
 import { forgotPasswordValidator } from "../validators/forgotPassword.validator";
 import { resetPasswordValidator } from "../validators/resetPassword.validator";
 import extractJWT from "../middleware/extractJWT";
-import IAuth, { IRegisterCandPayload } from "./auth.interface";
+import IAuth, { IRegisterCandPayload, IRegisterSupervisorPayload } from "./auth.interface";
 import { setAuthCookies, clearAuthCookies } from "../utils/cookie.utils";
 import { AuthTokenService } from "./authToken.service";
 import { UserRole } from "../types/role.types";
@@ -93,8 +94,13 @@ export class AuthRouter {
               locations: ["body"],
             }) as IRegisterCandPayload;
             
-            // Get DataSource for institution if provided
+            // Institution ID is required; default DB is for other configurations only
             const dataSource = await this.getDataSourceFromRequest(req);
+            if (!dataSource) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "institutionId is required. Provide a valid institutionId in the request body, query, or X-Institution-Id header.",
+              });
+            }
             
             const resp = await this.authController.registerCand(payload, dataSource);
             res.status(StatusCodes.CREATED).json(resp);
@@ -103,6 +109,35 @@ export class AuthRouter {
           }
         }
         else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+    this.router.post(
+      "/registerSupervisor",
+      strictRateLimiter,
+      registerSupervisorValidator,
+      async (req: Request, res: Response, next: NextFunction) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const payload = matchedData(req, {
+              locations: ["body"],
+            }) as IRegisterSupervisorPayload;
+
+            const dataSource = await this.getDataSourceFromRequest(req);
+            if (!dataSource) {
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "institutionId is required. Provide a valid institutionId in the request body, query, or X-Institution-Id header.",
+              });
+            }
+
+            const resp = await this.authController.registerSupervisor(payload, dataSource);
+            res.status(StatusCodes.CREATED).json(resp);
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }

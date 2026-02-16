@@ -74,6 +74,28 @@ export class SupervisorController {
     }
   }
 
+  /**
+   * Update supervisor approved status. Only super admin and institute admin.
+   * Institution-scoped: dataSource is the institution's DB from JWT/context.
+   */
+  public async handleUpdateSupervisorApproved(
+    req: Request,
+    res: Response
+  ): Promise<ISupervisorDoc | null> {
+    const id = req.params.id;
+    const validatedReq = matchedData(req) as { approved: boolean };
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    try {
+      const updated = await this.supervisorService.updateSupervisor(
+        { id, approved: validatedReq.approved },
+        dataSource
+      );
+      return updated;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async handleUpdateSupervisor(
     req: Request,
     res: Response

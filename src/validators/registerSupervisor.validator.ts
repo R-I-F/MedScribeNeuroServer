@@ -1,6 +1,6 @@
 import { body } from "express-validator";
 
-export const createCandValidator = [
+export const registerSupervisorValidator = [
   body("email")
     .isEmail()
     .withMessage("email must be a valid email address"),
@@ -22,25 +22,22 @@ export const createCandValidator = [
     .notEmpty()
     .withMessage("phoneNum is required"),
 
-  body("regNum")
-    .isString()
-    .withMessage("regNum must be a string"),
-
-  body("nationality")
-    .isString()
-    .withMessage("nationality must be a string"),
-
-  body("rank")
-    .isString()
-    .withMessage("rank must be a string"),
-
-  body("regDeg")
-    .optional({ values: "falsy" })
-    .isString()
-    .withMessage("regDeg must be a string when provided"),
-
   body("institutionId")
     .isUUID()
     .withMessage("institutionId must be a valid UUID"),
-];
 
+  body("position")
+    .optional({ values: "falsy" })
+    .isIn([
+      "Professor",
+      "Assistant Professor",
+      "Lecturer",
+      "Assistant Lecturer",
+      "Guest Doctor",
+      "Consultant",
+      "unknown",
+    ])
+    .withMessage(
+      "position must be one of: Professor, Assistant Professor, Lecturer, Assistant Lecturer, Guest Doctor, Consultant, unknown"
+    ),
+];
