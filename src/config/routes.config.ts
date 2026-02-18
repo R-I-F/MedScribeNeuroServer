@@ -91,6 +91,9 @@ export function addRoutes(app: Application) {
   const { BundlerRouter } = require("../bundler/bundler.router");
   const bundlerRouter = container.get(BundlerRouter) as any;
 
+  const { ClinicalSubRouter } = require("../clinicalSub/clinicalSub.router");
+  const clinicalSubRouter = container.get(ClinicalSubRouter) as any;
+
   app.use("/institutions", institutionRouter.router);
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);
@@ -119,6 +122,7 @@ export function addRoutes(app: Application) {
   app.use("/positions", positionsRouter.router);
   app.use("/approaches", approachesRouter.router);
   app.use("/regions", regionsRouter.router);
+  app.use("/clinicalSub", clinicalSubRouter.router);
   app.use("/references", bundlerRouter.router);
   app.use("/candidate", bundlerRouter.router);
 

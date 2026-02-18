@@ -27,6 +27,7 @@ export function toCensoredSupervisor(
     fullName: doc.fullName,
     position: doc.position,
     canValidate: doc.canValidate,
+    canValClin: doc.canValClin,
     approved: doc.approved,
     role: doc.role,
   };

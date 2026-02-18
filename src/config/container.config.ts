@@ -145,6 +145,11 @@ import { BundlerRouter } from "../bundler/bundler.router";
 import { BundlerService } from "../bundler/bundler.service";
 import { BundlerProvider } from "../bundler/bundler.provider";
 
+import { ClinicalSubController } from "../clinicalSub/clinicalSub.controller";
+import { ClinicalSubRouter } from "../clinicalSub/clinicalSub.router";
+import { ClinicalSubService } from "../clinicalSub/clinicalSub.service";
+import { ClinicalSubProvider } from "../clinicalSub/clinicalSub.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -292,3 +297,8 @@ container.bind(BundlerController).toSelf().inTransientScope();
 container.bind(BundlerRouter).toSelf().inTransientScope();
 container.bind(BundlerService).toSelf().inTransientScope();
 container.bind(BundlerProvider).toSelf().inTransientScope();
+
+container.bind(ClinicalSubController).toSelf().inTransientScope();
+container.bind(ClinicalSubRouter).toSelf().inTransientScope();
+container.bind(ClinicalSubService).toSelf().inTransientScope();
+container.bind(ClinicalSubProvider).toSelf().inTransientScope();

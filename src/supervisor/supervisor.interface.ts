@@ -5,6 +5,7 @@ import { TSupervisorPosition } from "../types/supervisorPosition.types";
 export interface ISupervisor extends User {
   role?: TUserRole;
   canValidate?: boolean; // true = validator supervisor (can validate submissions), false = academic supervisor (events only)
+  canValClin?: boolean; // true = can validate clinical submissions (clinical sub), false = cannot
   position?: TSupervisorPosition; // Supervisor's academic position
   termsAcceptedAt?: Date;
 }
@@ -21,6 +22,7 @@ export interface ISupervisorCensoredDoc {
   fullName: string;
   position?: TSupervisorPosition;
   canValidate?: boolean; // true = validator (can review submissions), false = academic (events only)
+  canValClin?: boolean; // true = can validate clinical submissions (clinical sub)
   approved: boolean;
   role?: TUserRole;
 }

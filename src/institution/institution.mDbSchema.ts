@@ -21,6 +21,9 @@ export class InstitutionEntity {
   isPractical!: boolean;
 
   @Column({ type: "boolean", default: true })
+  isClinical!: boolean;
+
+  @Column({ type: "boolean", default: true })
   isActive!: boolean;
 
   @Column({ type: "varchar", length: 100, default: "neurosurgery" })

@@ -15,6 +15,7 @@ export interface IBundlerDoc {
 /**
  * Combined response for GET /candidate/dashboard (candidate dashboard bundle).
  * Full bundle: when institution is both academic and practical.
+ * When institution is also clinical (isClinical: true), includes clinicalSubCand (same as GET /clinicalSub/cand).
  * Each key matches the corresponding single endpoint response.
  */
 export interface ICandidateDashboardDoc {
@@ -27,6 +28,8 @@ export interface ICandidateDashboardDoc {
   activityTimeline: { items: unknown[] };
   submissionRanking: unknown;
   academicRanking: unknown;
+  /** Present when institution is academic + practical + clinical. Same as GET /clinicalSub/cand (censored candidate/supervisor). */
+  clinicalSubCand?: unknown[];
 }
 
 /**

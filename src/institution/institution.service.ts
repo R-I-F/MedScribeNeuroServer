@@ -19,6 +19,7 @@ export interface IInstitution {
   isActive: boolean;
   isAcademic: boolean;
   isPractical: boolean;
+  isClinical: boolean;
   department: string;
 }
 
@@ -45,6 +46,7 @@ function entityToInstitution(entity: InstitutionEntity): IInstitution {
     isActive: entity.isActive,
     isAcademic: entity.isAcademic,
     isPractical: entity.isPractical,
+    isClinical: entity.isClinical,
     department: entity.department,
   };
 }

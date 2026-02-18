@@ -410,31 +410,32 @@ The following routes are **disabled**: they remain registered but return **410 G
    - [Institute Admins](#institute-admins-instituteadmin)
    - [Clerks](#clerks-clerk)
 6. [Submissions](#submissions-sub)
-7. [Activity Timeline](#activity-timeline-activitytimeline)
-8. [Candidates](#candidates-cand)
-9. [Supervisors](#supervisors)
-10. [Calendar Surgery](#calendar-surgery)
-11. [Diagnosis](#diagnosis)
-12. [Procedure CPT](#procedure-cpt)
-13. [Main Diagnosis](#main-diagnosis)
-14. [Additional Questions](#additional-questions-additionalquestions)
-15. [Consumables](#consumables-consumables)
-16. [Equipment](#equipment-equipment)
-17. [Positions](#positions-positions)
-18. [Approaches](#approaches-approaches)
-19. [Regions](#regions-regions)
-20. [References](#references-references)
-21. [Candidate Dashboard](#candidate-dashboard-candidate-dashboard)
-22. [Arabic Procedures](#arabic-procedures)
-23. [Hospitals](#hospitals)
-24. [Mailer](#mailer)
-25. [External Service](#external-service)
-26. [Lectures](#lectures)
-27. [Journals](#journals)
-28. [Conferences](#conferences)
-29. [Events](#events)
-30. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
-31. [Error Responses](#error-responses)
+7. [Clinical Submissions](#clinical-submissions-clinicalsub)
+8. [Activity Timeline](#activity-timeline-activitytimeline)
+9. [Candidates](#candidates-cand)
+10. [Supervisors](#supervisors)
+11. [Calendar Surgery](#calendar-surgery)
+12. [Diagnosis](#diagnosis)
+13. [Procedure CPT](#procedure-cpt)
+14. [Main Diagnosis](#main-diagnosis)
+15. [Additional Questions](#additional-questions-additionalquestions)
+16. [Consumables](#consumables-consumables)
+17. [Equipment](#equipment-equipment)
+18. [Positions](#positions-positions)
+19. [Approaches](#approaches-approaches)
+20. [Regions](#regions-regions)
+21. [References](#references-references)
+22. [Candidate Dashboard](#candidate-dashboard-candidate-dashboard)
+23. [Arabic Procedures](#arabic-procedures)
+24. [Hospitals](#hospitals)
+25. [Mailer](#mailer)
+26. [External Service](#external-service)
+27. [Lectures](#lectures)
+28. [Journals](#journals)
+29. [Conferences](#conferences)
+30. [Events](#events)
+31. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
+32. [Error Responses](#error-responses)
 
 ---
 
@@ -448,31 +449,32 @@ The following routes are **disabled**: they remain registered but return **410 G
 **Rate Limit:** 200 requests per 15 minutes per IP (IP-based)
 
 **Description:**  
-Returns a list of all active institutions available in the system. This endpoint is public and does not require authentication. Use this to allow users to select their institution before logging in.
+Returns a list of all active institutions available in the system. This endpoint is public and does not require authentication. Use this to allow users to select their institution before logging in. The response body is the **raw array** of institutions (no wrapper object). Database credentials and internal fields (e.g. `databaseName`, `isActive`, `isClinical`) are never exposed.
 
-**Response (200 OK):**
+**Response (200 OK):**  
+Body is a JSON **array** of institution objects:
+
 ```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "code": "cairo-university",
-      "name": "Kasr El Ainy / Cairo University",
-      "isAcademic": true,
-      "isPractical": true
-    },
-    {
-      "id": "660e8400-e29b-41d4-a716-446655440001",
-      "code": "masr-el-dawly",
-      "name": "Masr El Dawly",
-      "isAcademic": false,
-      "isPractical": true
-    }
-  ]
-}
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "code": "cairo-university",
+    "name": "Kasr El Ainy / Cairo University",
+    "isAcademic": true,
+    "isPractical": true,
+    "isClinical": true,
+    "department": "neurosurgery"
+  },
+  {
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "code": "masr-el-dawly",
+    "name": "Masr El Dawly",
+    "isAcademic": false,
+    "isPractical": true,
+    "isClinical": true,
+    "department": "neurosurgery"
+  }
+]
 ```
 
 **Response Fields:**
@@ -481,11 +483,13 @@ Returns a list of all active institutions available in the system. This endpoint
 - `name` (string): Display name of the institution
 - `isAcademic` (boolean): Whether the institution is academic
 - `isPractical` (boolean): Whether the institution is practical
+- `isClinical` (boolean): Whether the institution has clinical (e.g. clinical sub) features; default `true`
+- `department` (string): Department name (e.g. "neurosurgery", default "neurosurgery")
 
 **Notes:**
 - This endpoint is public and does not require authentication
 - Only active institutions are returned
-- Database credentials are never exposed in the response
+- Database credentials and internal fields are never exposed in the response
 - Use the `id` field when logging in or registering (include in request body as `institutionId`)
 - Rate limiting is IP-based; exceeding 200 requests per 15 minutes returns 429 Too Many Requests
 
@@ -501,12 +505,12 @@ Returns a list of all active institutions available in the system. This endpoint
 
 **Example Usage:**
 ```typescript
-// 1. Get available institutions
+// 1. Get available institutions (response body is the array directly)
 const institutionsResponse = await fetch('/institutions');
-const { data: institutions } = await institutionsResponse.json();
+const institutions = await institutionsResponse.json(); // array of institution objects
 
 // 2. User selects an institution (e.g., Cairo University)
-const selectedInstitution = institutions[0]; // { id: "...", code: "cairo-university", name: "Cairo University" }
+const selectedInstitution = institutions[0]; // { id: "...", code: "cairo-university", name: "...", department: "neurosurgery", ... }
 
 // 3. Login with institutionId
 const loginResponse = await fetch('/auth/login', {
@@ -515,7 +519,7 @@ const loginResponse = await fetch('/auth/login', {
   body: JSON.stringify({
     email: 'user@example.com',
     password: 'password123',
-    institutionId: selectedInstitution.id // Include institution ID
+    institutionId: selectedInstitution.id
   })
 });
 ```
@@ -4010,6 +4014,8 @@ Authorization: Bearer <superAdmin_token>
 
 Creates a new surgical experience submission. Only authenticated candidates can submit. The candidate ID is taken from the JWT; the request body supplies procedure, supervisor, diagnosis, and submission details. New submissions are created with status `pending` and must be reviewed by a supervisor.
 
+**Email notification:** After the submission is saved, the server sends an email to the assigned supervisor (`supervisorDocId`) to notify them that a new submission requires review. The email includes the candidate name, submission ID, procedure info, and a link to the review page. Sending is done in the background (non-blocking); the API responds immediately. If the supervisor has no email address, no email is sent.
+
 **Requires:** Candidate authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
@@ -4126,6 +4132,7 @@ Returns the created submission document with populated relations. Same shape as 
 **Notes:**
 - Only candidates can create submissions; the candidate ID is taken from the JWT.
 - Submissions are created with `subStatus: "pending"` and must be reviewed by a validator supervisor.
+- The assigned supervisor receives an email (subject: "Review submission from [candidate name] · [shortId]") with a link to review the submission. Email is sent asynchronously; the API does not wait for it. If the supervisor has no email, the email is skipped.
 - All submission endpoints use the institution database resolved from the JWT (`institutionId`).
 - Standard rate limit for POST: 50 requests per 15 minutes per user.
 - `subGoogleUid` is not in the request body and is not generated by the server; the response may have `subGoogleUid: null`.
@@ -5839,6 +5846,195 @@ Authorization: Bearer <superAdmin_token>
 
 ---
 
+## Clinical Submissions (`/clinicalSub`)
+
+Clinical submissions (clinical sub) record candidate clinical activity (e.g. clinical round, outpatient clinic, workshop) with an assigned supervisor. All endpoints are institution-scoped via JWT or `X-Institution-Id`.
+
+**Important:** Every response that includes `candidate` or `supervisor` uses **censored** objects only: no `password`, `email`, or `phone` is ever returned. Candidate is returned as `{ id, fullName, regNum, rank, regDeg, approved, role }`. Supervisor is returned as `{ id, fullName, position, canValidate, approved, role }`.
+
+### Rate Limiting
+
+- **GET endpoints:** 200 requests per 15 minutes per user (user-based)
+- **POST/PUT endpoints:** 50 requests per 15 minutes per user (user-based)
+
+**Rate Limit Response (429 Too Many Requests):**
+```json
+{
+  "error": "Too many requests, please try again later."
+}
+```
+
+### Get All Clinical Submissions
+**GET** `/clinicalSub/`
+
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
+
+**Headers:**
+```
+Authorization: Bearer <token>
+X-Institution-Id: <institution_uuid>   (or institutionId in JWT)
+```
+
+**Response (200 OK):** Array of clinical subs with censored `candidate` and `supervisor`:
+```json
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "candDocId": "660e8400-e29b-41d4-a716-446655440001",
+    "supervisorDocId": "770e8400-e29b-41d4-a716-446655440002",
+    "dateCA": "2025-02-01",
+    "typeCA": "clinical round",
+    "description": "Observed lumbar puncture and case presentation.",
+    "subStatus": "pending",
+    "review": null,
+    "reviewedAt": null,
+    "createdAt": "2025-02-17T10:00:00.000Z",
+    "updatedAt": "2025-02-17T10:00:00.000Z",
+    "candidate": {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "fullName": "Ahmed Ali",
+      "regNum": "R123",
+      "rank": "resident",
+      "regDeg": "msc",
+      "approved": true,
+      "role": "candidate"
+    },
+    "supervisor": {
+      "id": "770e8400-e29b-41d4-a716-446655440002",
+      "fullName": "Dr. Sara Mohamed",
+      "position": "professor",
+      "canValidate": true,
+      "approved": true,
+      "role": "supervisor"
+    }
+  }
+]
+```
+
+**Notes:** `typeCA` is one of: `clinical round`, `outpatient clinic`, `workshop`, `other`. `subStatus` is one of: `pending`, `approved`, `rejected`. `description` is a non-null string (candidate-provided summary of the activity); may be empty `""`.
+
+---
+
+### Get Clinical Submissions for Signed-in Supervisor (`/super`)
+**GET** `/clinicalSub/super`
+
+**Requires:** Supervisor, Institute Admin, or Super Admin
+
+**Behavior:** If the caller is a **Supervisor**, returns only clinical subs where `supervisorDocId` equals the signed-in supervisor. If the caller is **Institute Admin** or **Super Admin**, returns all clinical subs in the institution.
+
+**Headers:** Same as above.
+
+**Response (200 OK):** Same array shape as GET `/clinicalSub/` with censored `candidate` and `supervisor`.
+
+---
+
+### Get Clinical Submissions for Signed-in Candidate (`/cand`)
+**GET** `/clinicalSub/cand`
+
+**Requires:** Candidate, Institute Admin, or Super Admin
+
+**Behavior:** If the caller is a **Candidate**, returns only clinical subs where `candDocId` equals the signed-in candidate. If the caller is **Institute Admin** or **Super Admin**, returns all clinical subs in the institution.
+
+**Headers:** Same as above.
+
+**Response (200 OK):** Same array shape as GET `/clinicalSub/` with censored `candidate` and `supervisor`.
+
+---
+
+### Get Clinical Sub by ID
+**GET** `/clinicalSub/:id`
+
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
+
+**Parameters:** `id` (path) — UUID of the clinical sub.
+
+**Response (200 OK):** Single clinical sub with censored `candidate` and `supervisor`. Same shape as one element of the list above.
+
+**Response (404 Not Found):**
+```json
+{ "error": "Clinical sub not found" }
+```
+
+**Response (400 Bad Request):** If `id` is not a valid UUID (e.g. validation errors in array form).
+
+---
+
+### Create Clinical Sub
+**POST** `/clinicalSub/`
+
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Email notification:** After the clinical sub is saved, the server sends an email to the assigned supervisor (`supervisorDocId`) to notify them that a new clinical submission requires review. The email includes the candidate name, date, type, description, and a link to the review page. Sending is done in the background (non-blocking); the API responds immediately. If the supervisor has no email address, no email is sent.
+
+**Review link format:** `{FRONTEND_URL}/dashboard/supervisor/clinical-submissions/{clinicalSubId}?institutionId={institutionId}`. Example: `https://your-app.com/dashboard/supervisor/clinical-submissions/8e6eb422-549c-4f57-9b26-99169efd5788?institutionId=550e8400-e29b-41d4-a716-446655440000`
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `candDocId` | string (UUID) | Yes | Candidate ID |
+| `supervisorDocId` | string (UUID) | Yes | Supervisor ID |
+| `dateCA` | string (ISO 8601 date) | Yes | Date of clinical activity |
+| `typeCA` | string | Yes | One of: `clinical round`, `outpatient clinic`, `workshop`, `other` |
+| `description` | string | No | Text describing the clinical activity (defaults to `""` if omitted) |
+
+**Example:**
+```json
+{
+  "candDocId": "660e8400-e29b-41d4-a716-446655440001",
+  "supervisorDocId": "770e8400-e29b-41d4-a716-446655440002",
+  "dateCA": "2025-02-15",
+  "typeCA": "clinical round",
+  "description": "Observed lumbar puncture and case presentation."
+}
+```
+
+**Response (201 Created):** Created clinical sub (IDs and timestamps; relations not populated in response).
+
+**Response (400 Bad Request):** Validation errors or "Candidate/Supervisor with ID '...' not found".
+
+**Notes:**
+- The assigned supervisor receives an email (subject: "Review clinical submission from [candidate name] · [shortId]") with a link to the review page (`/dashboard/supervisor/clinical-submissions/{id}?institutionId=...`). Email is sent asynchronously; the API does not wait for it. If the supervisor has no email, the email is skipped.
+
+---
+
+### Update Clinical Sub
+**PUT** `/clinicalSub/:id`
+
+**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Parameters:** `id` (path) — UUID of the clinical sub.
+
+**Email notification (supervisor review):** When the request updates `subStatus` to `approved` or `rejected` (and the status has changed from its previous value), the server sends an email to the candidate to notify them of the review outcome. The email includes the supervisor name, status, date, type, description, and review text (if provided). Sending is done in the background (non-blocking); the API responds immediately. If the candidate has no email address, no email is sent.
+
+**Request Body (all optional):**
+| Field | Type | Description |
+|-------|------|-------------|
+| `candDocId` | string (UUID) | Candidate ID |
+| `supervisorDocId` | string (UUID) | Supervisor ID |
+| `dateCA` | string (ISO 8601 date) | Date of clinical activity |
+| `typeCA` | string | One of: `clinical round`, `outpatient clinic`, `workshop`, `other` |
+| `subStatus` | string | One of: `pending`, `approved`, `rejected` |
+| `description` | string | Text describing the clinical activity (empty string to clear) |
+| `review` | string \| null | Review text (supervisor) |
+| `reviewedAt` | string (ISO 8601 datetime) \| null | When reviewed |
+
+**Response (200 OK):** Updated clinical sub with censored `candidate` and `supervisor`.
+
+**Response (404 Not Found):** `{ "error": "Clinical sub not found" }`
+
+**Response (400 Bad Request):** Invalid UUID or "Candidate/Supervisor with ID '...' not found".
+
+**Notes:**
+- When a supervisor updates the clinical sub to approved or rejected, the candidate receives an email (subject: "Clinical submission Approved" or "Clinical submission Rejected") with the review details. Email is sent asynchronously; the API does not wait for it. If the candidate has no email, the email is skipped.
+- No clinical sub endpoint returns candidate or supervisor `password`, `email`, or `phone`.
+- All endpoints use user-based rate limiting and require a valid JWT and institution context.
+
+---
+
 ## Activity Timeline (`/activityTimeline`)
 
 Chronological timeline of the **candidate** user's recent activity (submissions and event attendance). Only candidates receive data; other roles receive an empty list.
@@ -6618,7 +6814,9 @@ Authorization: Bearer <superAdmin_token>
 
 ## Supervisors (`/supervisor`)
 
-**⚠️ Multi-Tenancy Note:** All supervisor endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access supervisors from their own institution.
+**⚠️ Multi-Tenancy Note:** All supervisor endpoints automatically route to the institution's database based on the `institutionId` in the JWT token (or `X-Institution-Id` header). Users can only access supervisors from their own institution.
+
+**Response format:** Success responses return the **raw** body (array or object). There is no wrapper like `{ status, data }` unless otherwise noted for specific endpoints.
 
 All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
 
@@ -6659,28 +6857,35 @@ The Supervisors module manages two types of supervisors:
    - CANNOT view or review submissions
    - Used for supervisors who only participate in academic activities
 
-**Note:** Both types can participate in events. Only validator supervisors can review submissions.
+**Note:** Both types can participate in events. Only validator supervisors can review submissions. **Password is never returned** in any supervisor response (censored or uncensored).
 
 ### Supervisor Model
 
 ```ts
 interface ISupervisor {
   email: string;
-  password: string;
+  password: string;        // Never returned in API responses
   fullName: string;
   phoneNum: string;
   approved: boolean;
   role: "supervisor";
-  canValidate?: boolean; // true = validator (default), false = academic only
-  position?: "Professor" | "Assistant Professor" | "Lecturer" | "Assistant Lecturer" | "Guest Doctor" | "Consultant" | "Specialist" | "unknown"; // Supervisor's academic position (defaults to "unknown")
+  canValidate?: boolean;  // true = validator (default), false = academic only
+  canValClin?: boolean;   // true = can validate clinical submissions (clinical sub), false = cannot (default false)
+  position?: TSupervisorPosition;
+  termsAcceptedAt?: Date;
 }
 
+// position is one of:
+// "Professor" | "Assistant Professor" | "Lecturer" | "Assistant Lecturer" | "Guest Doctor" | "Consultant" | "unknown"
+
 // Censored response (GET /supervisor and GET /supervisor/:id for Clerk, Supervisor, Candidate):
+// No email, phone, or password.
 interface ISupervisorCensoredDoc {
   id: string;
   fullName: string;
-  position?: string;
+  position?: TSupervisorPosition;
   canValidate?: boolean;
+  canValClin?: boolean;   // true = can validate clinical submissions (clinical sub)
   approved: boolean;
   role?: string;
 }
@@ -6880,50 +7085,44 @@ Cookie: auth_token=<token>
 ```
 
 **Description:**  
-Returns a list of all supervisors in the system. This endpoint is accessible to Super Admins, Institute Admins, Clerks, Supervisors, and Candidates.
+Returns a list of all supervisors in the institution. Response body is the **raw array** of supervisor objects (no wrapper). Accessible to Super Admin, Institute Admin, Supervisor, and Candidate.
 
 **Response shape by role:**
-- **Super Admin, Institute Admin:** Full supervisor data (uncensored), excluding `password`, `createdAt`, `updatedAt`. Fields: `id`, `email`, `fullName`, `phoneNum`, `approved`, `role`, `canValidate`, `position`, `termsAcceptedAt`.
-- **Clerk, Supervisor, Candidate:** Censored data only (no email, phone, or password). Fields: `id`, `fullName`, `position`, `canValidate`, `approved`, `role`.
+- **Super Admin, Institute Admin:** Full supervisor data (uncensored), excluding `password`, `createdAt`, `updatedAt`. Fields: `id`, `email`, `fullName`, `phoneNum`, `approved`, `role`, `canValidate`, `canValClin`, `position`, `termsAcceptedAt`.
+- **Clerk, Supervisor, Candidate:** Censored data only (no email, phone, or password). Fields: `id`, `fullName`, `position`, `canValidate`, `canValClin`, `approved`, `role`.
 
-**Response (200 OK) – Uncensored (Super Admin / Institute Admin):**
+**Response (200 OK) – Uncensored (Super Admin / Institute Admin):**  
+Body is a JSON **array**:
 ```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "email": "supervisor@example.com",
-      "fullName": "Dr. Jane Smith",
-      "phoneNum": "+1234567890",
-      "approved": true,
-      "role": "supervisor",
-      "canValidate": true,
-      "position": "Professor"
-    }
-  ]
-}
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "supervisor@example.com",
+    "fullName": "Dr. Jane Smith",
+    "phoneNum": "+1234567890",
+    "approved": true,
+    "role": "supervisor",
+    "canValidate": true,
+    "canValClin": false,
+    "position": "Professor"
+  }
+]
 ```
 
-**Response (200 OK) – Censored (Clerk / Supervisor / Candidate):**
+**Response (200 OK) – Censored (Clerk / Supervisor / Candidate):**  
+Body is a JSON **array** (no email, phone, or password):
 ```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "fullName": "Dr. Jane Smith",
-      "position": "Professor",
-      "canValidate": true,
-      "approved": true,
-      "role": "supervisor"
-    }
-  ]
-}
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "fullName": "Dr. Jane Smith",
+    "position": "Professor",
+    "canValidate": true,
+    "canValClin": false,
+    "approved": true,
+    "role": "supervisor"
+  }
+]
 ```
 
 **Error Response (401 Unauthorized):**
@@ -6982,45 +7181,39 @@ Cookie: auth_token=<token>
 - `id` (required): Supervisor UUID (must be a valid UUID format)
 
 **Description:**  
-Returns a specific supervisor by ID. This endpoint is accessible to Super Admins, Institute Admins, Clerks, Supervisors, and Candidates.
+Returns a specific supervisor by ID. Response body is the **raw** supervisor object or `null` if not found (no wrapper). Accessible to Super Admin, Institute Admin, Clerk, Supervisor, and Candidate.
 
 **Response shape by role:**
 - **Super Admin, Institute Admin:** Full supervisor data (uncensored), excluding `password`, `createdAt`, `updatedAt`.
-- **Clerk, Supervisor, Candidate:** Censored data only. Fields: `id`, `fullName`, `position`, `canValidate`, `approved`, `role`.
+- **Clerk, Supervisor, Candidate:** Censored data only. Fields: `id`, `fullName`, `position`, `canValidate`, `approved`, `role`. Password is never returned.
 
-**Response (200 OK) – Uncensored (Super Admin / Institute Admin):**
+**Response (200 OK) – Uncensored (Super Admin / Institute Admin):**  
+Body is a single **object**:
 ```json
 {
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "supervisor@example.com",
-    "fullName": "Dr. Jane Smith",
-    "phoneNum": "+1234567890",
-    "approved": true,
-    "role": "supervisor",
-    "canValidate": true,
-    "position": "Professor"
-  }
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "supervisor@example.com",
+  "fullName": "Dr. Jane Smith",
+  "phoneNum": "+1234567890",
+  "approved": true,
+  "role": "supervisor",
+  "canValidate": true,
+  "canValClin": false,
+  "position": "Professor"
 }
 ```
 
-**Response (200 OK) – Censored (Clerk / Supervisor / Candidate):**
+**Response (200 OK) – Censored (Clerk / Supervisor / Candidate):**  
+Body is a single **object** (no email, phone, or password):
 ```json
 {
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "fullName": "Dr. Jane Smith",
-    "position": "Professor",
-    "canValidate": true,
-    "approved": true,
-    "role": "supervisor"
-  }
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "fullName": "Dr. Jane Smith",
+  "position": "Professor",
+  "canValidate": true,
+  "canValClin": false,
+  "approved": true,
+  "role": "supervisor"
 }
 ```
 
@@ -9937,7 +10130,8 @@ This endpoint is implemented by the **bundler** module (same module as GET /refe
 
 **GET** `/candidate/dashboard` returns a single response whose **shape depends on the institution type**:
 
-- **Academic and practical** (`isAcademic: true`, `isPractical: true`): full bundle — same data as nine endpoints (stats, points, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking, academicRanking).
+- **Academic, practical, and clinical** (`isAcademic: true`, `isPractical: true`, `isClinical: true`): full bundle with **ten** keys — the nine below plus `clinicalSubCand` (same as GET /clinicalSub/cand: the signed-in candidate’s clinical subs with censored candidate/supervisor).
+- **Academic and practical** (`isAcademic: true`, `isPractical: true`, `isClinical: false`): full bundle — same data as **nine** endpoints (stats, points, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking, academicRanking).
 - **Practical only** (`isPractical: true`, `isAcademic: false`): practical bundle — seven keys (stats, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking). No `points` or `academicRanking`.
 
 **Access:** Logged-in **candidates only**, and only when the institution has **practical** enabled (`isPractical` true). Institutions with `isPractical: false` receive **403 Forbidden**. There is **no server-side caching**; data is per-candidate and subject to change. The front end may cache the response (e.g. refetch every 15 minutes). For frontend usage by institution type, see [Candidate dashboard for practical institutions](./docs/FRONTEND_CANDIDATE_DASHBOARD_PRACTICAL.md).
@@ -9969,13 +10163,14 @@ Cookie: auth_token=<token>
 **Description:**  
 Returns candidate dashboard data in one response. The response **shape depends on the institution**:
 
-1. **Full bundle (academic + practical):** When the institution has both `isAcademic` and `isPractical` true, the response has **nine** keys (equivalent to calling the nine endpoints in one request).
-2. **Practical-only bundle:** When the institution has `isPractical: true` and `isAcademic: false`, the response has **seven** keys (no event points or academic ranking).
+1. **Full bundle (academic + practical):** When the institution has both `isAcademic` and `isPractical` true, the response has **nine** keys (or **ten** when `isClinical` is also true — see below).
+2. **Full bundle with clinical (academic + practical + clinical):** When the institution has `isAcademic`, `isPractical`, and `isClinical` all true, the response includes an extra key **`clinicalSubCand`** — same as GET /clinicalSub/cand (signed-in candidate’s clinical subs with censored candidate/supervisor).
+3. **Practical-only bundle:** When the institution has `isPractical: true` and `isAcademic: false`, the response has **seven** keys (no event points or academic ranking).
 
 No server-side caching; the front end may cache (e.g. refetch every 15 minutes).
 
 **Response (200 OK) – Full bundle** (institution is academic and practical):  
-A single JSON object with nine keys (body returned directly; no top-level `status`/`data` wrapper):
+A single JSON object with **nine** keys (or **ten** when institution is also clinical). Body returned directly; no top-level `status`/`data` wrapper:
 
 - `stats` – same as GET /sub/candidate/stats
 - `points` – same as GET /event/candidate/points
@@ -9986,6 +10181,7 @@ A single JSON object with nine keys (body returned directly; no top-level `statu
 - `activityTimeline` – same as GET /activityTimeline (object with `items` array)
 - `submissionRanking` – same as GET /sub/submissionRanking
 - `academicRanking` – same as GET /event/academicRanking
+- `clinicalSubCand` – *(only when institution has `isClinical: true`)* same as GET /clinicalSub/cand: array of clinical subs for the signed-in candidate with censored candidate and supervisor (no password, email, phone)
 
 **Response (200 OK) – Practical-only bundle** (institution is practical, not academic):  
 A single JSON object with **seven** keys (no `points`, no `academicRanking`):

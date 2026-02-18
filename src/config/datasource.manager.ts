@@ -27,6 +27,7 @@ import { EquipmentEntity } from "../equipment/equipment.mDbSchema";
 import { PositionEntity } from "../positions/positions.mDbSchema";
 import { ApproachEntity } from "../approaches/approaches.mDbSchema";
 import { RegionEntity } from "../regions/regions.mDbSchema";
+import { ClinicalSubEntity } from "../clinicalSub/clinicalSub.mDbSchema";
 
 /**
  * DataSource Manager - Singleton for managing multi-tenant database connections
@@ -141,6 +142,7 @@ export class DataSourceManager {
         PositionEntity,
         ApproachEntity,
         RegionEntity,
+        ClinicalSubEntity,
       ],
       migrations: [__dirname + "/../migrations/*.ts"],
       synchronize: false, // NEVER set to true in production

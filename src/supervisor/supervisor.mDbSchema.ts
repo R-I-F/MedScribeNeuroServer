@@ -32,6 +32,9 @@ export class SupervisorEntity {
   @Column({ type: "boolean", default: true, nullable: true })
   canValidate?: boolean;
 
+  @Column({ type: "boolean", default: false })
+  canValClin!: boolean;
+
   @Column({ 
     type: "enum", 
     enum: Object.values(SupervisorPosition),

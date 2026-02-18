@@ -19,7 +19,7 @@ export class BundlerService {
     institution: IInstitution
   ): Promise<ICandidateDashboardDoc | IPracticalCandidateDashboardDoc> {
     if (institution.isAcademic && institution.isPractical) {
-      return await this.bundlerProvider.getCandidateDashboard(req, res);
+      return await this.bundlerProvider.getCandidateDashboard(req, res, institution);
     }
     if (institution.isPractical && !institution.isAcademic) {
       return await this.bundlerProvider.getCandidateDashboardPractical(req, res);

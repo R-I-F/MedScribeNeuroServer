@@ -10,6 +10,8 @@ import { PositionsProvider } from "../positions/positions.provider";
 import { SubController } from "../sub/sub.controller";
 import { EventController } from "../event/event.controller";
 import { ActivityTimelineController } from "../activityTimeline/activityTimeline.controller";
+import { ClinicalSubController } from "../clinicalSub/clinicalSub.controller";
+import { IInstitution } from "../institution/institution.service";
 
 /**
  * Provider for bundled endpoints: references (GET /references) and candidate dashboard (GET /candidate/dashboard).
@@ -29,7 +31,8 @@ export class BundlerProvider {
     @inject(PositionsProvider) private positionsProvider: PositionsProvider,
     @inject(SubController) private subController: SubController,
     @inject(EventController) private eventController: EventController,
-    @inject(ActivityTimelineController) private activityTimelineController: ActivityTimelineController
+    @inject(ActivityTimelineController) private activityTimelineController: ActivityTimelineController,
+    @inject(ClinicalSubController) private clinicalSubController: ClinicalSubController
   ) {}
 
   public async getAll(dataSource: DataSource, institutionId: string): Promise<IBundlerDoc> {
@@ -77,9 +80,30 @@ export class BundlerProvider {
 
   /**
    * Candidate dashboard bundle: aggregates 9 candidate endpoints into one response.
+   * When institution.isClinical is true, also includes clinicalSubCand (GET /clinicalSub/cand).
    * No server-side caching.
    */
-  public async getCandidateDashboard(req: Request, res: Response): Promise<ICandidateDashboardDoc> {
+  public async getCandidateDashboard(
+    req: Request,
+    res: Response,
+    institution: IInstitution
+  ): Promise<ICandidateDashboardDoc> {
+    const basePromises: Promise<unknown>[] = [
+      this.subController.handleGetCandidateSubmissionsStats(req, res),
+      this.eventController.handleGetMyPoints(req, res),
+      this.subController.handleGetCandidateSubmissions(req, res),
+      this.subController.handleGetCptAnalytics(req, res),
+      this.subController.handleGetIcdAnalytics(req, res),
+      this.subController.handleGetSupervisorAnalytics(req, res),
+      this.activityTimelineController.handleGetActivityTimeline(req, res),
+      this.subController.handleGetSubmissionRanking(req, res),
+      this.eventController.handleGetAcademicRanking(req, res),
+    ];
+
+    const clinicalPromise = institution.isClinical
+      ? this.clinicalSubController.handleGetMine(req, res)
+      : Promise.resolve(null as unknown[] | null);
+
     const [
       stats,
       points,
@@ -90,19 +114,10 @@ export class BundlerProvider {
       activityTimeline,
       submissionRanking,
       academicRanking,
-    ] = await Promise.all([
-      this.subController.handleGetCandidateSubmissionsStats(req, res),
-      this.eventController.handleGetMyPoints(req, res),
-      this.subController.handleGetCandidateSubmissions(req, res),
-      this.subController.handleGetCptAnalytics(req, res),
-      this.subController.handleGetIcdAnalytics(req, res),
-      this.subController.handleGetSupervisorAnalytics(req, res),
-      this.activityTimelineController.handleGetActivityTimeline(req, res),
-      this.subController.handleGetSubmissionRanking(req, res),
-      this.eventController.handleGetAcademicRanking(req, res),
-    ]);
+      clinicalSubCand,
+    ] = await Promise.all([...basePromises, clinicalPromise]);
 
-    return {
+    const result: ICandidateDashboardDoc = {
       stats,
       points,
       submissions,
@@ -113,6 +128,10 @@ export class BundlerProvider {
       submissionRanking,
       academicRanking,
     };
+    if (institution.isClinical && clinicalSubCand != null) {
+      result.clinicalSubCand = clinicalSubCand as unknown[];
+    }
+    return result;
   }
 
   /**
