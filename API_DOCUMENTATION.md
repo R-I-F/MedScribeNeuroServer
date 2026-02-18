@@ -10,6 +10,14 @@
 
 ---
 
+## Health and security (bots / scanners)
+
+**Health check:** Use **GET /health** for load balancer and Kubernetes probes. It returns `200` with `{ "status": "ok" }` and is rate-limited (60 requests per 15 minutes per IP). Do **not** use GET / or POST / for health checks; those paths are unhandled and return **404**.
+
+**Bot and scanner mitigation:** The server uses best practices to limit abuse: (1) **GET /health** only for probes; unknown paths (e.g. GET /, POST /) return 404 so bots don’t get 200. (2) **Global IP rate limit** (400 requests per 15 minutes per IP) to throttle scanners. (3) **Security headers** (Helmet) and **body size limit** (500kb) to reduce DoS. (4) **404 responses** are logged briefly without stack traces; only a generic "Not Found" message is returned. Configure your LB/ingress to use **GET /health** as the health check path.
+
+---
+
 ## Response Format
 
 **⚠️ IMPORTANT: ALL API responses (except `/auth/validate`) automatically follow this standardized JSON structure.** The response formatter middleware wraps every response, so you must always access data from the `data` field for success responses or `error` field for error responses.

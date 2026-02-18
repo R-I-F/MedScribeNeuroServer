@@ -3,11 +3,13 @@ import express, { Express, Request, Response, NextFunction } from "express";
 import * as dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 
 import { addRoutes } from "./config/routes.config";
 import { responseFormatter } from "./middleware/responseFormatter";
 import { requestLogger } from "./middleware/requestLogger.middleware";
 import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware";
+import { globalIpRateLimiter } from "./middleware/rateLimiter.middleware";
 import { initializeDatabase, validateDatabaseConfig } from "./config/database.config";
 
 dotenv.config();
@@ -31,6 +33,9 @@ console.log("[App] Process started", { PORT: port, NODE_ENV: process.env.NODE_EN
 // With 1, we trust only the first proxy (e.g. nginx); req.ip comes from that proxy safely.
 app.set('trust proxy', 1);
 
+// Security headers (X-Content-Type-Options, X-Frame-Options, etc.). CSP disabled for JSON API.
+app.use(helmet({ contentSecurityPolicy: false }));
+
 // CORS configuration
 // When credentials: true, origin cannot be "*" - must be specific origin
 const allowedOrigin = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || "http://localhost:3000";
@@ -43,10 +48,14 @@ app.use(cors({
   optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 }));
 
-app.use(express.json());
+// Body size limit to reduce DoS via huge payloads (e.g. bots sending large bodies)
+app.use(express.json({ limit: "500kb" }));
 app.use(cookieParser()); // Parse httpOnly cookies
 app.use(requestLogger);
 app.use(responseFormatter);
+
+// Global IP rate limit: throttle bots/scanners hitting many paths. Per-route limiters still apply.
+app.use(globalIpRateLimiter);
 
 async function bootstrap() {
   try {

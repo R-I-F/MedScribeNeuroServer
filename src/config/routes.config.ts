@@ -94,6 +94,11 @@ export function addRoutes(app: Application) {
   const { ClinicalSubRouter } = require("../clinicalSub/clinicalSub.router");
   const clinicalSubRouter = container.get(ClinicalSubRouter) as any;
 
+  const { healthRateLimiter } = require("../middleware/rateLimiter.middleware");
+  // Health check: use GET /health for load balancer / k8s probes. Rate-limited to throttle bot traffic.
+  // Unhandled GET / and POST / return 404 (bots/scanners get 404, not 200).
+  app.get("/health", healthRateLimiter, (_req: any, res: any) => res.status(200).json({ status: "ok" }));
+
   app.use("/institutions", institutionRouter.router);
   app.use("/hospital", hospitalRouter.router);
   app.use("/arabProc", arabProcRouter.router);

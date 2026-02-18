@@ -17,6 +17,32 @@ function getIpForRateLimit(req: Request): string {
 }
 
 /**
+ * Global IP rate limiter (applied to all requests in index.ts).
+ * Limits each IP to 400 requests per 15 minutes across the whole app.
+ * Throttles bots/scanners that hit many paths; per-route limiters provide finer limits.
+ */
+export const globalIpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 400,
+  message: {
+    status: "error",
+    statusCode: StatusCodes.TOO_MANY_REQUESTS,
+    message: "Too Many Requests",
+    error: "Too many requests from this IP, please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+      status: "error",
+      statusCode: StatusCodes.TOO_MANY_REQUESTS,
+      message: "Too Many Requests",
+      error: "Too many requests from this IP, please try again later.",
+    });
+  },
+});
+
+/**
  * Standard API rate limiter (IP-based)
  * Limits requests to 200 requests per 15 minutes per IP
  * Suitable for public or unauthenticated endpoints
@@ -32,6 +58,31 @@ export const apiRateLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (req: Request, res: Response) => {
+    res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+      status: "error",
+      statusCode: StatusCodes.TOO_MANY_REQUESTS,
+      message: "Too Many Requests",
+      error: "Too many requests from this IP, please try again later.",
+    });
+  },
+});
+
+/**
+ * Health-check rate limiter (IP-based).
+ * Limits GET /health to 60 requests per 15 minutes per IP (enough for LB probes, throttles bots).
+ */
+export const healthRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: {
+    status: "error",
+    statusCode: StatusCodes.TOO_MANY_REQUESTS,
+    message: "Too Many Requests",
+    error: "Too many requests from this IP, please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
   handler: (req: Request, res: Response) => {
     res.status(StatusCodes.TOO_MANY_REQUESTS).json({
       status: "error",
