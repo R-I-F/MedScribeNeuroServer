@@ -12,6 +12,10 @@ export const upsertProcCptValidator = checkSchema({
       errorMessage: "ProcCpt title should have a maximum of 200 characters",
     },
     trim: true,
+    custom: {
+      options: (value: string) => !value.includes(","),
+      errorMessage: "ProcCpt title must not contain commas",
+    },
   },
   alphaCode: {
     in: ["body"],

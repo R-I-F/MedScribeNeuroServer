@@ -1,11 +1,36 @@
+import { randomUUID } from "crypto";
 import { injectable } from "inversify";
 import { DataSource } from "typeorm";
-import { IEquipmentDoc } from "./equipment.interface";
+import { IEquipmentDoc, IEquipmentInput } from "./equipment.interface";
 import { EquipmentEntity } from "./equipment.mDbSchema";
 
 @injectable()
 export class EquipmentProvider {
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  public async create(data: IEquipmentInput, dataSource: DataSource): Promise<IEquipmentDoc> | never {
+    const repo = dataSource.getRepository(EquipmentEntity);
+    const entity = repo.create({ id: randomUUID(), equipment: data.equipment });
+    const saved = await repo.save(entity);
+    return saved as unknown as IEquipmentDoc;
+  }
+
+  public async update(id: string, data: Partial<IEquipmentInput>, dataSource: DataSource): Promise<IEquipmentDoc | null> | never {
+    if (!this.uuidRegex.test(id)) throw new Error("Invalid equipment ID format");
+    const repo = dataSource.getRepository(EquipmentEntity);
+    const existing = await repo.findOne({ where: { id } });
+    if (!existing) return null;
+    if (data.equipment !== undefined) existing.equipment = data.equipment;
+    const saved = await repo.save(existing);
+    return saved as unknown as IEquipmentDoc;
+  }
+
+  public async delete(id: string, dataSource: DataSource): Promise<boolean> | never {
+    if (!this.uuidRegex.test(id)) throw new Error("Invalid equipment ID format");
+    const repo = dataSource.getRepository(EquipmentEntity);
+    const result = await repo.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
 
   public async getAll(dataSource: DataSource): Promise<IEquipmentDoc[]> | never {
     try {

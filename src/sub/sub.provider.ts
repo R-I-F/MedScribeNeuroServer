@@ -226,12 +226,12 @@ export class SubProvider {
           rawItemArr[indexes.roleInProc]
         ) as TRoleInSurg,
         assRoleDesc,
-        otherSurgRank: this.utilService.stringToLowerCaseTrimUndefined(
-          rawItemArr[indexes.otherSurg]
-        ) as TOtherSurgRank,
-        otherSurgName: this.utilService.stringToLowerCaseTrimUndefined(
-          rawItemArr[indexes.nameOtherSurg]
-        ) as string,
+        otherSurgRank: (this.utilService.stringToLowerCaseTrimUndefined(
+          rawItemArr[indexes.otherSurg] ?? ""
+        ) ?? "") as TOtherSurgRank,
+        otherSurgName: (this.utilService.stringToLowerCaseTrimUndefined(
+          rawItemArr[indexes.nameOtherSurg] ?? ""
+        ) ?? "") as string,
         isItRevSurg: this.utilService.yesNoToBoolean(
           rawItemArr[indexes.isItRevSurg]
         ),
@@ -285,8 +285,18 @@ export class SubProvider {
       }
     }
     try {
-      // Business logic: Filter out duplicates before bulk creation
-      const uniqueSubs = await this.filterDuplicateSubs(subPayloads, dataSource);
+      // Dedupe within batch by subGoogleUid (keep first) so we never insert same uid twice
+      const seenUids = new Set<string>();
+      const dedupedPayloads = subPayloads.filter((sub) => {
+        const uid = sub.subGoogleUid?.trim();
+        if (!uid) return true;
+        if (seenUids.has(uid)) return false;
+        seenUids.add(uid);
+        return true;
+      });
+
+      // Business logic: Filter out duplicates already in DB before bulk creation
+      const uniqueSubs = await this.filterDuplicateSubs(dedupedPayloads, dataSource);
 
       // Business logic: Create bulk submissions (only new ones)
       if (uniqueSubs.length === 0) {
@@ -336,6 +346,27 @@ export class SubProvider {
     dataSource: DataSource,
     institutionId?: string
   ): Promise<ISubDoc> {
+    // Submission limits per procedure: max 2 per procDocId, no duplicate roleInSurg
+    const existing = await this.subService.getSubsByCandidateIdAndProcDocId(
+      candidateId,
+      body.procDocId,
+      dataSource
+    );
+    if (existing.length >= 2) {
+      throw new Error(
+        "This procedure already has 2 submissions from you. You cannot add more entries for this procedure."
+      );
+    }
+    if (existing.length === 1) {
+      const normalizedRole = this.utilService.stringToLowerCaseTrim(body.roleInSurg);
+      const existingRole = (existing[0] as any).roleInSurg ?? "";
+      if (normalizedRole === existingRole) {
+        throw new Error(
+          "You have already submitted an entry for this procedure with this role. Please select a different role (e.g. Assistant, Observer) for this submission."
+        );
+      }
+    }
+
     const mainDiag = await this.mainDiagService.getMainDiagById(
       { id: body.mainDiagDocId },
       dataSource

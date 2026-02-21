@@ -2,6 +2,8 @@ import express, { Request, Response, Router } from "express";
 import { inject, injectable } from "inversify";
 import { ProcCptController } from "./procCpt.controller";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
+import { createProcCptValidator } from "../validators/createProcCpt.validator";
+import { updateProcCptValidator } from "../validators/updateProcCpt.validator";
 import { upsertProcCptValidator } from "../validators/upsertProcCpt.validator";
 import { deleteProcCptValidator } from "../validators/deleteProcCpt.validator";
 import { validationResult } from "express-validator";
@@ -48,6 +50,60 @@ export class ProcCptRouter {
       }
     );
 
+    // POST (create only): fails with 409 if numCode already exists
+    this.router.post(
+      "/",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      createProcCptValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const procCpt = await this.procCptController.handlePostProcCpt(req, res);
+            res.status(StatusCodes.CREATED).json(procCpt);
+          } catch (err: any) {
+            if (err.message?.includes("already exists")) {
+              res.status(StatusCodes.CONFLICT).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // PUT (update only by id): fails with 404 if not found
+    this.router.put(
+      "/:id",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      updateProcCptValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const procCpt = await this.procCptController.handlePutProcCpt(req, res);
+            res.status(StatusCodes.OK).json(procCpt);
+          } catch (err: any) {
+            if (err.message?.includes("not found")) {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
     this.router.post(
       "/postAllFromExternal",
       extractJWT,
@@ -75,7 +131,7 @@ export class ProcCptRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       upsertProcCptValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -97,7 +153,7 @@ export class ProcCptRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       deleteProcCptValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

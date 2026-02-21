@@ -14,22 +14,24 @@ export const createDiagnosisValidator = checkSchema({
     isString: true,
     trim: true,
     errorMessage: "icdName is required and must be a string",
+    custom: {
+      options: (value: string) => !value.includes(","),
+      errorMessage: "icdName must not contain commas",
+    },
   },
   "neuroLogName": {
     in: ["body"],
     optional: true,
     isArray: {
-      options: {
-        min: 1,
-      },
+      options: { min: 1 },
       errorMessage: "neuroLogName must be a non-empty array if provided",
     },
     custom: {
       options: (value: any) => {
         if (value && Array.isArray(value)) {
-          return value.every((item: any) => typeof item === 'string' && item.trim().length > 0);
+          return value.every((item: any) => typeof item === "string" && item.trim().length > 0);
         }
-        return true; // Allow undefined/null since it's optional
+        return true;
       },
       errorMessage: "neuroLogName array must contain only non-empty strings",
     },

@@ -120,6 +120,32 @@ export class SubService {
     }
   }
 
+  /**
+   * Candidate submissions for a given procedure (procDocId). Used for submission limits per procedure.
+   * Only submissions with candDocId = candidateId, procDocId, submissionType = 'candidate'.
+   * Rejected submissions are excluded from the count (only pending and approved count).
+   */
+  public async getSubsByCandidateIdAndProcDocId(
+    candidateId: string,
+    procDocId: string,
+    dataSource: DataSource
+  ): Promise<ISubDoc[]> | never {
+    try {
+      const subRepository = dataSource.getRepository(SubmissionEntity);
+      const subs = await subRepository.find({
+        where: {
+          candDocId: candidateId,
+          procDocId,
+          submissionType: "candidate",
+          subStatus: In(["pending", "approved"]),
+        },
+      });
+      return subs as unknown as ISubDoc[];
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  }
+
   public async getSubsBySupervisorId(supervisorId: string, dataSource: DataSource): Promise<ISubDoc[]> | never {
     try {
       const subRepository = dataSource.getRepository(SubmissionEntity);

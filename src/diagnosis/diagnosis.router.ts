@@ -76,7 +76,7 @@ export class DiagnosisRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       createDiagnosisValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -85,7 +85,13 @@ export class DiagnosisRouter {
             const newDiagnosis = await this.diagnosisController.handlePostDiagnosis(req, res);
             res.status(StatusCodes.CREATED).json(newDiagnosis);
           } catch (err: any) {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            const message = err?.message ?? String(err);
+            console.error("[DiagnosisRouter] POST /post error:", message);
+            if (message.includes("already exists")) {
+              res.status(StatusCodes.CONFLICT).json({ error: message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: message });
+            }
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
@@ -98,7 +104,7 @@ export class DiagnosisRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       updateDiagnosisValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -124,7 +130,7 @@ export class DiagnosisRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       deleteDiagnosisValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

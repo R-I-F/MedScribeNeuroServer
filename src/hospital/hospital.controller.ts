@@ -51,6 +51,16 @@ export class HospitalController {
     }
   }
 
+  public async handlePutHospital(
+    req: Request,
+    res: Response
+  ): Promise<IHospitalDoc | null> | never {
+    const id = req.params.id;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    const validatedReq = matchedData(req) as Partial<IHospital>;
+    return await this.hospitalService.updateHospital(id, validatedReq, dataSource);
+  }
+
   public async handleDeleteHospital(
     req: Request,
     res: Response

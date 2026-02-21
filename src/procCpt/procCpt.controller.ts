@@ -32,6 +32,21 @@ export class ProcCptController {
     }
   }
 
+  public async handlePostProcCpt(req: Request, res: Response): Promise<IProcCptDoc> | never {
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    const validatedReq = matchedData(req) as IProcCpt;
+    const result = await this.procCptService.createProcCptStrict(validatedReq, dataSource);
+    return result;
+  }
+
+  public async handlePutProcCpt(req: Request, res: Response): Promise<IProcCptDoc> | never {
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    const id = req.params.id;
+    const validatedReq = matchedData(req) as Partial<IProcCpt>;
+    const result = await this.procCptService.updateProcCpt(id, validatedReq, dataSource);
+    return result;
+  }
+
   public async handleUpsertProcCpt(req: Request, res: Response): Promise<IProcCptDoc> | never {
     const dataSource = (req as any).institutionDataSource || AppDataSource;
     try {

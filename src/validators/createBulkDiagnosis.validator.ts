@@ -23,6 +23,10 @@ export const createBulkDiagnosisValidator = checkSchema({
     isString: true,
     trim: true,
     errorMessage: "icdName is required and must be a string",
+    custom: {
+      options: (value: string) => !value.includes(","),
+      errorMessage: "icdName must not contain commas",
+    },
   },
   "diagnoses.*.neuroLogName": {
     in: ["body"],

@@ -4,3 +4,5 @@ export interface IPosition {
 }
 
 export interface IPositionDoc extends IPosition {}
+
+export type IPositionInput = Pick<IPosition, "position">;

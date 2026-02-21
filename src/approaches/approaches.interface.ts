@@ -4,3 +4,5 @@ export interface IApproach {
 }
 
 export interface IApproachDoc extends IApproach {}
+
+export type IApproachInput = Pick<IApproach, "approach">;

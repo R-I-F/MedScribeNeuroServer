@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
-import { IPositionDoc } from "./positions.interface";
+import { IPositionDoc, IPositionInput } from "./positions.interface";
 import { PositionsProvider } from "./positions.provider";
 
 @injectable()
@@ -18,6 +18,30 @@ export class PositionsService {
   public async getById(id: string, dataSource: DataSource): Promise<IPositionDoc | null> | never {
     try {
       return await this.positionsProvider.getById(id, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async create(data: IPositionInput, dataSource: DataSource): Promise<IPositionDoc> | never {
+    try {
+      return await this.positionsProvider.create(data, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async update(id: string, data: Partial<IPositionInput>, dataSource: DataSource): Promise<IPositionDoc | null> | never {
+    try {
+      return await this.positionsProvider.update(id, data, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async delete(id: string, dataSource: DataSource): Promise<boolean> | never {
+    try {
+      return await this.positionsProvider.delete(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

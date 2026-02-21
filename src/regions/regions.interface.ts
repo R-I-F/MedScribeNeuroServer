@@ -4,3 +4,5 @@ export interface IRegion {
 }
 
 export interface IRegionDoc extends IRegion {}
+
+export type IRegionInput = Pick<IRegion, "region">;

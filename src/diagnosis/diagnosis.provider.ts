@@ -80,11 +80,12 @@ export class DiagnosisProvider {
    * @returns Processed diagnosis data
    */
   private processDiagnosisData(diagnosisData: IDiagnosis): IDiagnosis {
-    // Business logic: Transform data as needed
     const processedData: IDiagnosis = {
-      icdCode: diagnosisData.icdCode.trim().toUpperCase(), // Normalize ICD code
-      icdName: this.utilService.stringToLowerCaseTrim(diagnosisData.icdName), // Sanitize name using utils service
-      neuroLogName: diagnosisData.neuroLogName ? diagnosisData.neuroLogName.map(name => this.utilService.stringToLowerCaseTrim(name)) : undefined // Sanitize optional field array using utils service
+      icdCode: diagnosisData.icdCode.trim().toUpperCase(),
+      icdName: this.utilService.stringToLowerCaseTrim(diagnosisData.icdName),
+      neuroLogName: diagnosisData.neuroLogName
+        ? diagnosisData.neuroLogName.map((name) => this.utilService.stringToLowerCaseTrim(name))
+        : undefined,
     };
 
     return processedData;

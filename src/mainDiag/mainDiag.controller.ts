@@ -90,4 +90,44 @@ export class MainDiagController {
       throw new Error(err);
     }
   }
+
+  public async handleRemoveProcsFromMainDiag(
+    req: Request,
+    res: Response
+  ): Promise<IMainDiagDoc | null> | never {
+    const validatedReq = matchedData(req) as { id: string; numCodes: string[] };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.mainDiagService.removeProcsFromMainDiag(
+        validatedReq.id ?? req.params.id,
+        validatedReq.numCodes,
+        dataSource
+      );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleRemoveDiagnosisFromMainDiag(
+    req: Request,
+    res: Response
+  ): Promise<IMainDiagDoc | null> | never {
+    const validatedReq = matchedData(req) as { id: string; icdCodes: string[] };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.mainDiagService.removeDiagnosisFromMainDiag(
+        validatedReq.id ?? req.params.id,
+        validatedReq.icdCodes,
+        dataSource
+      );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

@@ -4,10 +4,12 @@ import { HospitalController } from "./hospital.controller";
 import express, { Request, Response, NextFunction, Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import { createHospitalValidator } from "../validators/createHospital.validator";
+import { updateHospitalValidator } from "../validators/updateHospital.validator";
 import { deleteHospitalValidator } from "../validators/deleteHospital.validator";
 import { getHospitalByIdValidator } from "../validators/getHospitalById.validator";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireCandidate } from "../middleware/authorize.middleware";
+import { requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
 
@@ -67,14 +69,16 @@ export class HospitalRouter {
       }
     );
 
+    const requireSuperAdminOrInstituteAdmin = authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN);
+
     // Create hospital
-    // Accessible to: superAdmin only
+    // Accessible to: superAdmin, instituteAdmin
     this.router.post(
       "/create",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       createHospitalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -94,14 +98,42 @@ export class HospitalRouter {
       }
     );
 
+    // Update hospital
+    // Accessible to: superAdmin, instituteAdmin
+    this.router.put(
+      "/:id",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      updateHospitalValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const hospital = await this.hospitalController.handlePutHospital(req, res);
+            if (hospital) {
+              res.status(StatusCodes.OK).json(hospital);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "Hospital not found" });
+            }
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
     // Delete hospital
-    // Accessible to: superAdmin only
+    // Accessible to: superAdmin, instituteAdmin
     this.router.delete(
       "/:id",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       deleteHospitalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

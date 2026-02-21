@@ -64,6 +64,31 @@ export class ProcCptService {
     }
   }
 
+  /** Create only: throws if a procedure with the same numCode already exists. */
+  public async createProcCptStrict(procCptData: IProcCpt, dataSource: DataSource): Promise<IProcCptDoc> | never {
+    const existing = await this.findByNumCode({ numCode: procCptData.numCode }, dataSource);
+    if (existing) {
+      throw new Error("CPT with this code already exists");
+    }
+    return this.createProcCpt(procCptData, dataSource);
+  }
+
+  /** Update only by id: throws if not found. */
+  public async updateProcCpt(
+    id: string,
+    updateData: Partial<IProcCpt>,
+    dataSource: DataSource
+  ): Promise<IProcCptDoc> | never {
+    const procCptRepository = dataSource.getRepository(ProcCptEntity);
+    const existing = await procCptRepository.findOne({ where: { id } });
+    if (!existing) {
+      throw new Error("ProcCpt not found");
+    }
+    procCptRepository.merge(existing as any, updateData);
+    const updated = await procCptRepository.save(existing as any);
+    return updated as unknown as IProcCptDoc;
+  }
+
   public async upsertProcCpt(procCptData: IProcCpt, dataSource: DataSource): Promise<IProcCptDoc> | never {
     try {
       const procCptRepository = dataSource.getRepository(ProcCptEntity);

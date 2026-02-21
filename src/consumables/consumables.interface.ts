@@ -4,3 +4,6 @@ export interface IConsumable {
 }
 
 export interface IConsumableDoc extends IConsumable {}
+
+export type IConsumableInput = Pick<IConsumable, "consumables">;
+export type IConsumableUpdateInput = Partial<IConsumableInput> & { id: string };

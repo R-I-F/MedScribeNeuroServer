@@ -237,4 +237,64 @@ export class MainDiagProvider {
       throw new Error(err);
     }
   }
+
+  /** Remove CPT (proc) links from a mainDiag by numCodes. */
+  public async removeProcsFromMainDiag(
+    mainDiagId: string,
+    numCodes: string[],
+    dataSource: DataSource
+  ): Promise<IMainDiagDoc | null> | never {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(mainDiagId)) {
+      throw new Error("Invalid mainDiag ID format");
+    }
+    const mainDiagRepository = dataSource.getRepository(MainDiagEntity);
+    const existingMainDiag = await mainDiagRepository.findOne({
+      where: { id: mainDiagId },
+      relations: ["procs", "diagnosis"],
+    });
+    if (!existingMainDiag) {
+      throw new Error("MainDiag not found");
+    }
+    const codesToRemove = new Set(numCodes.map((c) => c.trim().toLowerCase()));
+    existingMainDiag.procs = existingMainDiag.procs.filter(
+      (p) => !codesToRemove.has(p.numCode?.trim().toLowerCase() ?? "")
+    ) as ProcCptEntity[];
+    await mainDiagRepository.save(existingMainDiag);
+    const result = await mainDiagRepository.findOne({
+      where: { id: mainDiagId },
+      relations: ["procs", "diagnosis"],
+    });
+    return result as unknown as IMainDiagDoc | null;
+  }
+
+  /** Remove diagnosis (ICD) links from a mainDiag by icdCodes. */
+  public async removeDiagnosisFromMainDiag(
+    mainDiagId: string,
+    icdCodes: string[],
+    dataSource: DataSource
+  ): Promise<IMainDiagDoc | null> | never {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(mainDiagId)) {
+      throw new Error("Invalid mainDiag ID format");
+    }
+    const mainDiagRepository = dataSource.getRepository(MainDiagEntity);
+    const existingMainDiag = await mainDiagRepository.findOne({
+      where: { id: mainDiagId },
+      relations: ["procs", "diagnosis"],
+    });
+    if (!existingMainDiag) {
+      throw new Error("MainDiag not found");
+    }
+    const codesToRemove = new Set(icdCodes.map((c) => c.trim().toLowerCase()));
+    existingMainDiag.diagnosis = existingMainDiag.diagnosis.filter(
+      (d) => !codesToRemove.has(d.icdCode?.trim().toLowerCase() ?? "")
+    ) as DiagnosisEntity[];
+    await mainDiagRepository.save(existingMainDiag);
+    const result = await mainDiagRepository.findOne({
+      where: { id: mainDiagId },
+      relations: ["procs", "diagnosis"],
+    });
+    return result as unknown as IMainDiagDoc | null;
+  }
 }

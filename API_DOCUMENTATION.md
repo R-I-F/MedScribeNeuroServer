@@ -4120,6 +4120,24 @@ Returns the created submission document with populated relations. Same shape as 
 }
 ```
 
+**Error Response (400 Bad Request - submission limits per procedure):**
+
+The backend enforces two rules per candidate per procedure (`procDocId`): at most 2 submissions per procedure, and no duplicate role. Only **pending** and **approved** submissions count; **rejected** submissions do not count toward the limit.
+
+*Max 2 per procedure (400):*
+```json
+{
+  "error": "This procedure already has 2 submissions from you. You cannot add more entries for this procedure."
+}
+```
+
+*Duplicate role for same procedure (400):*
+```json
+{
+  "error": "You have already submitted an entry for this procedure with this role. Please select a different role (e.g. Assistant, Observer) for this submission."
+}
+```
+
 **Error Response (401 Unauthorized):**
 ```json
 {
@@ -4139,6 +4157,7 @@ Returns the created submission document with populated relations. Same shape as 
 
 **Notes:**
 - Only candidates can create submissions; the candidate ID is taken from the JWT.
+- **Submission limits per procedure:** A candidate may create at most **2 submissions** for the same `procDocId`. The two must have **different** `roleInSurg` values (no duplicate role per procedure). Rejected submissions do not count toward these limits. When violated, the API returns 400 with one of the messages above; the frontend should display that message to the user.
 - Submissions are created with `subStatus: "pending"` and must be reviewed by a validator supervisor.
 - The assigned supervisor receives an email (subject: "Review submission from [candidate name] · [shortId]") with a link to review the submission. Email is sent asynchronously; the API does not wait for it. If the supervisor has no email, the email is skipped.
 - All submission endpoints use the institution database resolved from the JWT (`institutionId`).
@@ -8292,9 +8311,7 @@ Deletes a calendar surgery record from the system. The `id` parameter must be a 
 
 ## Diagnosis (`/diagnosis`)
 
-**⚠️ Multi-Tenancy Note:** All diagnosis endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access diagnoses from their own institution.
-
-**⚠️ Multi-Tenancy Note:** All diagnosis endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access diagnoses from their own institution.
+**⚠️ Multi-Tenancy Note:** All diagnosis endpoints route to the institution's database based on the `institutionId` in the JWT or `X-Institution-Id` header. Users only access diagnoses for their own institution. All IDs are UUIDs.
 
 All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting-1) section below for details.
 
@@ -8346,7 +8363,7 @@ Returns all diagnoses in the system, ordered by creation date (newest first). Th
   "message": "OK",
   "data": [
     {
-      "_id": "507f1f77bcf86cd799439011",
+      "id": "507f1f77bcf86cd799439011",
       "icdCode": "G93.1",
       "icdName": "anoxic brain damage",
       "neuroLogName": ["anoxic brain damage"],
@@ -8354,7 +8371,7 @@ Returns all diagnoses in the system, ordered by creation date (newest first). Th
       "updatedAt": "2025-12-01T14:00:00.000Z"
     },
     {
-      "_id": "507f1f77bcf86cd799439012",
+      "id": "507f1f77bcf86cd799439012",
       "icdCode": "G93.2",
       "icdName": "benign intracranial hypertension",
       "neuroLogName": ["benign intracranial hypertension"],
@@ -8364,6 +8381,8 @@ Returns all diagnoses in the system, ordered by creation date (newest first). Th
   ]
 }
 ```
+
+**Note:** The API returns `id` (UUID) for each diagnosis.
 
 **Error Response (401 Unauthorized):**
 ```json
@@ -8400,18 +8419,19 @@ Returns all diagnoses in the system, ordered by creation date (newest first). Th
 ### Create Bulk Diagnoses
 **POST** `/diagnosis/postBulk`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin authentication only
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **Request Body:**
 ```json
@@ -8445,7 +8465,7 @@ Cookie: auth_token=<token>
   "message": "Created",
   "data": [
     {
-      "_id": "507f1f77bcf86cd799439011",
+      "id": "507f1f77bcf86cd799439011",
       "icdCode": "G93.1",
       "icdName": "Anoxic brain damage",
       "neuroLogName": ["anoxic brain damage"],
@@ -8453,7 +8473,7 @@ Cookie: auth_token=<token>
       "updatedAt": "2025-12-01T14:00:00.000Z"
     },
     {
-      "_id": "507f1f77bcf86cd799439012",
+      "id": "507f1f77bcf86cd799439012",
       "icdCode": "G93.2",
       "icdName": "Benign intracranial hypertension",
       "neuroLogName": ["benign intracranial hypertension"],
@@ -8464,19 +8484,26 @@ Cookie: auth_token=<token>
 }
 ```
 
-**Note:** The `neuroLogName` array values are automatically converted to lowercase.
+**Note:** The `neuroLogName` array values are automatically converted to lowercase. Each diagnosis object uses `id` (UUID).
 
 ---
 
 ### Create Single Diagnosis
 **POST** `/diagnosis/post`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **Request Body:**
 ```json
@@ -8499,7 +8526,7 @@ Authorization: Bearer <superAdmin_token>
   "statusCode": 201,
   "message": "Created",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
+    "id": "507f1f77bcf86cd799439011",
     "icdCode": "G93.1",
     "icdName": "Anoxic brain damage",
     "neuroLogName": ["anoxic brain damage"],
@@ -8509,7 +8536,7 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
-**Note:** The `neuroLogName` array values are automatically converted to lowercase.
+**Note:** The `neuroLogName` array values are automatically converted to lowercase. The response uses `id` (UUID).
 
 **Error Response (401 Unauthorized):**
 ```json
@@ -8541,23 +8568,35 @@ Authorization: Bearer <superAdmin_token>
 }
 ```
 
+**Error Response (409 Conflict - Duplicate ICD):**
+When a diagnosis with the same `icdCode` already exists for the institution, the API returns:
+```json
+{
+  "status": "error",
+  "statusCode": 409,
+  "message": "Conflict",
+  "error": "Diagnosis with ICD code 'G93.1' already exists"
+}
+```
+
 ---
 
 ### Update Diagnosis
 **PATCH** `/diagnosis/:id`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **URL Parameters:**
 - `id` (required): Diagnosis UUID (must be a valid UUID format)
@@ -8590,7 +8629,7 @@ Cookie: auth_token=<token>
   "statusCode": 200,
   "message": "OK",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
+    "id": "507f1f77bcf86cd799439011",
     "icdCode": "G93.1",
     "icdName": "anoxic brain damage",
     "neuroLogName": ["anoxic brain damage"],
@@ -8668,7 +8707,7 @@ Cookie: auth_token=<token>
 ```
 
 **Notes:**
-- Only Super Admins can update diagnoses
+- Super Admins and Institute Admins can update diagnoses (institution-scoped).
 - The `id` parameter is validated to ensure it's a valid UUID format before processing
 - Returns 404 if the diagnosis with the specified ID does not exist
 - If updating `icdCode` or `icdName`, the system checks for duplicates and prevents conflicts
@@ -8679,16 +8718,19 @@ Cookie: auth_token=<token>
 ### Delete Diagnosis
 **DELETE** `/diagnosis/:id`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **URL Parameters:**
 - `id` (required): Diagnosis UUID (must be a valid UUID format)
@@ -8766,7 +8808,7 @@ Deletes a diagnosis from the system. The `id` parameter must be a valid UUID for
 ```
 
 **Notes:**
-- Only Super Admins can delete diagnoses
+- Super Admins and Institute Admins can delete diagnoses (institution-scoped).
 - The `id` parameter is validated to ensure it's a valid UUID format before processing
 - Returns 404 if the diagnosis with the specified ID does not exist
 - All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting-1) above)
@@ -8775,9 +8817,7 @@ Deletes a diagnosis from the system. The `id` parameter must be a valid UUID for
 
 ## Procedure CPT (`/procCpt`)
 
-**⚠️ Multi-Tenancy Note:** All procedure CPT endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access procedure CPTs from their own institution.
-
-**⚠️ Multi-Tenancy Note:** All procedure CPT endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access procedure CPTs from their own institution.
+**⚠️ Multi-Tenancy Note:** All procedure CPT endpoints route to the institution's database based on the `institutionId` in the JWT or `X-Institution-Id` header. Users only access procedure CPTs for their own institution. All IDs are UUIDs.
 
 All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting) section below for details.
 
@@ -8786,7 +8826,7 @@ All endpoints in this module are protected with **user-based rate limiting**. Ra
 All `/procCpt` endpoints are protected with user-based rate limiting:
 
 - **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
+- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
 
 Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
 
@@ -8873,6 +8913,76 @@ Returns all procedure CPT codes in the system, ordered by creation date (newest 
 
 ---
 
+### Create Procedure CPT (create only)
+**POST** `/procCpt`
+
+Creates a new procedure CPT code. **Create-only:** if a procedure with the same `numCode` already exists, the API returns **409 Conflict** instead of updating. Use **PUT** `/procCpt/:id` to update an existing procedure, or **POST** `/procCpt/upsert` for create-or-update by `numCode`.
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
+
+**Request Body:**
+```json
+{
+  "numCode": "61783",
+  "alphaCode": "A",
+  "title": "Craniotomy for tumor resection",
+  "description": "Procedure description"
+}
+```
+
+**Field Requirements:**
+- `numCode` (required): Numerical code, string, max 50 characters
+- `alphaCode` (required): Alpha code, string, max 50 characters
+- `title` (required): Procedure title, string, max 200 characters. **Must not contain commas.**
+- `description` (required): Procedure description, string, max 500 characters
+
+**Response (201 Created):**
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": {
+    "id": "507f1f77bcf86cd799439011",
+    "numCode": "61783",
+    "alphaCode": "A",
+    "title": "Craniotomy for tumor resection",
+    "description": "Procedure description",
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-01-15T10:00:00.000Z"
+  }
+}
+```
+
+**Error Response (409 Conflict - CPT code already exists):**
+When a procedure with the same `numCode` already exists for the institution:
+```json
+{
+  "status": "error",
+  "statusCode": 409,
+  "message": "Conflict",
+  "error": "CPT with this code already exists"
+}
+```
+
+**Error Response (400 Bad Request):** Validation errors (e.g. missing fields, title contains commas).
+
+**Error Response (401/403/429):** Same as other procCpt endpoints.
+
+---
+
 ### Create ProcCpt from External
 **POST** `/procCpt/postAllFromExternal`
 
@@ -8902,31 +9012,40 @@ Authorization: Bearer <superAdmin_token>
   "message": "Created",
   "data": [
     {
-      "_id": "507f1f77bcf86cd799439011",
+      "id": "507f1f77bcf86cd799439011",
       "numCode": "61783",
       "alphaCode": "A",
       "title": "Craniotomy for tumor resection",
-      "description": "Procedure description"
+      "description": "Procedure description",
+      "createdAt": "2025-01-15T10:00:00.000Z",
+      "updatedAt": "2025-01-15T10:00:00.000Z"
     }
   ]
 }
 ```
+
+**Note:** Each item uses `id` (UUID). Super Admin only.
 
 ---
 
 ### Upsert ProcCpt
 **POST** `/procCpt/upsert`
 
-Creates or updates a procedure CPT code. If a procedure with the same `numCode` exists, it will be updated. Otherwise, a new procedure will be created.
+Creates or updates a procedure CPT code by `numCode`. If a procedure with the same `numCode` exists, it will be updated; otherwise, a new procedure will be created. For strict **create-only** or **update-only** behavior, use **POST** `/procCpt` (returns 409 if code exists) and **PUT** `/procCpt/:id` (update by id, returns 404 if not found).
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **Request Body:**
 ```json
@@ -8944,7 +9063,7 @@ Authorization: Bearer <superAdmin_token>
 - `title` (required): Procedure title, string, max 200 characters
 - `description` (required): Procedure description, string, max 500 characters
 
-**Note:** The upsert operation uses `numCode` to determine if a procedure already exists. If a procedure with the same `numCode` is found, all fields will be updated. Otherwise, a new procedure will be created.
+**Note:** The upsert operation uses `numCode` to determine if a procedure already exists. If a procedure with the same `numCode` is found, all fields will be updated. Otherwise, a new procedure will be created. **Title must not contain commas.**
 
 **Response (200 OK):**
 ```json
@@ -8953,11 +9072,13 @@ Authorization: Bearer <superAdmin_token>
   "statusCode": 200,
   "message": "OK",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
+    "id": "507f1f77bcf86cd799439011",
     "numCode": "61783",
     "alphaCode": "A",
     "title": "Craniotomy for tumor resection",
-    "description": "Procedure description"
+    "description": "Procedure description",
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-01-15T10:00:00.000Z"
   }
 }
 ```
@@ -8974,21 +9095,94 @@ Authorization: Bearer <superAdmin_token>
 
 ---
 
-### Delete Procedure CPT Code
-**DELETE** `/procCpt/:id`
+### Update Procedure CPT (update only)
+**PUT** `/procCpt/:id`
 
-**Requires:** Super Admin authentication
+Updates an existing procedure CPT code by id. **Update-only:** if no procedure with the given `id` exists, the API returns **404 Not Found**. All body fields are optional; only provided fields are updated.
+
+**Requires:** Super Admin or Institute Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
+
+**URL Parameters:**
+- `id` (required): ProcCpt UUID (must be a valid UUID format)
+
+**Request Body (all fields optional):**
+```json
+{
+  "numCode": "61783",
+  "alphaCode": "A",
+  "title": "Craniotomy for tumor resection",
+  "description": "Procedure description"
+}
+```
+
+**Field Requirements:**
+- `title` (optional): Procedure title, string, max 200 characters. **Must not contain commas** if provided.
+- `alphaCode` (optional): Alpha code, string, max 50 characters
+- `numCode` (optional): Numerical code, string, max 50 characters
+- `description` (optional): Procedure description, string, max 500 characters
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "id": "507f1f77bcf86cd799439011",
+    "numCode": "61783",
+    "alphaCode": "A",
+    "title": "Craniotomy for tumor resection",
+    "description": "Procedure description",
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-01-15T11:00:00.000Z"
+  }
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "ProcCpt not found"
+}
+```
+
+**Error Response (400 Bad Request):** Validation errors (e.g. invalid UUID, title contains commas).
+
+**Error Response (401/403/429):** Same as other procCpt endpoints.
+
+---
+
+### Delete Procedure CPT Code
+**DELETE** `/procCpt/:id`
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **URL Parameters:**
 - `id` (required): ProcCpt UUID (must be a valid UUID format)
@@ -9066,7 +9260,7 @@ Deletes a procedure CPT code from the system. The `id` parameter must be a valid
 ```
 
 **Notes:**
-- Only Super Admins can delete procedure CPT codes
+- Super Admins and Institute Admins can delete procedure CPT codes (institution-scoped).
 - The `id` parameter is validated to ensure it's a valid UUID format before processing
 - Returns 404 if the procedure CPT code with the specified ID does not exist
 - All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting) above)
@@ -9077,8 +9271,6 @@ Deletes a procedure CPT code from the system. The `id` parameter must be a valid
 
 **⚠️ Multi-Tenancy Note:** All main diagnosis endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access main diagnoses from their own institution.
 
-**⚠️ Multi-Tenancy Note:** All main diagnosis endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access main diagnoses from their own institution.
-
 All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
 
 ### Rate Limiting
@@ -9086,7 +9278,7 @@ All endpoints in this module are protected with **user-based rate limiting**. Ra
 All `/mainDiag` endpoints are protected with user-based rate limiting:
 
 - **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
+- **POST/PUT/DELETE endpoints** (including POST `/:id/procs/remove` and POST `/:id/diagnosis/remove`): 50 requests per 15 minutes per user
 
 Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
 
@@ -9418,18 +9610,19 @@ Returns a specific main diagnosis by ID, including its related additional-questi
 ### Update Main Diagnosis
 **PUT** `/mainDiag/:id`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
 
-**Rate Limit:** 50 requests per 15 minutes per user
+**Rate Limit:** 50 requests per 15 minutes per user (strict user-based rate limiter)
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **URL Parameters:**
 - `id` (required): Main Diagnosis UUID (must be a valid UUID format)
@@ -9448,7 +9641,7 @@ Cookie: auth_token=<token>
 - `procs` (optional): Array of procedure numCodes (strings) to append to existing procedures. Duplicates are automatically avoided.
 - `diagnosis` (optional): Array of diagnosis icdCodes (strings) to append to existing diagnoses. Duplicates are automatically avoided.
 
-**Note:** The `procs` and `diagnosis` arrays are appended to existing values, not replaced. If a procedure or diagnosis already exists, it won't be duplicated. The `title` is automatically converted to lowercase.
+**Note:** The `procs` and `diagnosis` arrays are appended to existing values, not replaced. If a procedure or diagnosis already exists, it won't be duplicated. The `title` is automatically converted to lowercase. To remove CPT or ICD links, use the dedicated remove endpoints (POST `/:id/procs/remove`, POST `/:id/diagnosis/remove`).
 
 **Response (200 OK):**
 ```json
@@ -9539,6 +9732,137 @@ Cookie: auth_token=<token>
   "error": "Too many requests from this user, please try again later."
 }
 ```
+
+---
+
+### Remove Proc (CPT) Links from Main Diagnosis
+**POST** `/mainDiag/:id/procs/remove`
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
+
+**URL Parameters:**
+- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
+
+**Request Body:**
+```json
+{
+  "numCodes": ["61783", "61108-00"]
+}
+```
+
+**Field Requirements:**
+- `numCodes` (required): Non-empty array of non-empty strings (procedure numCodes) to remove from this main diagnosis. Only the link between the main diagnosis and those CPT codes is removed; the procCpt records themselves are not deleted.
+
+**Description:**  
+Removes the association between the main diagnosis and the given CPT procedure codes. Matching is case-insensitive. Returns the updated main diagnosis with `procs` and `diagnosis` relations populated (wrapped in the standard response format; the main diagnosis object is in `data`).
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "id": "507f1f77bcf86cd799439011",
+    "title": "cns tumors",
+    "procs": [
+      {
+        "id": "507f1f77bcf86cd799439012",
+        "numCode": "61108-00",
+        "alphaCode": "A",
+        "title": "Procedure Title",
+        "description": "Procedure description"
+      }
+    ],
+    "diagnosis": [
+      {
+        "id": "507f1f77bcf86cd799439014",
+        "icdCode": "G93.1",
+        "icdName": "Anoxic brain damage"
+      }
+    ],
+    "createdAt": "2025-12-01T14:00:00.000Z",
+    "updatedAt": "2025-12-01T15:00:00.000Z"
+  }
+}
+```
+
+**Error Response (400 Bad Request):** Validation error (e.g. invalid UUID, `numCodes` must be a non-empty array of non-empty strings).
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "MainDiag not found"
+}
+```
+
+**Error Response (401/403/429):** Same as other mainDiag write endpoints.
+
+---
+
+### Remove Diagnosis (ICD) Links from Main Diagnosis
+**POST** `/mainDiag/:id/diagnosis/remove`
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
+
+**URL Parameters:**
+- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
+
+**Request Body:**
+```json
+{
+  "icdCodes": ["G93.1", "G93.2"]
+}
+```
+
+**Field Requirements:**
+- `icdCodes` (required): Non-empty array of non-empty strings (diagnosis icdCodes) to remove from this main diagnosis. Only the link between the main diagnosis and those ICD codes is removed; the diagnosis records themselves are not deleted.
+
+**Description:**  
+Removes the association between the main diagnosis and the given ICD diagnosis codes. Matching is case-insensitive. Returns the updated main diagnosis with `procs` and `diagnosis` relations populated (wrapped in the standard response format; the main diagnosis object is in `data`).
+
+**Response (200 OK):** Same shape as the remove-procs response (standard wrapper with full main diagnosis object in `data`: `procs`, `diagnosis`, `createdAt`, `updatedAt`).
+
+**Error Response (400 Bad Request):** Validation error (e.g. invalid UUID, `icdCodes` must be a non-empty array of non-empty strings).
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "MainDiag not found"
+}
+```
+
+**Error Response (401/403/429):** Same as other mainDiag write endpoints.
 
 ---
 
@@ -9768,13 +10092,14 @@ Returns the additional-question configuration for a specific main diagnosis.
 
 **⚠️ Multi-Tenancy Note:** All consumables endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access consumables from their own institution.
 
-These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
 
 ### Rate Limiting
 
 - **GET** `/consumables`, **GET** `/consumables/:id`: 200 requests per 15 minutes per user
+- **POST, PUT, DELETE** `/consumables`, `/consumables/:id`: 50 requests per 15 minutes per user (strict)
 
-**Rate Limit Response (429 Too Many Requests):** Same format as above.
+**Rate Limit Response (429 Too Many Requests):** Same format as elsewhere.
 
 ---
 
@@ -9836,15 +10161,69 @@ Returns a single consumable by ID.
 
 ---
 
+### Create Consumable
+**POST** `/consumables`
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Request Body:**
+```json
+{
+  "consumables": "artificial dural graft"
+}
+```
+
+**Field Requirements:** `consumables` (required): string, max 100 characters
+
+**Response (201 Created):** Standard wrapper with `data` containing `{ "id": "<UUID>", "consumables": "..." }`. **400** for validation errors. **401, 403, 429** as above.
+
+---
+
+### Update Consumable
+**PUT** `/consumables/:id`
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**URL Parameters:** `id` (required): Consumable UUID
+
+**Request Body (optional):**
+```json
+{
+  "consumables": "updated name"
+}
+```
+
+**Response (200 OK):** Full consumable object. **404** if not found. **400** for invalid UUID or validation. **401, 403, 429** as above.
+
+---
+
+### Delete Consumable
+**DELETE** `/consumables/:id`
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**URL Parameters:** `id` (required): Consumable UUID
+
+**Response (200 OK):** `{ "message": "Consumable deleted successfully" }`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+
+---
+
 ## Equipment (`/equipment`)
 
 **⚠️ Multi-Tenancy Note:** All equipment endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access equipment from their own institution.
 
-These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
 
 ### Rate Limiting
 
 - **GET** `/equipment`, **GET** `/equipment/:id`: 200 requests per 15 minutes per user
+- **POST, PUT, DELETE** `/equipment`, `/equipment/:id`: 50 requests per 15 minutes per user (strict)
 
 ---
 
@@ -9892,15 +10271,47 @@ Returns all equipment (reference list, e.g. endoscope, microscope, high speed dr
 
 ---
 
+### Create Equipment
+**POST** `/equipment`
+
+**Requires:** Super Admin or Institute Admin authentication. **Rate Limit:** 50 requests per 15 minutes per user.
+
+**Request Body:** `{ "equipment": "endoscope" }` — `equipment` (required): string, max 100 characters.
+
+**Response (201 Created):** `data` contains `{ "id": "<UUID>", "equipment": "..." }`. **400** validation. **401, 403, 429** as above.
+
+---
+
+### Update Equipment
+**PUT** `/equipment/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Equipment UUID.
+
+**Request Body (optional):** `{ "equipment": "updated name" }`
+
+**Response (200 OK):** Full equipment object. **404** if not found. **400** invalid UUID/validation. **401, 403, 429** as above.
+
+---
+
+### Delete Equipment
+**DELETE** `/equipment/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Equipment UUID.
+
+**Response (200 OK):** `{ "message": "Equipment deleted successfully" }`. **404** if not found. **400** invalid UUID. **401, 403, 429** as above.
+
+---
+
 ## Positions (`/positions`)
 
 **⚠️ Multi-Tenancy Note:** All positions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access positions from their own institution.
 
-These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
 
 ### Rate Limiting
 
 - **GET** `/positions`, **GET** `/positions/:id`: 200 requests per 15 minutes per user
+- **POST, PUT, DELETE** `/positions`, `/positions/:id`: 50 requests per 15 minutes per user (strict)
 
 ---
 
@@ -9946,15 +10357,37 @@ Returns all positions (reference list, e.g. supine, prone, lateral, concorde, ot
 
 ---
 
+### Create Position
+**POST** `/positions`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **Request Body:** `{ "position": "supine" }` — `position` (required): string, max 50 characters. **Response (201):** `data`: `{ "id", "position" }`. **400/401/403/429** as above.
+
+---
+
+### Update Position
+**PUT** `/positions/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Position UUID. **Request Body (optional):** `{ "position": "updated" }`. **Response (200):** Full position object. **404** if not found. **400/401/403/429** as above.
+
+---
+
+### Delete Position
+**DELETE** `/positions/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Position UUID. **Response (200):** `{ "message": "Position deleted successfully" }`. **404** if not found. **400/401/403/429** as above.
+
+---
+
 ## Approaches (`/approaches`)
 
 **⚠️ Multi-Tenancy Note:** All approaches endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access approaches from their own institution.
 
-These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
 
 ### Rate Limiting
 
 - **GET** `/approaches`, **GET** `/approaches/:id`: 200 requests per 15 minutes per user
+- **POST, PUT, DELETE** `/approaches`, `/approaches/:id`: 50 requests per 15 minutes per user (strict)
 
 ---
 
@@ -10000,15 +10433,37 @@ Returns all approaches (reference list, e.g. pterional, endonasal, suboccipital,
 
 ---
 
+### Create Approach
+**POST** `/approaches`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **Request Body:** `{ "approach": "pterional" }` — `approach` (required): string, max 50 characters. **Response (201):** `data`: `{ "id", "approach" }`. **400/401/403/429** as above.
+
+---
+
+### Update Approach
+**PUT** `/approaches/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Approach UUID. **Request Body (optional):** `{ "approach": "updated" }`. **Response (200):** Full approach object. **404** if not found. **400/401/403/429** as above.
+
+---
+
+### Delete Approach
+**DELETE** `/approaches/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Approach UUID. **Response (200):** `{ "message": "Approach deleted successfully" }`. **404** if not found. **400/401/403/429** as above.
+
+---
+
 ## Regions (`/regions`)
 
 **⚠️ Multi-Tenancy Note:** All regions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access regions from their own institution.
 
-These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
 
 ### Rate Limiting
 
 - **GET** `/regions`, **GET** `/regions/:id`: 200 requests per 15 minutes per user
+- **POST, PUT, DELETE** `/regions`, `/regions/:id`: 50 requests per 15 minutes per user (strict)
 
 ---
 
@@ -10051,6 +10506,27 @@ Returns all regions (reference list, e.g. craniocervical, cervical, dorsal, lumb
 **URL Parameters:** `id` (required): Region UUID
 
 **Response (200 OK):** Single object with `id`, `region`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+
+---
+
+### Create Region
+**POST** `/regions`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **Request Body:** `{ "region": "craniocervical" }` — `region` (required): string, max 50 characters. **Response (201):** `data`: `{ "id", "region" }`. **400/401/403/429** as above.
+
+---
+
+### Update Region
+**PUT** `/regions/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Region UUID. **Request Body (optional):** `{ "region": "updated" }`. **Response (200):** Full region object. **404** if not found. **400/401/403/429** as above.
+
+---
+
+### Delete Region
+**DELETE** `/regions/:id`
+
+**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Region UUID. **Response (200):** `{ "message": "Region deleted successfully" }`. **404** if not found. **400/401/403/429** as above.
 
 ---
 
@@ -10492,8 +10968,6 @@ Deletes an Arabic procedure from the system. The `id` parameter must be a valid 
 
 **⚠️ Multi-Tenancy Note:** All hospital endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access hospitals from their own institution.
 
-**⚠️ Multi-Tenancy Note:** All hospital endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access hospitals from their own institution.
-
 All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
 
 ### Rate Limiting
@@ -10501,7 +10975,7 @@ All endpoints in this module are protected with **user-based rate limiting**. Ra
 All `/hospital` endpoints are protected with user-based rate limiting:
 
 - **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
+- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
 
 Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
 
@@ -10520,7 +10994,7 @@ Rate limiting uses the authenticated user's ID from the JWT token. If no valid t
 ### Authentication
 
 - **GET endpoints**: Require authentication (accessible to all authenticated users: candidates, clerks, supervisors, institute admins, super admins)
-- **POST/DELETE endpoints**: Require Super Admin authentication
+- **POST/PUT/DELETE endpoints**: Require Super Admin or Institute Admin authentication
 
 **Headers:**
 ```
@@ -10720,18 +11194,19 @@ Returns a specific hospital by ID. The `id` parameter must be a valid UUID forma
 
 **POST** `/hospital/create`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
-Cookie: auth_token=<superAdmin_token>
+Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **Request Body:**
 ```json
@@ -10833,22 +11308,69 @@ Cookie: auth_token=<superAdmin_token>
 
 ---
 
-### Delete Hospital
+### Update Hospital
 
-**DELETE** `/hospital/:id`
+**PUT** `/hospital/:id`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
-Cookie: auth_token=<superAdmin_token>
+Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
+
+**URL Parameters:**
+- `id` (required): Hospital UUID (must be valid UUID format)
+
+**Request Body (all fields optional):**
+```json
+{
+  "arabName": "مستشفى محدث",
+  "engName": "Updated Hospital Name",
+  "location": {
+    "long": 31.2001,
+    "lat": 30.0444
+  }
+}
+```
+
+**Field Requirements:**
+- `arabName` (optional): Arabic hospital name, string, max 100 characters
+- `engName` (optional): English hospital name, string, max 100 characters
+- `location` (optional): Object with `long` (-180 to 180) and/or `lat` (-90 to 90). Merged with existing location if only one coordinate is sent.
+
+**Response (200 OK):** Full hospital object (id, arabName, engName, location, createdAt, updatedAt) in standard wrapper.
+
+**Error Response (404 Not Found):** `"Hospital not found"` if no hospital with the given id exists.
+
+**Error Response (400 Bad Request):** Validation errors (e.g. invalid UUID). **401, 403, 429** as for other hospital write endpoints.
+
+---
+
+### Delete Hospital
+
+**DELETE** `/hospital/:id`
+
+**Requires:** Super Admin or Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **URL Parameters:**
 - `id` (required): Hospital UUID (must be valid UUID format)
@@ -13874,9 +14396,9 @@ All PDF reports include MedScribe branding in the header:
 | `/supervisor/candidates` | Yes | Supervisor |
 | `/cand/*` | Partial / DISABLED | **DISABLED:** POST /createCandsFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin or Institute Admin (GET /, GET /:id) / **Super Admin, Institute Admin only** (PUT /:id/approved – update candidate approved status; institution-scoped) / Super Admin, Institute Admin, Candidate (PUT /:id – Candidate own profile only: regDeg, regNum, phoneNum; admins full control) / Super Admin (PATCH /:id/resetPassword, DELETE /:id) |
 | `/calSurg/*` | Partial / DISABLED | **DISABLED:** POST /postAllFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin, Institute Admin, Clerk, Supervisor, or Candidate (GET /dashboard, GET /getById, GET /getAll) / Super Admin, Institute Admin, or Clerk (POST /, PATCH /:id, DELETE /:id) |
-| `/diagnosis/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postBulk, POST /post, PATCH /:id, DELETE /:id) |
-| `/procCpt/*` | Partial | Super Admin or Institute Admin (GET /) / Super Admin (POST /postAllFromExternal, POST /upsert, DELETE /:id) |
-| `/mainDiag/*` | Partial | Super Admin, Institute Admin, Supervisor, or Candidate (GET /, GET /:id) / Super Admin (POST, PUT /:id, DELETE /:id) |
+| `/diagnosis/*` | Partial | Super Admin or Institute Admin (GET /, POST /post, PATCH /:id, DELETE /:id) / Super Admin (POST /postBulk) |
+| `/procCpt/*` | Partial | Super Admin or Institute Admin (GET /, POST /upsert, DELETE /:id) / Super Admin (POST /postAllFromExternal) |
+| `/mainDiag/*` | Partial | Super Admin, Institute Admin, Supervisor, or Candidate (GET /, GET /:id) / Super Admin or Institute Admin (PUT /:id, POST /:id/procs/remove, POST /:id/diagnosis/remove) / Super Admin (POST /, DELETE /:id) |
 | `/arabProc/*` | Partial | Super Admin, Institute Admin, or Clerk (GET /getAllArabProcs) / Super Admin (POST /createArabProc, POST /createArabProcFromExternal, DELETE /:id) |
 | `/hospital/*` | Partial | Super Admin (POST /create) / No (GET, PUT, DELETE) |
 | `/mailer/*` | Yes | Institute Admin or Super Admin |

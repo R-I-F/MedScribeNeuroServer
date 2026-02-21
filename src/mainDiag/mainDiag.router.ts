@@ -5,10 +5,13 @@ import { createMainDiagValidator } from "../validators/createMainDiag.validator"
 import { getMainDiagByIdValidator } from "../validators/getMainDiagById.validator";
 import { updateMainDiagValidator } from "../validators/updateMainDiag.validator";
 import { deleteMainDiagValidator } from "../validators/deleteMainDiag.validator";
+import { removeMainDiagProcsValidator } from "../validators/removeMainDiagProcs.validator";
+import { removeMainDiagDiagnosisValidator } from "../validators/removeMainDiagDiagnosis.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireCandidate } from "../middleware/authorize.middleware";
+import { requireSuperAdmin, requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
 
@@ -92,19 +95,74 @@ export class MainDiagRouter {
       }
     );
 
-    // Update mainDiag
+    // Update mainDiag - superAdmin, instituteAdmin
+    const requireSuperAdminOrInstituteAdmin = authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN);
     this.router.put(
       "/:id",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       updateMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
         if (result.isEmpty()) {
           try {
             const resp = await this.mainDiagController.handleUpdateMainDiag(req, res);
+            if (resp) {
+              res.status(StatusCodes.OK).json(resp);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "MainDiag not found" });
+            }
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Remove CPT (proc) links from mainDiag - superAdmin, instituteAdmin
+    this.router.post(
+      "/:id/procs/remove",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      removeMainDiagProcsValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.mainDiagController.handleRemoveProcsFromMainDiag(req, res);
+            if (resp) {
+              res.status(StatusCodes.OK).json(resp);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "MainDiag not found" });
+            }
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Remove diagnosis (ICD) links from mainDiag - superAdmin, instituteAdmin
+    this.router.post(
+      "/:id/diagnosis/remove",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      removeMainDiagDiagnosisValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.mainDiagController.handleRemoveDiagnosisFromMainDiag(req, res);
             if (resp) {
               res.status(StatusCodes.OK).json(resp);
             } else {

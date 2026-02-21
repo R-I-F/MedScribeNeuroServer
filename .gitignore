@@ -11,6 +11,11 @@ src/migrations/
 # Environment files (secrets)
 .env
 
+# Local backup / one-off SQL and script outputs (do not commit)
+*_backup.sql
+*_to_backup.sql
+*.backup.sql
+
 # HTTP test files (may contain tokens and sensitive data)
 *.http
 **/*.http

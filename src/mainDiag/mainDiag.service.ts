@@ -46,4 +46,28 @@ export class MainDiagService {
       throw new Error(err);
     }
   }
+
+  public async removeProcsFromMainDiag(
+    mainDiagId: string,
+    numCodes: string[],
+    dataSource: DataSource
+  ): Promise<IMainDiagDoc | null> | never {
+    try {
+      return await this.mainDiagProvider.removeProcsFromMainDiag(mainDiagId, numCodes, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async removeDiagnosisFromMainDiag(
+    mainDiagId: string,
+    icdCodes: string[],
+    dataSource: DataSource
+  ): Promise<IMainDiagDoc | null> | never {
+    try {
+      return await this.mainDiagProvider.removeDiagnosisFromMainDiag(mainDiagId, icdCodes, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

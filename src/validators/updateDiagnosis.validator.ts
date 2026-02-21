@@ -22,6 +22,10 @@ export const updateDiagnosisValidator = checkSchema({
     isString: true,
     trim: true,
     errorMessage: "icdName must be a string if provided",
+    custom: {
+      options: (value: string) => value == null || value === "" || !value.includes(","),
+      errorMessage: "icdName must not contain commas",
+    },
   },
   neuroLogName: {
     in: ["body"],

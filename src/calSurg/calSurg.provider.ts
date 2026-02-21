@@ -83,11 +83,20 @@ export class CalSurgProvider {
       }
 
       // Business logic: Process external data and create calSurg records
+      const totalRows = externalData?.data?.data?.length ?? 0;
       const processedItems = await this.processExternalData(externalData, dataSource);
-      
+      const skippedNoLocation = totalRows - processedItems.length;
+      if (skippedNoLocation > 0) {
+        console.warn(`[calSurg] ${skippedNoLocation} row(s) skipped: "Location" not found in hospitals (check spelling/name in sheet).`);
+      }
+
       // Business logic: Filter out duplicates before bulk creation
       const uniqueCalSurgs = await this.filterDuplicateCalSurgs(processedItems, dataSource);
-      
+      const skippedDuplicates = processedItems.length - uniqueCalSurgs.length;
+      if (skippedDuplicates > 0) {
+        console.warn(`[calSurg] ${skippedDuplicates} row(s) skipped: already exist in DB (duplicate google_uid).`);
+      }
+
       // Business logic: Create bulk calSurgs (only new ones)
       if (uniqueCalSurgs.length === 0) {
         return [];
@@ -262,9 +271,8 @@ export class CalSurgProvider {
       const location: any = hospitalsMap.get(rawItem["Location"]);
       const arabicProc: IArabProcDoc | undefined = arabicProcsMap.get(rawItem["Procedure"]);
       
-      // Business logic: Only create record if both references exist
-      if (location && arabicProc) {
-        // Now calSurg uses UUIDs directly (no conversion needed)
+      // Business logic: Create record if hospital exists; arabProc is optional (null when not detected)
+      if (location) {
         const normalizedItem: ICalSurg = {
           timeStamp: this.utilService.stringToDateConverter(rawItem["Timestamp"]),
           patientName: sanPatientName,
@@ -273,7 +281,7 @@ export class CalSurgProvider {
             : this.utilService.stringToDateConverter(rawItem["Timestamp"]), // fallback if DOB missing
           gender: rawItem["Gender"],
           hospital: location.id, // Use UUID directly (handles both MongoDB _id and MariaDB id)
-          arabProc: arabicProc.id, // Use UUID directly
+          arabProc: arabicProc?.id, // UUID when procedure matched; undefined → null in DB when not detected
           procDate: this.utilService.stringToDateConverter(rawItem["Operation Date"]),
           google_uid: rawItem["uid"],
           formLink: rawItem["Link"]
