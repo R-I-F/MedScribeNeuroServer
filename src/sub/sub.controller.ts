@@ -361,6 +361,55 @@ export class SubController {
     }
   }
 
+  private static readonly ALLOWED_AUDIO_MIME_TYPES = [
+    "audio/webm",
+    "audio/mp3",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/ogg",
+    "audio/flac",
+    "audio/aac",
+  ];
+
+  /**
+   * Generate surgical notes from voice during submission creation (no submission id yet).
+   * Uses calSurgId from path; loads cal_surg and builds minimal context for the AI.
+   */
+  public async handleGenerateSurgicalNotesFromVoiceByCalSurg(req: Request, res: Response) {
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      const calSurgId = req.params.calSurgId;
+      if (!calSurgId) {
+        throw new Error("CalSurg ID is required");
+      }
+
+      const file = (req as any).file;
+      if (!file || !file.buffer) {
+        throw new Error("Audio file is required (multipart field 'audio')");
+      }
+      const rawMime = (file.mimetype || "").trim();
+      const mimeType = rawMime.includes(";") ? rawMime.split(";")[0].trim() : rawMime;
+      if (!SubController.ALLOWED_AUDIO_MIME_TYPES.includes(mimeType)) {
+        throw new Error(
+          `Invalid audio type. Allowed: ${SubController.ALLOWED_AUDIO_MIME_TYPES.join(", ")}`
+        );
+      }
+
+      const result = await this.subProvider.generateSurgicalNotesFromVoiceForCalSurg(
+        calSurgId,
+        file.buffer,
+        mimeType,
+        dataSource
+      );
+      return result;
+    } catch (err: any) {
+      throw new Error(err.message || err);
+    }
+  }
+
   public async handleDeleteSub(
     req: Request,
     res: Response

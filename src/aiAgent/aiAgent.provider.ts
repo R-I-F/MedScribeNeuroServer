@@ -2,6 +2,7 @@ import { inject, injectable } from "inversify";
 import { AiAgentService } from "./aiAgent.service";
 import {
   IGenerateSurgicalNotesInput,
+  IGenerateSurgicalNotesFromVoiceInput,
   IGenerateSurgicalNotesResponse,
   IFormattedSubmissionData,
 } from "./aiAgent.interface";
@@ -24,6 +25,37 @@ export class AiAgentProvider {
       };
     } catch (err: any) {
       throw new Error(err.message || "Failed to generate surgical notes");
+    }
+  }
+
+  /**
+   * Generate surgical notes from voice recording + full submission and cal_surg context.
+   * Prompt excludes intraoperative events; includes cal_surg extras (timeStamp, formLink, google_uid).
+   */
+  public async generateSurgicalNotesFromVoice(
+    input: IGenerateSurgicalNotesFromVoiceInput
+  ): Promise<IGenerateSurgicalNotesResponse> | never {
+    try {
+      const formattedData = this.formatSubmissionData(input.submission);
+      const calSurg = (input.submission as any).calSurg || (input.submission as any).procDocId;
+      const calSurgExtras = calSurg && typeof calSurg === "object" ? {
+        timeStamp: calSurg.timeStamp,
+        formLink: calSurg.formLink,
+        google_uid: calSurg.google_uid,
+      } : undefined;
+      const prompt = this.createPromptForVoice(formattedData, calSurgExtras);
+      const audioBase64 = input.audioBuffer.toString("base64");
+      const surgicalNotes = await this.aiAgentService.generateContentFromAudioAndText(
+        prompt,
+        audioBase64,
+        input.mimeType
+      );
+
+      return {
+        surgicalNotes: surgicalNotes.trim(),
+      };
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to generate surgical notes from voice");
     }
   }
 
@@ -100,12 +132,19 @@ export class AiAgentProvider {
     };
   }
 
+  private formatDateForPrompt(value: Date | string | undefined): string {
+    if (value == null) return "N/A";
+    if (typeof value === "string") return value;
+    if (value instanceof Date && !isNaN(value.getTime())) return value.toLocaleDateString();
+    return "N/A";
+  }
+
   private createPrompt(data: IFormattedSubmissionData): string {
     const prompt = `You are a medical professional assistant specializing in neurosurgery. Generate comprehensive, professional surgical notes based on the following submission data.
 
 PATIENT INFORMATION:
 - Name: ${data.patientInfo.name}
-- Date of Birth: ${data.patientInfo.dateOfBirth.toLocaleDateString()}
+- Date of Birth: ${this.formatDateForPrompt(data.patientInfo.dateOfBirth)}
 - Gender: ${data.patientInfo.gender}
 
 HOSPITAL:
@@ -113,7 +152,7 @@ HOSPITAL:
 
 PROCEDURE:
 - Procedure Name: ${data.procedure.name}
-- Procedure Date: ${data.procedure.date.toLocaleDateString()}
+- Procedure Date: ${this.formatDateForPrompt(data.procedure.date)}
 ${data.procedure.description ? `- Description: ${data.procedure.description}` : ""}
 
 SURGICAL TEAM:
@@ -166,6 +205,82 @@ Please generate comprehensive, professional surgical notes that include:
 11. Postoperative plan
 
 Format the notes in a clear, professional medical format suitable for a surgical report.`;
+
+    return prompt;
+  }
+
+  /**
+   * Prompt for voice-based surgical notes. Excludes intraoperative events.
+   * Includes cal_surg extras (timeStamp, formLink, google_uid) when provided.
+   * Output = only what was said in the voice (translated to English, structured); no context echo, no placeholders, no markdown.
+   */
+  private createPromptForVoice(
+    data: IFormattedSubmissionData,
+    calSurgExtras?: { timeStamp?: Date; formLink?: string; google_uid?: string }
+  ): string {
+    const prompt = `You are a medical professional assistant. Your only job is to turn the attached voice dictation into clean, professional surgical-note text in English.
+
+RULES (strict):
+1. Voice may be in any language. Transcribe and translate to English. Output in English only.
+2. The case context below is for your reference only (to understand terms, procedure type, etc.). Do NOT output any of it. Do NOT repeat patient name, diagnosis, procedure name, surgeon, assistant, hospital, instruments from context, or any other context field. Your response must contain ONLY what the speaker actually said in the audio, translated and written as professional surgical notes.
+3. Include ONLY what was actually said in the audio. If the speaker did not mention something (e.g. anesthesia, blood loss, complications, postoperative plan), do NOT include that section at all. No placeholders like "[Not specified in audio]", "[Not mentioned]", or "No complications were reported". Omit any section that was not stated in the dictation.
+4. Use plain text only. No markdown: no asterisks (**), no bold, no headers like "Surgical Notes". No section labels unless the speaker explicitly dictated them. Prefer flowing professional prose where appropriate.
+5. Structure and clean up the dictated content so it reads as proper surgical notes, but do not add information from the context. If the dictation is mostly the procedure description, your output is mostly that description—nothing else.
+
+CASE CONTEXT (reference only; do not repeat any of this in your output):
+
+PATIENT INFORMATION:
+- Name: ${data.patientInfo.name}
+- Date of Birth: ${this.formatDateForPrompt(data.patientInfo.dateOfBirth)}
+- Gender: ${data.patientInfo.gender}
+
+HOSPITAL:
+- Name: ${data.hospital.name}${data.hospital.arabName ? ` (${data.hospital.arabName})` : ""}
+
+PROCEDURE:
+- Procedure Name: ${data.procedure.name}
+- Procedure Date: ${this.formatDateForPrompt(data.procedure.date)}
+${data.procedure.description ? `- Description: ${data.procedure.description}` : ""}
+${calSurgExtras?.timeStamp ? `- Calendar/Surgery Timestamp: ${this.formatDateForPrompt(calSurgExtras.timeStamp)}` : ""}
+${calSurgExtras?.formLink ? `- Form Link: ${calSurgExtras.formLink}` : ""}
+${calSurgExtras?.google_uid ? `- Google UID: ${calSurgExtras.google_uid}` : ""}
+
+SURGICAL TEAM:
+- Candidate/Surgeon: ${data.candidate.name} (${data.candidate.email})
+- Supervisor: ${data.supervisor.name} (${data.supervisor.email})
+- Role in Surgery: ${data.surgeryDetails.roleInSurgery}
+${data.surgeryDetails.assistantRoleDescription ? `- Assistant Role Description: ${data.surgeryDetails.assistantRoleDescription}` : ""}
+- Other Surgeons: ${data.surgeryDetails.otherSurgeons} (${data.surgeryDetails.otherSurgeonsRank})
+- Revision Surgery: ${data.surgeryDetails.isRevisionSurgery ? "Yes" : "No"}
+
+PREOPERATIVE INFORMATION:
+${data.surgeryDetails.preoperativeCondition ? `- Preoperative Clinical Condition: ${data.surgeryDetails.preoperativeCondition}` : ""}
+
+EQUIPMENT AND MATERIALS:
+- Instruments Used: ${data.surgeryDetails.instrumentsUsed}
+- Consumables Used: ${data.surgeryDetails.consumablesUsed}
+${data.surgeryDetails.consumablesDetails ? `- Consumables Details: ${data.surgeryDetails.consumablesDetails}` : ""}
+
+DIAGNOSIS:
+- Main Diagnosis: ${data.diagnosis.mainDiagnosis}
+- Diagnoses: ${data.diagnosis.diagnoses.join(", ") || "N/A"}
+- Procedures: ${data.diagnosis.procedures.join(", ") || "N/A"}
+
+CPT CODES:
+${data.diagnosis.cptCodes.length > 0 ? data.diagnosis.cptCodes.map(cpt => `- ${cpt.code}${cpt.description ? `: ${cpt.description}` : ""}`).join("\n") : "N/A"}
+
+ICD CODES:
+${data.diagnosis.icdCodes.length > 0 ? data.diagnosis.icdCodes.map(icd => `- ${icd.code}${icd.description ? `: ${icd.description}` : ""}`).join("\n") : "N/A"}
+
+SURGICAL DETAILS:
+${data.surgicalData.spinalOrCranial ? `- Spinal or Cranial: ${data.surgicalData.spinalOrCranial}` : ""}
+${data.surgicalData.position ? `- Position: ${data.surgicalData.position}` : ""}
+${data.surgicalData.approach ? `- Approach: ${data.surgicalData.approach}` : ""}
+${data.surgicalData.region ? `- Region: ${data.surgicalData.region}` : ""}
+${data.surgicalData.clinicalPresentation ? `- Clinical Presentation: ${data.surgicalData.clinicalPresentation}` : ""}
+${data.surgicalData.surgicalNotes ? `- Existing Surgical Notes: ${data.surgicalData.surgicalNotes}` : ""}
+
+From the attached audio only: transcribe/translate to English and output the dictated content as professional surgical notes. Do not add titles, section headers for missing content, placeholders, or any information from the context above. Plain text only.`;
 
     return prompt;
   }

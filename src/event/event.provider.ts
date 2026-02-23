@@ -798,7 +798,8 @@ export class EventProvider {
   public async bulkImportAttendanceFromExternal(
     addedBy: string,
     addedByRole: "instituteAdmin" | "supervisor" | "candidate",
-    dataSource: DataSource
+    dataSource: DataSource,
+    options?: { startRow?: number }
   ): Promise<{
     totalRows: number;
     processed: number;
@@ -819,7 +820,11 @@ export class EventProvider {
         throw new Error("Failed to fetch external data from spreadsheet");
       }
 
-      const rows = externalData.data.data;
+      let rows: any[] = externalData.data.data;
+      const startRow = options?.startRow;
+      if (startRow != null && startRow > 1) {
+        rows = rows.slice(startRow - 1);
+      }
       const totalRows = rows.length;
       let processed = 0;
       let added = 0;
@@ -836,10 +841,11 @@ export class EventProvider {
       const uniqueEmails = new Set<string>();
       const uniqueUids = new Set<string>();
 
-      const startIndex = 1; // Skip header row
+      const startIndex = startRow != null && startRow > 1 ? 0 : 1; // When startRow set, process from first sliced row; else skip header
+      const rowOffset = startRow != null && startRow > 1 ? startRow - 1 : 0;
       for (let i = startIndex; i < rows.length; i++) {
         const row = rows[i];
-        const rowNumber = i + 1;
+        const rowNumber = rowOffset + i + 1;
 
         try {
           let candidateEmail: string | undefined;

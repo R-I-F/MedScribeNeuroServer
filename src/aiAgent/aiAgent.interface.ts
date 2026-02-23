@@ -4,6 +4,12 @@ export interface IGenerateSurgicalNotesInput {
   submission: ISubDoc;
 }
 
+export interface IGenerateSurgicalNotesFromVoiceInput {
+  submission: ISubDoc;
+  audioBuffer: Buffer;
+  mimeType: string;
+}
+
 export interface IGenerateSurgicalNotesResponse {
   surgicalNotes: string;
 }

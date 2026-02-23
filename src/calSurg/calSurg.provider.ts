@@ -82,6 +82,12 @@ export class CalSurgProvider {
         return externalData;
       }
 
+      // When startRow is set, keep only rows from that index (1-based → 0-based slice)
+      const startRow = validatedReq.startRow;
+      if (startRow != null && startRow > 1 && Array.isArray(externalData?.data?.data)) {
+        externalData.data.data = externalData.data.data.slice(startRow - 1);
+      }
+
       // Business logic: Process external data and create calSurg records
       const totalRows = externalData?.data?.data?.length ?? 0;
       const processedItems = await this.processExternalData(externalData, dataSource);
@@ -233,12 +239,11 @@ export class CalSurgProvider {
    * @returns API string
    */
   private buildExternalApiString(validatedReq: Partial<IExternalRow>): string {
-    // Business logic: Build API string
-    if (validatedReq.row) {
+    // Business logic: Build API string. When startRow is set we fetch full sheet and slice later.
+    if (validatedReq.row && !validatedReq.startRow) {
       return `${process.env.GETTER_API_ENDPOINT}?spreadsheetName=calSurgLogSheet&sheetName=Form%20Responses%201&row=${validatedReq.row}`;
-    } else {
-      return `${process.env.GETTER_API_ENDPOINT}?spreadsheetName=calSurgLogSheet&sheetName=Form%20Responses%201`;
     }
+    return `${process.env.GETTER_API_ENDPOINT}?spreadsheetName=calSurgLogSheet&sheetName=Form%20Responses%201`;
   }
 
   /**

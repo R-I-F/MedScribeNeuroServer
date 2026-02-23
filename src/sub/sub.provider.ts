@@ -88,6 +88,12 @@ export class SubProvider {
         return [];
       }
 
+      // When startRow is set, keep only rows from that index (1-based → 0-based slice)
+      const startRow = validatedReq.startRow;
+      if (startRow != null && startRow > 1) {
+        externalData.data.data = externalData.data.data.slice(startRow - 1);
+      }
+
       return await this.processExternalData(externalData, dataSource);
     } catch (err: any) {
       throw new Error(err);
@@ -95,10 +101,10 @@ export class SubProvider {
   }
 
   private buildExternalApiString(validatedReq: Partial<IExternalRow>): string {
-    if (validatedReq.row) {
+    // When startRow is set we fetch full sheet and slice later
+    if (validatedReq.row && !validatedReq.startRow) {
       return `${process.env.GETTER_API_ENDPOINT}?spreadsheetName=neuroLogResponses&sheetName=Form%20Responses%201&row=${validatedReq.row}`;
     }
-
     return `${process.env.GETTER_API_ENDPOINT}?spreadsheetName=neuroLogResponses&sheetName=Form%20Responses%201`;
   }
 
@@ -147,9 +153,6 @@ export class SubProvider {
     for (let i = 0; i < externalData.data.data.length; i++) {
       const rawItem: ISubRawData = externalData.data.data[i];
       const rawItemArr = Object.values(rawItem);
-      if(i ===  5){
-        continue;
-      }
       const mainDiagTitle = this.utilService.returnSanitizedMainDiag(
         rawItemArr[indexes.mainDiag]
       ) as TMainDiagTitle;
@@ -255,7 +258,11 @@ export class SubProvider {
           }
           return undefined;
         })(),
-        subGoogleUid: rawItemArr[indexes.subUid] || "",
+        subGoogleUid: (() => {
+          const raw = rawItemArr[indexes.subUid];
+          const s = typeof raw === "string" ? raw.trim() : "";
+          return s === "" ? null : s;
+        })(),
         subStatus: this.utilService.normalizeSubStatus(
           rawItemArr[indexes.subStatus]
         ) as TSubStatus,
@@ -265,14 +272,12 @@ export class SubProvider {
 
       // console.log("google uid ", subBase.subGoogleUid)
 
-      // Only create submission if all required fields are present
+      // Only create submission if all required fields are present (subGoogleUid optional; stored as null when missing)
       if (
         subBase.candDocId &&
         subBase.procDocId &&
         subBase.supervisorDocId &&
-        subBase.mainDiagDocId &&
-        subBase.subGoogleUid &&
-        subBase.subGoogleUid.trim() !== ""
+        subBase.mainDiagDocId
       ) {
         const subPayload = this.returnSubPayload(
           mainDiagTitle,
@@ -282,23 +287,19 @@ export class SubProvider {
         );
 
         subPayloads.push(subPayload);
+      } else {
+        const reasons: string[] = [];
+        if (!subBase.candDocId) reasons.push(`candidate not found (email: ${String(rawItemArr[indexes.candEmail] ?? "")})`);
+        if (!subBase.procDocId) reasons.push(`procedure/calSurg not found (procUid: ${String(rawItemArr[indexes.procUid] ?? "")})`);
+        if (!subBase.supervisorDocId) reasons.push(`supervisor not found (index 3 value: ${String(rawItemArr[indexes.superEmail] ?? "")})`);
+        if (!subBase.mainDiagDocId) reasons.push(`mainDiag not found (title: ${String(mainDiagTitle ?? "")})`);
+        console.warn(`[sub external import] Row ${i} skipped: ${reasons.join("; ")}`);
       }
     }
     try {
-      // Dedupe within batch by subGoogleUid (keep first) so we never insert same uid twice
-      const seenUids = new Set<string>();
-      const dedupedPayloads = subPayloads.filter((sub) => {
-        const uid = sub.subGoogleUid?.trim();
-        if (!uid) return true;
-        if (seenUids.has(uid)) return false;
-        seenUids.add(uid);
-        return true;
-      });
+      // External import: no duplicate check by subGoogleUid; insert all rows that have required fields
+      const uniqueSubs = subPayloads;
 
-      // Business logic: Filter out duplicates already in DB before bulk creation
-      const uniqueSubs = await this.filterDuplicateSubs(dedupedPayloads, dataSource);
-
-      // Business logic: Create bulk submissions (only new ones)
       if (uniqueSubs.length === 0) {
         return [];
       }
@@ -2018,6 +2019,68 @@ export class SubProvider {
       return result;
     } catch (err: any) {
       throw new Error(err.message || "Failed to generate surgical notes");
+    }
+  }
+
+  /**
+   * Generate surgical notes from voice during submission creation (no submission exists yet).
+   * Loads cal_surg by id and builds minimal context so the AI has procedure/patient/hospital info.
+   */
+  public async generateSurgicalNotesFromVoiceForCalSurg(
+    calSurgId: string,
+    audioBuffer: Buffer,
+    mimeType: string,
+    dataSource: DataSource
+  ): Promise<{ surgicalNotes: string }> | never {
+    try {
+      if (!this.uuidRegex.test(calSurgId)) {
+        throw new Error("Invalid calSurg ID format");
+      }
+
+      const calSurg = await this.calSurgService.getCalSurgById(calSurgId, dataSource);
+      if (!calSurg) {
+        throw new Error("CalSurg not found");
+      }
+
+      const calSurgEntity = calSurg as any;
+      const minimalSubmission: any = {
+        procDocId: calSurgEntity,
+        calSurg: calSurgEntity,
+        candDocId: null,
+        supervisorDocId: null,
+        mainDiagDocId: null,
+        procCpts: [],
+        icds: [],
+        diagnosisName: [],
+        procedureName: [],
+        timeStamp: calSurgEntity.timeStamp || new Date(),
+        roleInSurg: "N/A",
+        assRoleDesc: undefined,
+        otherSurgName: "",
+        otherSurgRank: "",
+        isItRevSurg: false,
+        preOpClinCond: undefined,
+        insUsed: "N/A",
+        consUsed: "N/A",
+        consDetails: undefined,
+        surgNotes: undefined,
+        IntEvents: undefined,
+        spOrCran: undefined,
+        pos: undefined,
+        approach: undefined,
+        clinPres: undefined,
+        region: undefined,
+      };
+
+      const result = await this.aiAgentProvider.generateSurgicalNotesFromVoice({
+        submission: minimalSubmission,
+        audioBuffer,
+        mimeType,
+      });
+
+      return result;
+    } catch (err: any) {
+      throw new Error(err.message || "Failed to generate surgical notes from voice");
     }
   }
 

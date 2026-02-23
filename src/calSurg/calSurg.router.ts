@@ -67,18 +67,24 @@ export class CalSurgRouter {
       }
     );
 
-    // DISABLED: See docs/DISABLED_ROUTES.md. Create calSurg from external (no auth; X-Institution-Id).
+    // Create calSurg from external (no auth; X-Institution-Id).
     this.router.post(
       "/postAllFromExternal",
       institutionResolver,
       strictRateLimiter,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
-        return res.status(StatusCodes.GONE).json({
-          error: "This endpoint is disabled.",
-          code: "ENDPOINT_DISABLED",
-          reference: "docs/DISABLED_ROUTES.md",
-        });
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const newCalSurgs = await this.calSurgController.handlePostCalSurgFromExternal(req, res);
+            res.status(StatusCodes.CREATED).json(newCalSurgs);
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err?.message ?? err });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
       }
     );
 

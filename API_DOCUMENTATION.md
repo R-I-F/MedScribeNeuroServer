@@ -5769,6 +5769,55 @@ OR
 
 ---
 
+### Generate Surgical Notes from Voice
+**POST** `/sub/calSurg/:calSurgId/generateSurgicalNotesFromVoice`
+
+**Authentication Required:** Yes. **Candidates**, **supervisors**, **institute admins**, and **super admins** can call this endpoint. Institution context required (e.g. `X-Institution-Id` header if your app uses it).
+
+**Rate Limit:** Same as other submission endpoints (user-based strict rate limiter).
+
+**Description:** Generates surgical notes from a **voice recording** during **submission creation**, when no submission id exists yet. The client sends an audio file and the **calendar surgery (procedure) id** (`calSurgId`). The backend loads that procedure (patient, hospital, procedure name, date, etc.) and sends it plus the audio to Google Gemini; the AI returns surgical notes. The audio is not stored. This is the only voice-to-surgical-notes endpoint; use it on the **create submission** form once the user has selected a procedure (the frontend has `calSurgId` / `procDocId` at that point). For frontend implementation details, see [docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md](./docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+X-Institution-Id: <institution_uuid>   (if your app uses institution-scoped requests)
+Content-Type: multipart/form-data      (set automatically by the browser when using FormData)
+```
+
+**URL Parameters:**
+- `calSurgId` (required): Calendar surgery (procedure) UUID. The procedure the user has selected on the form. The backend fetches it (with hospital, arabProc) to build context for the AI.
+
+**Request Body:** `multipart/form-data` with a single file field:
+- **Field name:** `audio` (required)
+- **Value:** The recorded audio file (binary). Allowed MIME types: `audio/webm`, `audio/mp3`, `audio/mpeg`, `audio/wav`, `audio/ogg`, `audio/flac`, `audio/aac`. Maximum file size: **20 MB**.
+
+**Response (200 OK):**
+Standard wrapper; `data` contains the generated surgical notes:
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "surgicalNotes": "PREOPERATIVE DIAGNOSIS:\n...\n\nPROCEDURE PERFORMED:\n...\n\n[Full AI-generated surgical notes text]"
+  }
+}
+```
+
+**Error Response (400 Bad Request):** Missing or invalid audio (e.g. wrong field name or MIME type not in allowed list). Standard error wrapper: `{ "status": "error", "statusCode": 400, "message": "Bad Request", "error": "<message>" }`.
+
+**Error Response (404 Not Found):** CalSurg not found (invalid id or wrong institution). Standard error wrapper: `{ "status": "error", "statusCode": 404, "message": "Not Found", "error": "<message>" }`.
+
+**Error Response (500 Internal Server Error):** AI service not configured or Gemini failure. Standard error wrapper: `{ "status": "error", "statusCode": 500, "message": "Internal Server Error", "error": "<message>" }`.
+
+**Notes:**
+- **Candidates**, **supervisors**, **institute admins**, and **super admins** can call this endpoint; other roles receive 403.
+- Use on the **create submission** form: the frontend has `calSurgId` (or `procDocId`) as soon as the user selects a procedure; no submission needs to be saved first.
+- Audio is not stored (multer memory storage). Frontend guide: [docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md](./docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md).
+
+---
+
 ### Delete Submission
 **DELETE** `/sub/:id`
 

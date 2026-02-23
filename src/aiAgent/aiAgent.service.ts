@@ -1,5 +1,10 @@
 import { injectable } from "inversify";
-import { GoogleGenAI } from "@google/genai";
+import {
+  GoogleGenAI,
+  createUserContent,
+  createPartFromText,
+  createPartFromBase64,
+} from "@google/genai";
 
 @injectable()
 export class AiAgentService {
@@ -39,6 +44,42 @@ export class AiAgentService {
       return response.text;
     } catch (err: any) {
       throw new Error(err.message || "Failed to generate text from AI");
+    }
+  }
+
+  /**
+   * Multimodal: send text prompt + audio (base64) to Gemini and return generated text.
+   * Used for voice-based surgical notes (transcribe + contextualize).
+   */
+  public async generateContentFromAudioAndText(
+    prompt: string,
+    audioBase64: string,
+    mimeType: string
+  ): Promise<string> | never {
+    try {
+      if (!this.genAI) {
+        throw new Error("GEMINI_API_KEY is not configured");
+      }
+
+      const modelName = process.env.GEMINI_MODEL_NAME || "gemini-2.5-flash";
+      const contents = createUserContent([
+        createPartFromText(prompt),
+        createPartFromBase64(audioBase64, mimeType),
+      ]);
+
+      const response = await this.genAI.models.generateContent({
+        model: modelName,
+        contents,
+      });
+
+      if (!response.text) {
+        throw new Error("No response generated from AI model");
+      }
+
+      return response.text;
+    } catch (err: any) {
+      const message = err?.message || err?.toString?.() || "Failed to generate content from audio and text";
+      throw new Error(message);
     }
   }
 }

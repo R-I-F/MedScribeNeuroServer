@@ -1,10 +1,12 @@
 import express, { Request, Response, Router } from "express";
+import multer from "multer";
 import { inject, injectable } from "inversify";
 import { SubController } from "./sub.controller";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
 import { createSubmissionValidator } from "../validators/createSubmission.validator";
 import { createSupervisorSubmissionValidator } from "../validators/createSupervisorSubmission.validator";
 import { getSubmissionByIdValidator } from "../validators/getSubmissionById.validator";
+import { getCalSurgIdParamValidator } from "../validators/getCalSurgIdParam.validator";
 import { reviewSubmissionValidator } from "../validators/reviewSubmission.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
@@ -13,6 +15,12 @@ import { authorize, requireCandidate, requireSuperAdmin, requireSupervisor, requ
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB for audio
+});
+
 @injectable()
 export class SubRouter {
 
@@ -26,32 +34,44 @@ export class SubRouter {
     this.initRoutes();
   }
   private async initRoutes(){
-    // DISABLED: See docs/DISABLED_ROUTES.md. Import submissions from external (no auth; X-Institution-Id).
+    // Import submissions from external (no auth; X-Institution-Id).
     this.router.post(
       "/postAllFromExternal",
       institutionResolver,
       strictRateLimiter,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
-        return res.status(StatusCodes.GONE).json({
-          error: "This endpoint is disabled.",
-          code: "ENDPOINT_DISABLED",
-          reference: "docs/DISABLED_ROUTES.md",
-        });
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const newSubs = await this.subController.handlePostSubFromExternal(req, res);
+            res.status(StatusCodes.CREATED).json(newSubs);
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err?.message ?? err });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
       }
     );
-    // DISABLED: See docs/DISABLED_ROUTES.md. Update submission status from external (no auth; X-Institution-Id).
+    // Update submission status from external (no auth; X-Institution-Id).
     this.router.patch(
       "/updateStatusFromExternal",
       institutionResolver,
       strictRateLimiter,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
-        return res.status(StatusCodes.GONE).json({
-          error: "This endpoint is disabled.",
-          code: "ENDPOINT_DISABLED",
-          reference: "docs/DISABLED_ROUTES.md",
-        });
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const updatedSubs = await this.subController.handleUpdateStatusFromExternal(req, res);
+            res.status(StatusCodes.OK).json(updatedSubs);
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err?.message ?? err });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
       }
     );
 
@@ -427,6 +447,38 @@ export class SubRouter {
       }
     )
     */
+
+    // Generate surgical notes from voice during submission creation (no submission id yet) - uses calSurgId (candidates, supervisors, institute admins, super admins)
+    this.router.post(
+      "/calSurg/:calSurgId/generateSurgicalNotesFromVoice",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireCandidate,
+      getCalSurgIdParamValidator,
+      upload.single("audio"),
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const surgicalNotes = await this.subController.handleGenerateSurgicalNotesFromVoiceByCalSurg(req, res);
+            res.status(StatusCodes.OK).json(surgicalNotes);
+          } catch (err: any) {
+            if (err.message?.includes("not found") || err.message?.includes("CalSurg not found")) {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else if (err.message?.includes("GEMINI_API_KEY") || err.message?.includes("not configured")) {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "AI service is not configured" });
+            } else if (err.message?.includes("Audio file is required")) {
+              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message || "Failed to generate surgical notes from voice" });
+            }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
 
     this.router.delete(
       "/:id",
