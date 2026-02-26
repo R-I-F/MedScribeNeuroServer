@@ -149,7 +149,7 @@ export class DataSourceManager {
       logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
       connectTimeout: 10000, // 10 seconds
       extra: {
-        connectionLimit: 10, // Max connections per institution
+        connectionLimit: 20, // Max connections per institution
       },
       ...sslOpts,
     };

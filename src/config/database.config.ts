@@ -86,7 +86,7 @@ function getDbConfig(): DataSourceOptions {
     subscribers: [],
     connectTimeout: 10000, // 10 seconds as recommended
     extra: {
-      connectionLimit: 10, // Connection pool limit
+      connectionLimit: 20, // Connection pool limit
     },
     ...sslOpts,
   };
