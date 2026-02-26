@@ -1,16 +1,19 @@
 import { randomUUID } from "crypto";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
 import { IRegionDoc, IRegionInput } from "./regions.interface";
 import { RegionEntity } from "./regions.mDbSchema";
+import { UtilService } from "../utils/utils.service";
 
 @injectable()
 export class RegionsProvider {
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+  constructor(@inject(UtilService) private utilService: UtilService) {}
+
   public async create(data: IRegionInput, dataSource: DataSource): Promise<IRegionDoc> | never {
     const repo = dataSource.getRepository(RegionEntity);
-    const entity = repo.create({ id: randomUUID(), region: data.region });
+    const entity = repo.create({ id: randomUUID(), region: this.utilService.sanitizeLabel(data.region) });
     const saved = await repo.save(entity);
     return saved as unknown as IRegionDoc;
   }
@@ -20,7 +23,7 @@ export class RegionsProvider {
     const repo = dataSource.getRepository(RegionEntity);
     const existing = await repo.findOne({ where: { id } });
     if (!existing) return null;
-    if (data.region !== undefined) existing.region = data.region;
+    if (data.region !== undefined) existing.region = this.utilService.sanitizeLabel(data.region);
     const saved = await repo.save(existing);
     return saved as unknown as IRegionDoc;
   }

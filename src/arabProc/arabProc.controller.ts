@@ -22,6 +22,16 @@ export class ArabProcController {
     }
   }
 
+  public async handleGetArabProcById(req: Request, res: Response): Promise<IArabProcDoc | null> | never {
+    const id = req.params.id;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    try {
+      return await this.arabProcService.getArabProcById(id, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async handlePostArabProc(
     req: Request<{}, {}, IArabProc>,
     res: Response
@@ -46,6 +56,17 @@ export class ArabProcController {
         validatedReq,
         dataSource
       );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handlePutArabProc(req: Request, res: Response): Promise<IArabProcDoc | null> | never {
+    const id = req.params.id;
+    const validatedReq = matchedData(req, { locations: ["body"] }) as Partial<IArabProc>;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    try {
+      return await this.arabProcService.updateArabProc(id, validatedReq, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

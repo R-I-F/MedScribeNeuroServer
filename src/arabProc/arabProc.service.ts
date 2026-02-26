@@ -24,6 +24,16 @@ export class ArabProcService {
     }
   }
 
+  public async getArabProcById(id: string, dataSource: DataSource): Promise<IArabProcDoc | null> | never {
+    try {
+      const arabProcRepository = dataSource.getRepository(ArabProcEntity);
+      const arabProc = await arabProcRepository.findOne({ where: { id } });
+      return arabProc as unknown as IArabProcDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async getArabProcsWithSearch(search: string | undefined, dataSource: DataSource): Promise<IArabProcDoc[]> | never {
     try {
       const arabProcRepository = dataSource.getRepository(ArabProcEntity);
@@ -91,6 +101,26 @@ export class ArabProcService {
       } else {
         throw new Error("Failed to fetch external data");
       }
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async updateArabProc(
+    id: string,
+    data: Partial<IArabProc>,
+    dataSource: DataSource
+  ): Promise<IArabProcDoc | null> | never {
+    try {
+      const arabProcRepository = dataSource.getRepository(ArabProcEntity);
+      const existing = await arabProcRepository.findOne({ where: { id } });
+      if (!existing) return null;
+      if (data.title !== undefined) existing.title = data.title;
+      if (data.alphaCode !== undefined) existing.alphaCode = data.alphaCode;
+      if (data.numCode !== undefined) existing.numCode = data.numCode;
+      if (data.description !== undefined) existing.description = data.description;
+      const saved = await arabProcRepository.save(existing);
+      return saved as unknown as IArabProcDoc;
     } catch (err: any) {
       throw new Error(err);
     }

@@ -6,8 +6,10 @@ import { createArabProcValidator } from "../validators/createArabProc.validators
 import { validationResult } from "express-validator";
 import { createFromExternalValidator } from "../validators/createFromExternal.validator";
 import { deleteArabProcValidator } from "../validators/deleteArabProc.validator";
+import { updateArabProcValidator } from "../validators/updateArabProc.validator";
+import { getArabProcByIdValidator } from "../validators/getArabProcById.validator";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
+import { authorize } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import { UserRole } from "../types/role.types";
 import institutionResolver from "../middleware/institutionResolver.middleware";
@@ -23,7 +25,7 @@ export class ArabProcRouter {
   }
 
   private initRoutes() {
-    // Custom authorization for GET: allows superAdmin, instituteAdmin, and clerk
+    // All CRUD: Super Admin, Institute Admin, Clerk
     const requireSuperAdminOrInstituteAdminOrClerk = authorize(
       UserRole.SUPER_ADMIN,
       UserRole.INSTITUTE_ADMIN,
@@ -46,12 +48,39 @@ export class ArabProcRouter {
         }
       }
     );
+
+    this.router.get(
+      "/:id",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSuperAdminOrInstituteAdminOrClerk,
+      getArabProcByIdValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const arabProc = await this.arabProcController.handleGetArabProcById(req, res);
+            if (arabProc) {
+              res.status(StatusCodes.OK).json(arabProc);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "ArabProc not found" });
+            }
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
     this.router.post(
       "/createArabProc",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdminOrClerk,
       createArabProcValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -72,7 +101,7 @@ export class ArabProcRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdminOrClerk,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -93,12 +122,38 @@ export class ArabProcRouter {
       }
     );
 
+    this.router.put(
+      "/:id",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdminOrClerk,
+      updateArabProcValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const updated = await this.arabProcController.handlePutArabProc(req, res);
+            if (updated) {
+              res.status(StatusCodes.OK).json(updated);
+            } else {
+              res.status(StatusCodes.NOT_FOUND).json({ error: "ArabProc not found" });
+            }
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
     this.router.delete(
       "/:id",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdminOrClerk,
       deleteArabProcValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

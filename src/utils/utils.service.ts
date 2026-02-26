@@ -46,6 +46,23 @@ export class UtilService {
     }
   }
 
+  /**
+   * Sanitize label/title for DB: trim, lowercase, remove commas, collapse multiple spaces.
+   * Use for mainDiag title, consumables, equipment, positions, approaches, regions, hospital names.
+   */
+  public sanitizeLabel(item: string): string | never {
+    if (typeof item !== "string") {
+      throw new Error("Item must be a string");
+    }
+    try {
+      const trimmed = item.trim().toLowerCase();
+      const noCommas = trimmed.replace(/,/g, " ");
+      return noCommas.replace(/\s+/g, " ").trim();
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public stringToLowerCaseTrimUndefined(item: string): string | undefined | never {
     if(typeof item !== "string") {
       throw new Error("Item must be a string");
@@ -82,6 +99,11 @@ export class UtilService {
 
       if (normalized === "pending" || normalized === "approved" || normalized === "rejected") {
         return normalized;
+      }
+
+      // External sheet may use "Accepted" instead of "Approved"
+      if (normalized === "accepted") {
+        return "approved";
       }
 
       throw new Error(`Invalid sub status: ${status}`);

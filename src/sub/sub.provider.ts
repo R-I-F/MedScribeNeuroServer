@@ -226,12 +226,12 @@ export class SubProvider {
           return undefined as any;
         })(),
         roleInSurg: this.utilService.stringToLowerCaseTrimUndefined(
-          rawItemArr[indexes.roleInProc]
+          rawItemArr[indexes.roleInProc] ?? ""
         ) as TRoleInSurg,
         assRoleDesc,
         otherSurgRank: (this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.otherSurg] ?? ""
-        ) ?? "") as TOtherSurgRank,
+        ) || "other") as TOtherSurgRank,
         otherSurgName: (this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.nameOtherSurg] ?? ""
         ) ?? "") as string,
@@ -241,12 +241,12 @@ export class SubProvider {
         preOpClinCond: this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.preOpClinicalCond]
         ),
-        insUsed: this.utilService.stringToLowerCaseTrimUndefined(
-          rawItemArr[indexes.insUsed]
-        ) as TInsUsed,
-        consUsed: this.utilService.stringToLowerCaseTrimUndefined(
-          rawItemArr[indexes.consUsed]
-        ) as TConsUsed,
+        insUsed: (this.utilService.stringToLowerCaseTrimUndefined(
+          rawItemArr[indexes.insUsed] ?? ""
+        ) || "none") as TInsUsed,
+        consUsed: (this.utilService.stringToLowerCaseTrimUndefined(
+          rawItemArr[indexes.consUsed] ?? ""
+        ) || "none") as TConsUsed,
         consDetails: this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.consDet]
         ),
@@ -297,8 +297,27 @@ export class SubProvider {
       }
     }
     try {
-      // External import: no duplicate check by subGoogleUid; insert all rows that have required fields
-      const uniqueSubs = subPayloads;
+      // Filter out submissions that already exist (by subGoogleUid) so we only insert new rows
+      let uniqueSubs = await this.filterDuplicateSubs(subPayloads, dataSource);
+      const skippedInDb = subPayloads.length - uniqueSubs.length;
+      if (skippedInDb > 0) {
+        console.warn(`[sub external import] ${skippedInDb} row(s) skipped: already exist in DB (duplicate subGoogleUid).`);
+      }
+
+      // Deduplicate within batch (same subGoogleUid appearing twice in sheet): keep first occurrence
+      const seenUids = new Set<string>();
+      const beforeInBatchDedup = uniqueSubs.length;
+      uniqueSubs = uniqueSubs.filter((sub) => {
+        const uid = sub.subGoogleUid?.trim();
+        if (!uid) return true;
+        if (seenUids.has(uid)) return false;
+        seenUids.add(uid);
+        return true;
+      });
+      const skippedInBatch = beforeInBatchDedup - uniqueSubs.length;
+      if (skippedInBatch > 0) {
+        console.warn(`[sub external import] ${skippedInBatch} row(s) skipped: duplicate subGoogleUid within batch (kept first).`);
+      }
 
       if (uniqueSubs.length === 0) {
         return [];

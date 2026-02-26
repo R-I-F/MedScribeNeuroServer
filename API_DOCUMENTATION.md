@@ -2395,6 +2395,26 @@ Deletes an Institute Admin from the system. Only Super Admins can delete Institu
 
 ---
 
+### Institute Admin Dashboard – Main Diagnosis
+
+The **Institute Admin dashboard** can manage Main Diagnosis with the same full CRUD as Super Admin. All operations are **institution-scoped**: the dashboard uses the Institute Admin's JWT (which includes `institutionId`), so only main diagnoses for that institution's database are listed, created, updated, or deleted.
+
+| Action | Method | Endpoint | Description |
+|--------|--------|----------|-------------|
+| List all | GET | `/mainDiag` | List all main diagnoses for the institution |
+| Get one | GET | `/mainDiag/:id` | Get a main diagnosis by ID |
+| Create | POST | `/mainDiag` | Create a new main diagnosis (title, procsArray, diagnosis) |
+| Update | PUT | `/mainDiag/:id` | Update title and/or append procs/diagnosis |
+| Remove procs | POST | `/mainDiag/:id/procs/remove` | Remove CPT links (body: `numCodes` array) |
+| Remove diagnosis | POST | `/mainDiag/:id/diagnosis/remove` | Remove ICD links (body: `icdCodes` array) |
+| Delete | DELETE | `/mainDiag/:id` | Delete a main diagnosis |
+
+**Authentication:** All of the above require **Super Admin or Institute Admin** (POST, PUT, remove, DELETE) or any authenticated user (GET). Send `Authorization: Bearer <token>` and, if needed, `X-Institution-Id` header. Full request/response details, validation, and rate limits are in [Main Diagnosis (`/mainDiag`)](#main-diagnosis-maindiag).
+
+**Frontend (i-admin dashboard):** The dashboard should show an **Add New** (create) and **Delete** button for main diagnosis so Institute Admins can manage them. See [Institute Admin – Main Diagnosis (Add New & Delete)](./docs/FRONTEND_INSTITUTE_ADMIN_MAIN_DIAGNOSIS.md) for the exact API calls and a UI checklist.
+
+---
+
 ### Get All Supervisors (Dashboard)
 **GET** `/instituteAdmin/supervisors`
 
@@ -9320,6 +9340,8 @@ Deletes a procedure CPT code from the system. The `id` parameter must be a valid
 
 **⚠️ Multi-Tenancy Note:** All main diagnosis endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access main diagnoses from their own institution.
 
+**Institute Admin dashboard:** Institute Admins have full CRUD access (create, read, update, delete, remove procs/diagnosis). For a summary of endpoints to use in the i-admin dashboard, see [Institute Admin Dashboard – Main Diagnosis](#institute-admin-dashboard--main-diagnosis).
+
 All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
 
 ### Rate Limiting
@@ -9346,18 +9368,19 @@ Rate limiting uses the authenticated user's ID from the JWT token. If no valid t
 ### Create Main Diagnosis
 **POST** `/mainDiag`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **Request Body:**
 ```json
@@ -9918,18 +9941,19 @@ Removes the association between the main diagnosis and the given ICD diagnosis c
 ### Delete Main Diagnosis
 **DELETE** `/mainDiag/:id`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin or Institute Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **URL Parameters:**
 - `id` (required): Main Diagnosis UUID (must be a valid UUID format)
@@ -10735,7 +10759,7 @@ A single JSON object with **seven** keys (no `points`, no `academicRanking`):
 
 **⚠️ Multi-Tenancy Note:** All Arabic procedure endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access Arabic procedures from their own institution.
 
-**⚠️ Multi-Tenancy Note:** All Arabic procedure endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access Arabic procedures from their own institution.
+**Access:** Full CRUD (GET list, GET by id, POST create, POST create from external, PUT update, DELETE) is available to **Super Admin, Institute Admin, or Clerk**.
 
 All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting) section below for details.
 
@@ -10744,7 +10768,7 @@ All endpoints in this module are protected with **user-based rate limiting**. Ra
 All `/arabProc` endpoints are protected with user-based rate limiting:
 
 - **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
+- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
 
 Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
 
@@ -10809,17 +10833,57 @@ Returns all Arabic procedures in the system. This endpoint is protected and requ
 
 ---
 
+### Get Arab Procedure by ID
+**GET** `/arabProc/:id`
+
+**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
+
+**URL Parameters:**
+- `id` (required): ArabProc UUID (must be a valid UUID format)
+
+**Description:** Returns a single Arabic procedure by ID.
+
+**Response (200 OK):** Same shape as one item in the Get All response (object with `id`, `title`, `alphaCode`, `numCode`, `description`, `createdAt`, `updatedAt`).
+
+**Error Response (404 Not Found):**
+```json
+{
+  "error": "ArabProc not found"
+}
+```
+
+**Error Response (400 Bad Request):** Invalid UUID in `id`.
+
+---
+
 ### Create Arab Procedure
 **POST** `/arabProc/createArabProc`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin, Institute Admin, or Clerk authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **Request Body:**
 ```json
@@ -10868,14 +10932,19 @@ Authorization: Bearer <superAdmin_token>
 ### Create Arab Procedure from External
 **POST** `/arabProc/createArabProcFromExternal`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin, Institute Admin, or Clerk authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **Request Body:**
 ```json
@@ -10914,21 +10983,71 @@ Authorization: Bearer <superAdmin_token>
 
 ---
 
-### Delete Arab Procedure
-**DELETE** `/arabProc/:id`
+### Update Arab Procedure
+**PUT** `/arabProc/:id`
 
-**Requires:** Super Admin authentication
+**Requires:** Super Admin, Institute Admin, or Clerk authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Headers:**
 ```
-Authorization: Bearer <superAdmin_token>
+Authorization: Bearer <token>
 ```
 OR
 ```
 Cookie: auth_token=<token>
 ```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
+
+**URL Parameters:**
+- `id` (required): ArabProc UUID (must be a valid UUID format)
+
+**Request Body:** All fields optional (at least one recommended). Only provided fields are updated.
+```json
+{
+  "title": "Updated procedure title",
+  "alphaCode": "CODE",
+  "numCode": "61070",
+  "description": "Updated description."
+}
+```
+
+**Field Requirements:**
+- `title` (optional): string, max 100 characters
+- `alphaCode` (optional): string, max 10 characters
+- `numCode` (optional): string, max 255 characters
+- `description` (optional): string
+
+**Response (200 OK):** Updated Arab procedure object (same shape as create response, with `id`, `createdAt`, `updatedAt`).
+
+**Error Response (404 Not Found):**
+```json
+{
+  "error": "ArabProc not found"
+}
+```
+
+**Error Response (400 Bad Request):** Invalid UUID or validation error on body.
+
+---
+
+### Delete Arab Procedure
+**DELETE** `/arabProc/:id`
+
+**Requires:** Super Admin, Institute Admin, or Clerk authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+Optionally: `X-Institution-Id` header if institution is not in JWT.
 
 **URL Parameters:**
 - `id` (required): ArabProc UUID (must be a valid UUID format)
@@ -14447,8 +14566,8 @@ All PDF reports include MedScribe branding in the header:
 | `/calSurg/*` | Partial / DISABLED | **DISABLED:** POST /postAllFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin, Institute Admin, Clerk, Supervisor, or Candidate (GET /dashboard, GET /getById, GET /getAll) / Super Admin, Institute Admin, or Clerk (POST /, PATCH /:id, DELETE /:id) |
 | `/diagnosis/*` | Partial | Super Admin or Institute Admin (GET /, POST /post, PATCH /:id, DELETE /:id) / Super Admin (POST /postBulk) |
 | `/procCpt/*` | Partial | Super Admin or Institute Admin (GET /, POST /upsert, DELETE /:id) / Super Admin (POST /postAllFromExternal) |
-| `/mainDiag/*` | Partial | Super Admin, Institute Admin, Supervisor, or Candidate (GET /, GET /:id) / Super Admin or Institute Admin (PUT /:id, POST /:id/procs/remove, POST /:id/diagnosis/remove) / Super Admin (POST /, DELETE /:id) |
-| `/arabProc/*` | Partial | Super Admin, Institute Admin, or Clerk (GET /getAllArabProcs) / Super Admin (POST /createArabProc, POST /createArabProcFromExternal, DELETE /:id) |
+| `/mainDiag/*` | Partial | Super Admin, Institute Admin, Supervisor, or Candidate (GET /, GET /:id) / Super Admin or Institute Admin (POST /, PUT /:id, POST /:id/procs/remove, POST /:id/diagnosis/remove, DELETE /:id) |
+| `/arabProc/*` | Partial | Super Admin, Institute Admin, or Clerk (GET /getAllArabProcs, GET /:id, POST /createArabProc, POST /createArabProcFromExternal, PUT /:id, DELETE /:id) |
 | `/hospital/*` | Partial | Super Admin (POST /create) / No (GET, PUT, DELETE) |
 | `/mailer/*` | Yes | Institute Admin or Super Admin |
 | `/mailer/send` | Yes | Institute Admin or Super Admin |

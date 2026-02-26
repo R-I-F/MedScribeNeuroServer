@@ -53,7 +53,7 @@ export class MainDiagProvider {
 
       // Create mainDiag entity with UUIDs and sanitized title
       const mainDiagEntity = mainDiagRepository.create({
-        title: this.utilService.stringToLowerCaseTrim(validatedReq.title),
+        title: this.utilService.sanitizeLabel(validatedReq.title),
       });
 
       // Save first to get the ID
@@ -157,7 +157,7 @@ export class MainDiagProvider {
 
       // Update title if provided
       if (updateData.title !== undefined) {
-        existingMainDiag.title = this.utilService.stringToLowerCaseTrim(updateData.title);
+        existingMainDiag.title = this.utilService.sanitizeLabel(updateData.title);
       }
 
       // Handle procs: append new ones to existing array

@@ -10,7 +10,7 @@ import { removeMainDiagDiagnosisValidator } from "../validators/removeMainDiagDi
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireSuperAdmin, requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { requireCandidate, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
@@ -26,13 +26,14 @@ export class MainDiagRouter {
   }
 
   public async initRoutes() {
-    // Create mainDiag
+    // Create mainDiag - superAdmin, instituteAdmin
+    const requireSuperAdminOrInstituteAdmin = authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN);
     this.router.post(
       "/",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       createMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -96,7 +97,6 @@ export class MainDiagRouter {
     );
 
     // Update mainDiag - superAdmin, instituteAdmin
-    const requireSuperAdminOrInstituteAdmin = authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN);
     this.router.put(
       "/:id",
       extractJWT,
@@ -177,13 +177,13 @@ export class MainDiagRouter {
       }
     );
 
-    // Delete mainDiag
+    // Delete mainDiag - superAdmin, instituteAdmin
     this.router.delete(
       "/:id",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdmin,
+      requireSuperAdminOrInstituteAdmin,
       deleteMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

@@ -1,16 +1,19 @@
 import { randomUUID } from "crypto";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
 import { IApproachDoc, IApproachInput } from "./approaches.interface";
 import { ApproachEntity } from "./approaches.mDbSchema";
+import { UtilService } from "../utils/utils.service";
 
 @injectable()
 export class ApproachesProvider {
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+  constructor(@inject(UtilService) private utilService: UtilService) {}
+
   public async create(data: IApproachInput, dataSource: DataSource): Promise<IApproachDoc> | never {
     const repo = dataSource.getRepository(ApproachEntity);
-    const entity = repo.create({ id: randomUUID(), approach: data.approach });
+    const entity = repo.create({ id: randomUUID(), approach: this.utilService.sanitizeLabel(data.approach) });
     const saved = await repo.save(entity);
     return saved as unknown as IApproachDoc;
   }
@@ -20,7 +23,7 @@ export class ApproachesProvider {
     const repo = dataSource.getRepository(ApproachEntity);
     const existing = await repo.findOne({ where: { id } });
     if (!existing) return null;
-    if (data.approach !== undefined) existing.approach = data.approach;
+    if (data.approach !== undefined) existing.approach = this.utilService.sanitizeLabel(data.approach);
     const saved = await repo.save(existing);
     return saved as unknown as IApproachDoc;
   }

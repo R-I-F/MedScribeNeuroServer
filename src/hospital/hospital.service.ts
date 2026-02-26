@@ -1,16 +1,22 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
 import { IHospital, IHospitalDoc } from "./hospital.interface";
-import { AppDataSource } from "../config/database.config";
 import { HospitalEntity } from "./hospital.mDbSchema";
-import { Repository } from "typeorm";
+import { UtilService } from "../utils/utils.service";
 
 @injectable()
 export class HospitalService {
+  constructor(@inject(UtilService) private utilService: UtilService) {}
+
   public async createHospital(hospitalData: IHospital, dataSource: DataSource): Promise<IHospitalDoc> | never {
     try {
       const hospitalRepository = dataSource.getRepository(HospitalEntity);
-      const newHospital = hospitalRepository.create(hospitalData);
+      const sanitized = {
+        ...hospitalData,
+        arabName: this.utilService.sanitizeLabel(hospitalData.arabName),
+        engName: this.utilService.sanitizeLabel(hospitalData.engName),
+      };
+      const newHospital = hospitalRepository.create(sanitized);
       const savedHospital = await hospitalRepository.save(newHospital);
       return savedHospital as unknown as IHospitalDoc;
     } catch (err: any) {
@@ -49,8 +55,8 @@ export class HospitalService {
       const hospitalRepository = dataSource.getRepository(HospitalEntity);
       const existing = await hospitalRepository.findOne({ where: { id } });
       if (!existing) return null;
-      if (updateData.arabName !== undefined) existing.arabName = updateData.arabName;
-      if (updateData.engName !== undefined) existing.engName = updateData.engName;
+      if (updateData.arabName !== undefined) existing.arabName = this.utilService.sanitizeLabel(updateData.arabName);
+      if (updateData.engName !== undefined) existing.engName = this.utilService.sanitizeLabel(updateData.engName);
       if (updateData.location !== undefined) {
         existing.location = { ...(existing.location || {}), ...updateData.location };
       }

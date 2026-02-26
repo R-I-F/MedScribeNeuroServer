@@ -1,16 +1,19 @@
 import { randomUUID } from "crypto";
-import { injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
 import { IPositionDoc, IPositionInput } from "./positions.interface";
 import { PositionEntity } from "./positions.mDbSchema";
+import { UtilService } from "../utils/utils.service";
 
 @injectable()
 export class PositionsProvider {
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+  constructor(@inject(UtilService) private utilService: UtilService) {}
+
   public async create(data: IPositionInput, dataSource: DataSource): Promise<IPositionDoc> | never {
     const repo = dataSource.getRepository(PositionEntity);
-    const entity = repo.create({ id: randomUUID(), position: data.position });
+    const entity = repo.create({ id: randomUUID(), position: this.utilService.sanitizeLabel(data.position) });
     const saved = await repo.save(entity);
     return saved as unknown as IPositionDoc;
   }
@@ -20,7 +23,7 @@ export class PositionsProvider {
     const repo = dataSource.getRepository(PositionEntity);
     const existing = await repo.findOne({ where: { id } });
     if (!existing) return null;
-    if (data.position !== undefined) existing.position = data.position;
+    if (data.position !== undefined) existing.position = this.utilService.sanitizeLabel(data.position);
     const saved = await repo.save(existing);
     return saved as unknown as IPositionDoc;
   }

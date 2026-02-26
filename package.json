@@ -10,8 +10,14 @@
     "db:import-calSurg-from-external": "ts-node scripts/import-calSurg-from-external.ts",
     "db:import-sub-from-external": "ts-node scripts/import-sub-from-external.ts",
     "db:import-calSurg-ka-from-row-3303": "ts-node scripts/import-calSurg-ka-from-row-3303.ts",
+    "db:import-calSurg-ka-from-row-3466": "ts-node scripts/import-calSurg-ka-from-row-3466.ts",
+    "db:import-calSurg-ka-from-row-3493": "ts-node scripts/import-calSurg-ka-from-row-3493.ts",
     "db:import-sub-ka-from-row-1290": "ts-node scripts/import-sub-ka-from-row-1290.ts",
-    "db:import-event-attendance-ka-from-row-483": "ts-node scripts/import-event-attendance-ka-from-row-483.ts"
+    "db:import-sub-ka-from-row-1452": "ts-node scripts/import-sub-ka-from-row-1452.ts",
+    "db:import-sub-ka-from-row-1479": "ts-node scripts/import-sub-ka-from-row-1479.ts",
+    "db:import-event-attendance-ka-from-row-483": "ts-node scripts/import-event-attendance-ka-from-row-483.ts",
+    "create-clerk-masr-el-dawly": "ts-node scripts/create-clerk-masr-el-dawly.ts",
+    "announce-events-next-thursday-ka": "ts-node scripts/announce-events-next-thursday-ka.ts"
   },
   "keywords": [],
   "author": "",
