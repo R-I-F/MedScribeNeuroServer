@@ -32,4 +32,33 @@ export class AdditionalQuestionsProvider {
       throw new Error(err);
     }
   }
+
+  /**
+   * Update only the boolean (0/1) fields for an existing additional_questions row.
+   * Only provided fields are updated. Row must exist.
+   */
+  public async updateByMainDiagDocId(
+    mainDiagDocId: string,
+    dataSource: DataSource,
+    updateData: Partial<Pick<IAdditionalQuestionDoc, "spOrCran" | "pos" | "approach" | "region" | "clinPres" | "intEvents">>
+  ): Promise<IAdditionalQuestionDoc | null> | never {
+    try {
+      if (!this.uuidRegex.test(mainDiagDocId)) {
+        throw new Error("Invalid mainDiagDocId format");
+      }
+      const repo = dataSource.getRepository(AdditionalQuestionEntity);
+      const row = await repo.findOne({ where: { mainDiagDocId } });
+      if (!row) return null;
+      const allowed = ["spOrCran", "pos", "approach", "region", "clinPres", "intEvents"] as const;
+      for (const key of allowed) {
+        if (updateData[key] !== undefined) {
+          (row as any)[key] = updateData[key];
+        }
+      }
+      await repo.save(row);
+      return row as unknown as IAdditionalQuestionDoc;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

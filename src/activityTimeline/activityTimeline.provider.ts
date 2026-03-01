@@ -29,11 +29,13 @@ export class ActivityTimelineProvider {
         select: { id: true, createdAt: true, subStatus: true, procedureName: true, procDocId: true },
         relations: ["calSurg"],
         order: { createdAt: "DESC" },
+        take: 50,
       }),
       attRepo.find({
         where: { candidateId: userId },
         relations: ["event", "event.lecture", "event.journal", "event.conf"],
         order: { createdAt: "DESC" },
+        take: 50,
       }),
     ]);
 

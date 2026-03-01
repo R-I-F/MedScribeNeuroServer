@@ -1,6 +1,5 @@
 import { checkSchema } from "express-validator";
 import { uuidValidator } from "./uuidValidator.util";
-import { isValidConsUsed } from "./consUsedValidator.util";
 
 const ROLE_IN_SURG = [
   "operator",
@@ -23,40 +22,7 @@ const OTHER_SURG_RANK = [
   "other",
 ] as const;
 
-const INS_USED = [
-  "endoscope",
-  "microscope",
-  "high speed drill",
-  "neuro-monitoring",
-  "ultrasonic aspirator",
-  "ultrasound and or doppler /intraoperative",
-  "stereotactic frame",
-  "radiofrequency device",
-  "neuronavigation",
-  "c-Arm",
-  "none",
-] as const;
-
-const CONS_USED = [
-  "artificial dural graft",
-  "external ventricular drain",
-  "bone cement",
-  "intervertebral cage",
-  "nervous system stimulator",
-  "pedicle screws",
-  "lp shunt",
-  "omaya resevoir, ventricular stent",
-  "titanium mesh/ and or miniplates",
-  "vp shunt- fixed pressure",
-  "vp shunt- programmable",
-  "csf drainage system, otherwise than vp, lp and evd",
-  "other",
-  "none",
-] as const;
-
 const SP_OR_CRAN = ["spinal", "cranial"] as const;
-const POS = ["supine", "prone", "lateral", "concorde", "other"] as const;
-const REGION = ["craniocervical", "cervical", "dorsal", "lumbar"] as const;
 
 /**
  * Validator for supervisor submissions.
@@ -115,41 +81,17 @@ export const createSupervisorSubmissionValidator = checkSchema({
     in: ["body"],
     notEmpty: true,
     errorMessage: "insUsed is required.",
-    isString: {
-      errorMessage: "insUsed must be a string.",
-    },
+    isString: { errorMessage: "insUsed must be a string." },
     isLength: { options: { max: 1000 }, errorMessage: "insUsed must not exceed 1000 characters." },
     trim: true,
-    custom: {
-      options: (value: unknown) => {
-        if (typeof value !== "string") return false;
-        const parts = value
-          .split(",")
-          .map((s) => s.trim().toLowerCase())
-          .filter((s) => s.length > 0);
-        if (parts.length === 0) return false;
-        const allowedLower = (INS_USED as readonly string[]).map((s) => s.toLowerCase());
-        return parts.every((p) => allowedLower.includes(p));
-      },
-      errorMessage: `Each instrument must be one of: ${INS_USED.join(", ")}`,
-    },
   },
   consUsed: {
     in: ["body"],
     notEmpty: true,
     errorMessage: "consUsed is required.",
-    isString: {
-      errorMessage: "consUsed must be a string.",
-    },
+    isString: { errorMessage: "consUsed must be a string." },
     isLength: { options: { max: 1000 }, errorMessage: "consUsed must not exceed 1000 characters." },
     trim: true,
-    custom: {
-      options: (value: unknown) => {
-        if (typeof value !== "string") return false;
-        return isValidConsUsed(value, CONS_USED as readonly string[]);
-      },
-      errorMessage: `Each consumable must be one of: ${CONS_USED.join(", ")}`,
-    },
   },
   diagnosisName: {
     in: ["body"],
@@ -183,8 +125,8 @@ export const createSupervisorSubmissionValidator = checkSchema({
   surgNotes: { in: ["body"], optional: true, isString: true, trim: true },
   IntEvents: { in: ["body"], optional: true, isString: true, trim: true },
   spOrCran: { in: ["body"], optional: true, isIn: { options: [SP_OR_CRAN] }, trim: true },
-  pos: { in: ["body"], optional: true, isIn: { options: [POS] }, trim: true },
+  pos: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
   approach: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
   clinPres: { in: ["body"], optional: true, isString: true, trim: true },
-  region: { in: ["body"], optional: true, isIn: { options: [REGION] }, trim: true },
+  region: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
 });

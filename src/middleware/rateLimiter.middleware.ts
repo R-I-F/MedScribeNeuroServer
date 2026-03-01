@@ -4,6 +4,12 @@ import { StatusCodes } from "http-status-codes";
 import jwt from "jsonwebtoken";
 
 /**
+ * When set to "true", all rate limiters are skipped (for load testing).
+ * Do not use in production.
+ */
+const skipRateLimit = () => process.env.DISABLE_RATE_LIMIT === "true";
+
+/**
  * Helper function to extract and normalize IP address for rate limiting
  * Uses express-rate-limit's ipKeyGenerator helper to properly handle IPv6 addresses
  * This satisfies express-rate-limit's validation requirements
@@ -24,6 +30,7 @@ function getIpForRateLimit(req: Request): string {
 export const globalIpRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 400,
+  skip: skipRateLimit,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -50,6 +57,7 @@ export const globalIpRateLimiter = rateLimit({
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 200, // Limit each IP to 200 requests per windowMs
+  skip: skipRateLimit,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -75,6 +83,7 @@ export const apiRateLimiter = rateLimit({
 export const healthRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 60,
+  skip: skipRateLimit,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -101,6 +110,7 @@ export const healthRateLimiter = rateLimit({
 export const strictRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // Limit each IP to 50 requests per windowMs
+  skip: skipRateLimit,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -128,6 +138,7 @@ export const strictRateLimiter = rateLimit({
 export const userBasedRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 200, // Limit each user to 200 requests per windowMs
+  skip: skipRateLimit,
   keyGenerator: (req: Request) => {
     // Try to extract user ID from JWT token
     try {
@@ -181,6 +192,7 @@ export const userBasedRateLimiter = rateLimit({
 export const userBasedStrictRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // Limit each user to 50 requests per windowMs
+  skip: skipRateLimit,
   keyGenerator: (req: Request) => {
     // Try to extract user ID from JWT token
     try {

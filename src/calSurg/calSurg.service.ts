@@ -1,11 +1,27 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
+import { Between, In, MoreThanOrEqual } from "typeorm";
+import { createTtlCache } from "../utils/ttlCache";
 import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
 import { CalSurgEntity } from "./calSurg.mDbSchema";
-import { Repository, Between, In, MoreThanOrEqual, LessThanOrEqual } from "typeorm";
+
+/** TTL for CalSurg dashboard cache (ms). Env: CACHE_TTL_CALSURG_DASHBOARD_MS */
+const CACHE_TTL_CALSURG_DASHBOARD_MS = Math.max(0, parseInt(process.env.CACHE_TTL_CALSURG_DASHBOARD_MS ?? "60000", 10)) || 60000;
 
 @injectable()
 export class CalSurgService {
+  private readonly calSurgDashboardCache = createTtlCache<any[]>();
+  private readonly calSurgDashboardLoadPromises = new Map<string, Promise<any[]>>();
+
+  /**
+   * Stable cache key per tenant. Read-only from DataSource options.
+   */
+  private getTenantCacheKey(dataSource: DataSource): string {
+    const opts = dataSource.options as { database?: string; host?: string };
+    const db = opts.database ?? "";
+    const host = opts.host ?? "";
+    return host && db ? `${host}:${db}` : db || "default";
+  }
   public async createCalSurg(calSurgData: ICalSurg, dataSource: DataSource): Promise<ICalSurgDoc> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
@@ -105,34 +121,66 @@ export class CalSurgService {
     }
   }
 
+  /** Max rows for dashboard to avoid unbounded slow queries (last 60 days can be large). */
+  private static readonly DASHBOARD_TAKE = 1000;
+
   /**
-   * Dashboard: calSurg within last 60 days, stripped of formLink and google_uid
+   * Dashboard: calSurg within last 60 days, stripped of formLink and google_uid.
+   * Cached per tenant with TTL (CACHE_TTL_CALSURG_DASHBOARD_MS). Concurrent requests for same tenant coalesce.
    */
   public async getCalSurgDashboard(dataSource: DataSource): Promise<any[]> | never {
     try {
-      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 60);
-      cutoff.setHours(0, 0, 0, 0);
-
-      const calSurgs = await calSurgRepository.find({
-        where: { procDate: MoreThanOrEqual(cutoff) },
-        relations: ["hospital", "arabProc"],
-        order: { procDate: "DESC" },
-      });
-
-      return calSurgs.map((cs) => {
-        const { formLink, google_uid, createdAt, updatedAt, ...rest } = cs as any;
-        return {
-          ...rest,
-          _id: rest.id ?? rest._id,
-          hospital: rest.hospital ? { _id: rest.hospital.id, engName: rest.hospital.engName, arabName: rest.hospital.arabName } : undefined,
-          arabProc: rest.arabProc ? { _id: rest.arabProc.id, title: rest.arabProc.title, numCode: rest.arabProc.numCode, alphaCode: rest.arabProc.alphaCode, description: rest.arabProc.description } : undefined,
-        };
-      });
+      const key = this.getTenantCacheKey(dataSource);
+      const cached = this.calSurgDashboardCache.get(key);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const inProgress = this.calSurgDashboardLoadPromises.get(key);
+      if (inProgress) {
+        await inProgress;
+        const after = this.calSurgDashboardCache.get(key);
+        if (after !== undefined) return after;
+      }
+      const loadPromise = this.computeCalSurgDashboard(dataSource);
+      this.calSurgDashboardLoadPromises.set(key, loadPromise);
+      try {
+        const result = await loadPromise;
+        this.calSurgDashboardCache.set(key, result, CACHE_TTL_CALSURG_DASHBOARD_MS);
+        return result;
+      } finally {
+        this.calSurgDashboardLoadPromises.delete(key);
+      }
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * Fetches and shapes CalSurg dashboard. Used by getCalSurgDashboard (cached).
+   * Bounded by DASHBOARD_TAKE; ensure idx_cal_surgs_proc_date exists for performance.
+   */
+  private async computeCalSurgDashboard(dataSource: DataSource): Promise<any[]> {
+    const calSurgRepository = dataSource.getRepository(CalSurgEntity);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 60);
+    cutoff.setHours(0, 0, 0, 0);
+
+    const calSurgs = await calSurgRepository.find({
+      where: { procDate: MoreThanOrEqual(cutoff) },
+      relations: ["hospital", "arabProc"],
+      order: { procDate: "DESC" },
+      take: CalSurgService.DASHBOARD_TAKE,
+    });
+
+    return calSurgs.map((cs) => {
+      const { formLink, google_uid, createdAt, updatedAt, ...rest } = cs as any;
+      return {
+        ...rest,
+        _id: rest.id ?? rest._id,
+        hospital: rest.hospital ? { _id: rest.hospital.id, engName: rest.hospital.engName, arabName: rest.hospital.arabName } : undefined,
+        arabProc: rest.arabProc ? { _id: rest.arabProc.id, title: rest.arabProc.title, numCode: rest.arabProc.numCode, alphaCode: rest.arabProc.alphaCode, description: rest.arabProc.description } : undefined,
+      };
+    });
   }
 
   public async getCalSurgByDateRange(startDate: Date, endDate: Date, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {

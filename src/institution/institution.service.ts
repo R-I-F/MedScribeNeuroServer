@@ -24,6 +24,8 @@ export interface IInstitution {
 }
 
 let cache: IInstitution[] | null = null;
+/** When non-null, a load is in progress or completed; concurrent callers await this instead of starting a new load. */
+let loadPromise: Promise<IInstitution[]> | null = null;
 
 async function ensureDefaultDbInitialized(): Promise<void> {
   if (!DefaultDbDataSource.isInitialized) {
@@ -59,10 +61,19 @@ async function loadInstitutions(): Promise<IInstitution[]> {
 }
 
 async function getCachedInstitutions(): Promise<IInstitution[]> {
-  if (cache === null) {
-    cache = await loadInstitutions();
+  if (cache !== null) {
+    return cache;
   }
-  return cache;
+  if (loadPromise !== null) {
+    return loadPromise;
+  }
+  loadPromise = loadInstitutions();
+  try {
+    cache = await loadPromise;
+    return cache;
+  } finally {
+    loadPromise = null;
+  }
 }
 
 /**
@@ -93,4 +104,5 @@ export async function getAllActiveInstitutions(): Promise<IInstitution[]> {
  */
 export function clearInstitutionCache(): void {
   cache = null;
+  loadPromise = null;
 }

@@ -27,4 +27,16 @@ export class AdditionalQuestionsService {
       throw new Error(err);
     }
   }
+
+  public async updateByMainDiagDocId(
+    mainDiagDocId: string,
+    dataSource: DataSource,
+    updateData: Partial<Pick<IAdditionalQuestionDoc, "spOrCran" | "pos" | "approach" | "region" | "clinPres" | "intEvents">>
+  ): Promise<IAdditionalQuestionDoc | null> | never {
+    try {
+      return await this.additionalQuestionsProvider.updateByMainDiagDocId(mainDiagDocId, dataSource, updateData);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }

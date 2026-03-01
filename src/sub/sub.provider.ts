@@ -18,8 +18,6 @@ import {
   ISubBase,
   TRoleInSurg,
   TOtherSurgRank,
-  TInsUsed,
-  TConsUsed,
   TMainDiagTitle,
   TSubStatus,
   SubPayloadMap,
@@ -243,10 +241,10 @@ export class SubProvider {
         ),
         insUsed: (this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.insUsed] ?? ""
-        ) || "none") as TInsUsed,
+        ) || "none"),
         consUsed: (this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.consUsed] ?? ""
-        ) || "none") as TConsUsed,
+        ) || "none"),
         consDetails: this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.consDet]
         ),
@@ -478,8 +476,8 @@ export class SubProvider {
       otherSurgName: toReq(body.otherSurgName),
       isItRevSurg: Boolean(body.isItRevSurg),
       preOpClinCond: toOpt(body.preOpClinCond),
-      insUsed: toReq(body.insUsed) as TInsUsed,
-      consUsed: toReq(body.consUsed) as TConsUsed,
+      insUsed: toReq(body.insUsed),
+      consUsed: toReq(body.consUsed),
       consDetails: toOpt(body.consDetails),
       mainDiagDocId: body.mainDiagDocId,
       subStatus: "pending" as TSubStatus,
@@ -496,10 +494,10 @@ export class SubProvider {
       surgNotes: toOpt(body.surgNotes),
       IntEvents: toOpt(body.IntEvents),
       spOrCran: body.spOrCran ? (toReq(body.spOrCran) as "spinal" | "cranial") : undefined,
-      pos: body.pos ? (toReq(body.pos) as "supine" | "prone" | "lateral" | "concorde" | "other") : undefined,
+      pos: body.pos ? toReq(body.pos) : undefined,
       approach: toOpt(body.approach),
       clinPres: toOpt(body.clinPres),
-      region: body.region ? (toReq(body.region) as "craniocervical" | "cervical" | "dorsal" | "lumbar") : undefined,
+      region: body.region ? toReq(body.region) : undefined,
     } as ISub;
 
     const savedSub = await this.subService.createOneSub(payload, dataSource);
@@ -602,8 +600,8 @@ export class SubProvider {
       otherSurgName: toReq(body.otherSurgName),
       isItRevSurg: Boolean(body.isItRevSurg),
       preOpClinCond: toOpt(body.preOpClinCond),
-      insUsed: toReq(body.insUsed) as TInsUsed,
-      consUsed: toReq(body.consUsed) as TConsUsed,
+      insUsed: toReq(body.insUsed),
+      consUsed: toReq(body.consUsed),
       consDetails: toOpt(body.consDetails),
       mainDiagDocId: body.mainDiagDocId,
       subStatus: "approved" as TSubStatus,
@@ -620,10 +618,10 @@ export class SubProvider {
       surgNotes: toOpt(body.surgNotes),
       IntEvents: toOpt(body.IntEvents),
       spOrCran: body.spOrCran ? (toReq(body.spOrCran) as "spinal" | "cranial") : undefined,
-      pos: body.pos ? (toReq(body.pos) as "supine" | "prone" | "lateral" | "concorde" | "other") : undefined,
+      pos: body.pos ? toReq(body.pos) : undefined,
       approach: toOpt(body.approach),
       clinPres: toOpt(body.clinPres),
-      region: body.region ? (toReq(body.region) as "craniocervical" | "cervical" | "dorsal" | "lumbar") : undefined,
+      region: body.region ? toReq(body.region) : undefined,
     } as ISub;
 
     return await this.subService.createOneSub(payload, dataSource);
@@ -828,21 +826,32 @@ export class SubProvider {
   }> | never {
     try {
       const allSubs = await this.subService.getSubsByCandidateId(candidateId, dataSource);
-      
-      const totalApproved = allSubs.filter(sub => sub.subStatus === "approved").length;
-      const totalRejected = allSubs.filter(sub => sub.subStatus === "rejected").length;
-      const totalPending = allSubs.filter(sub => sub.subStatus === "pending").length;
-      const totalApprovedAndPending = totalApproved + totalPending;
-
-      return {
-        totalApproved,
-        totalRejected,
-        totalPending,
-        totalApprovedAndPending
-      };
+      return this.getCandidateSubmissionsStatsFromSubs(allSubs);
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * Derive stats from an existing list of submissions (no DB call).
+   * Used by dashboard bundle to avoid duplicate submission load.
+   */
+  public getCandidateSubmissionsStatsFromSubs(subs: ISubDoc[]): {
+    totalApproved: number;
+    totalRejected: number;
+    totalPending: number;
+    totalApprovedAndPending: number;
+  } {
+    const totalApproved = subs.filter((sub) => sub.subStatus === "approved").length;
+    const totalRejected = subs.filter((sub) => sub.subStatus === "rejected").length;
+    const totalPending = subs.filter((sub) => sub.subStatus === "pending").length;
+    const totalApprovedAndPending = totalApproved + totalPending;
+    return {
+      totalApproved,
+      totalRejected,
+      totalPending,
+      totalApprovedAndPending,
+    };
   }
 
   public async getCptAnalytics(
@@ -916,6 +925,68 @@ export class SubProvider {
     }
   }
 
+  /**
+   * CPT analytics from an existing list of approved submissions (no DB call).
+   * Used by dashboard bundle to avoid duplicate submission load.
+   */
+  public getCptAnalyticsFromSubs(
+    approvedSubs: ISubDoc[],
+    _role: string
+  ): {
+    totalApprovedSubmissions: number;
+    items: {
+      cptCode: string;
+      alphaCode: string;
+      title: string;
+      total: { count: number; percentage: number };
+      byRole: { role: string; count: number; percentage: number }[];
+    }[];
+  } {
+    const totalApproved = approvedSubs.length;
+    const map = new Map<string, { alphaCode: string; title: string; byRole: Record<string, number> }>();
+    for (const sub of approvedSubs) {
+      const procs = (sub as any).procCpts ?? [];
+      const roleLabel = getRoleLabel((sub as any).roleInSurg);
+      const seen = new Set<string>();
+      for (const p of procs) {
+        const code = p?.numCode ?? String(p);
+        if (!code || seen.has(code)) continue;
+        seen.add(code);
+        let cur = map.get(code);
+        if (!cur) {
+          cur = { alphaCode: p?.alphaCode ?? "", title: p?.title ?? "", byRole: {} };
+          map.set(code, cur);
+        }
+        cur.byRole[roleLabel] = (cur.byRole[roleLabel] ?? 0) + 1;
+      }
+    }
+    const items = Array.from(map.entries())
+      .map(([cptCode, v]) => {
+        const totalCount = Object.values(v.byRole).reduce((a, b) => a + b, 0);
+        const totalPct = totalApproved > 0 ? Math.round((totalCount / totalApproved) * 10000) / 100 : 0;
+        const byRole = ROLE_ORDER.map((r) => {
+          const count = v.byRole[r] ?? 0;
+          const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+          return { role: r, count, percentage: pct };
+        }).filter((x) => x.count > 0);
+        for (const [roleLabel, count] of Object.entries(v.byRole)) {
+          if (!ROLE_ORDER.includes(roleLabel)) {
+            const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+            byRole.push({ role: roleLabel, count, percentage: pct });
+          }
+        }
+        return {
+          cptCode,
+          alphaCode: v.alphaCode,
+          title: v.title,
+          total: { count: totalCount, percentage: totalPct },
+          byRole,
+        };
+      })
+      .sort((a, b) => b.total.count - a.total.count);
+    return { totalApprovedSubmissions: totalApproved, items };
+  }
+
   public async getIcdAnalytics(
     userId: string,
     role: string,
@@ -986,6 +1057,65 @@ export class SubProvider {
   }
 
   /**
+   * ICD analytics from an existing list of approved submissions (no DB call).
+   * Used by dashboard bundle to avoid duplicate submission load.
+   */
+  public getIcdAnalyticsFromSubs(
+    approvedSubs: ISubDoc[]
+  ): {
+    totalApprovedSubmissions: number;
+    items: {
+      icdCode: string;
+      icdName: string;
+      total: { count: number; percentage: number };
+      byRole: { role: string; count: number; percentage: number }[];
+    }[];
+  } {
+    const totalApproved = approvedSubs.length;
+    const map = new Map<string, { icdName: string; byRole: Record<string, number> }>();
+    for (const sub of approvedSubs) {
+      const icds = (sub as any).icds ?? [];
+      const roleLabel = getRoleLabel((sub as any).roleInSurg);
+      const seen = new Set<string>();
+      for (const d of icds) {
+        const code = d?.icdCode ?? String(d);
+        if (!code || seen.has(code)) continue;
+        seen.add(code);
+        let cur = map.get(code);
+        if (!cur) {
+          cur = { icdName: d?.icdName ?? "", byRole: {} };
+          map.set(code, cur);
+        }
+        cur.byRole[roleLabel] = (cur.byRole[roleLabel] ?? 0) + 1;
+      }
+    }
+    const items = Array.from(map.entries())
+      .map(([icdCode, v]) => {
+        const totalCount = Object.values(v.byRole).reduce((a, b) => a + b, 0);
+        const totalPct = totalApproved > 0 ? Math.round((totalCount / totalApproved) * 10000) / 100 : 0;
+        const byRole = ROLE_ORDER.map((r) => {
+          const count = v.byRole[r] ?? 0;
+          const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+          return { role: r, count, percentage: pct };
+        }).filter((x) => x.count > 0);
+        for (const [roleLabel, count] of Object.entries(v.byRole)) {
+          if (!ROLE_ORDER.includes(roleLabel)) {
+            const pct = totalCount > 0 ? Math.round((count / totalCount) * 10000) / 100 : 0;
+            byRole.push({ role: roleLabel, count, percentage: pct });
+          }
+        }
+        return {
+          icdCode,
+          icdName: v.icdName,
+          total: { count: totalCount, percentage: totalPct },
+          byRole,
+        };
+      })
+      .sort((a, b) => b.total.count - a.total.count);
+    return { totalApprovedSubmissions: totalApproved, items };
+  }
+
+  /**
    * Supervisor analytics: approved submissions created by the logged-in user, grouped by supervisor.
    * Only candidates "create" submissions; supervisors/admins receive empty analytics.
    * Percentages use largest-remainder so they sum to 100.
@@ -1049,6 +1179,54 @@ export class SubProvider {
   }
 
   /**
+   * Supervisor analytics from an existing list of approved submissions (no DB call).
+   * Used by dashboard bundle to avoid duplicate submission load.
+   */
+  public getSupervisorAnalyticsFromSubs(approvedSubs: ISubDoc[]): {
+    totalApprovedSubmissions: number;
+    items: { supervisorId: string; supervisorName: string; count: number; percentage: number }[];
+  } {
+    const total = approvedSubs.length;
+    const map = new Map<string, { name: string; count: number }>();
+    for (const sub of approvedSubs) {
+      const sup = (sub as any).supervisor ?? (sub as any).supervisorDocId;
+      const id = sup?.id ?? (typeof sup === "string" ? sup : null);
+      if (!id) continue;
+      const name = sup?.fullName ?? sup?.email ?? "Unknown";
+      const cur = map.get(id);
+      if (cur) {
+        cur.count += 1;
+      } else {
+        map.set(id, { name, count: 1 });
+      }
+    }
+    const raw = Array.from(map.entries())
+      .map(([supervisorId, v]) => ({
+        supervisorId,
+        supervisorName: v.name,
+        count: v.count,
+        rawPct: total > 0 ? (v.count / total) * 100 : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+    const rounded = raw.map((r) => ({ ...r, floor: Math.floor(r.rawPct), frac: r.rawPct - Math.floor(r.rawPct) }));
+    let sum = rounded.reduce((s, r) => s + r.floor, 0);
+    const remainder = 100 - sum;
+    rounded.sort((a, b) => b.frac - a.frac);
+    for (let i = 0; i < remainder && i < rounded.length; i++) {
+      rounded[i].floor += 1;
+    }
+    const items = rounded
+      .sort((a, b) => b.count - a.count)
+      .map(({ supervisorId, supervisorName, count, floor }) => ({
+        supervisorId,
+        supervisorName,
+        count,
+        percentage: floor,
+      }));
+    return { totalApprovedSubmissions: total, items };
+  }
+
+  /**
    * Submission (surgical experience) ranking: top 10 by approved count + logged-in candidate if not in top 10.
    * Fetches candidate details only for returned ids (≤11).
    */
@@ -1087,13 +1265,21 @@ export class SubProvider {
       const idsToFetch = addLoggedIn
         ? [...top10.map((r) => r.candidateId), loggedInUserId!]
         : top10.map((r) => r.candidateId);
+      const candidates = await this.candService.getCandsByIds(idsToFetch, dataSource);
       const candidateMap = new Map<string, { fullName: string; regDeg: string }>();
+      for (const c of candidates) {
+        const id = (c as any)?.id ?? (c as any)?._id;
+        if (id) {
+          candidateMap.set(id, {
+            fullName: (c as any)?.fullName ?? "—",
+            regDeg: (c as any)?.regDeg ?? "",
+          });
+        }
+      }
       for (const id of idsToFetch) {
-        const c = await this.candService.getCandById(id, dataSource);
-        candidateMap.set(id, {
-          fullName: (c as any)?.fullName ?? "—",
-          regDeg: (c as any)?.regDeg ?? "",
-        });
+        if (!candidateMap.has(id)) {
+          candidateMap.set(id, { fullName: "—", regDeg: "" });
+        }
       }
 
       const result: {

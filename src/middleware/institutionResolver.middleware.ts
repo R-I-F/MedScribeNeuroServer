@@ -107,6 +107,8 @@ export async function institutionResolver(
     // Attach to request context
     (req as any).institutionId = institutionId;
     (req as any).institutionDataSource = dataSource;
+    (req as any).institution = institution;
+    (req as any).institutionDepartment = institution.department;
 
     next();
   } catch (error: any) {

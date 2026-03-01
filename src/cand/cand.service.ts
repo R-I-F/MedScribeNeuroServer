@@ -155,6 +155,25 @@ export class CandService {
     }
   }
 
+  /**
+   * Fetch multiple candidates by id in one query. Used e.g. by academic ranking to load top 10 + logged-in candidate.
+   */
+  public async getCandsByIds(ids: string[], dataSource: DataSource): Promise<ICandDoc[]> | never {
+    try {
+      if (ids.length === 0) return [];
+      const candRepository = dataSource.getRepository(CandidateEntity);
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validIds = ids.filter((id) => uuidRegex.test(id));
+      if (validIds.length === 0) return [];
+      const candidates = await candRepository.find({
+        where: { id: In(validIds) },
+      });
+      return candidates as unknown as ICandDoc[];
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async resetCandidatePassword(id: string, dataSource: DataSource): Promise<ICandDoc | null> | never {
     try {
       const candRepository = dataSource.getRepository(CandidateEntity);

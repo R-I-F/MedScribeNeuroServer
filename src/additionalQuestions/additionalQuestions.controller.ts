@@ -40,4 +40,14 @@ export class AdditionalQuestionsController {
       throw new Error(err);
     }
   }
+
+  public async handleUpdate(req: Request, res: Response): Promise<IAdditionalQuestionDoc | null> | never {
+    const validated = matchedData(req) as { mainDiagDocId: string; spOrCran?: number; pos?: number; approach?: number; region?: number; clinPres?: number; intEvents?: number };
+    const dataSource = (req as any).institutionDataSource;
+    if (!dataSource) {
+      throw new Error("Institution DataSource not resolved");
+    }
+    const { mainDiagDocId, ...updateData } = validated;
+    return await this.additionalQuestionsService.updateByMainDiagDocId(mainDiagDocId, dataSource, updateData);
+  }
 }

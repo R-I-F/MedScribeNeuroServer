@@ -451,21 +451,39 @@ export class EventProvider {
         string,
         { name: string; role: "candidate" | "supervisor"; rank?: string; position?: string }
       >();
-      for (const id of journalPresenterIds) {
-        const c = await this.candService.getCandById(id, dataSource);
-        presenterMap.set(id, {
-          name: (c as any)?.fullName ?? "—",
-          role: "candidate",
-          rank: (c as any)?.rank,
-        });
+      const journalIds = Array.from(journalPresenterIds);
+      const lectureConfIds = Array.from(lectureConfPresenterIds);
+      if (journalIds.length > 0) {
+        const candidates = await this.candService.getCandsByIds(journalIds, dataSource);
+        for (const c of candidates) {
+          const id = (c as any)?.id ?? (c as any)?._id;
+          if (id) {
+            presenterMap.set(id, {
+              name: (c as any)?.fullName ?? "—",
+              role: "candidate",
+              rank: (c as any)?.rank,
+            });
+          }
+        }
       }
-      for (const id of lectureConfPresenterIds) {
-        const s = await this.supervisorService.getSupervisorById({ id }, dataSource);
-        presenterMap.set(id, {
-          name: (s as any)?.fullName ?? "—",
-          role: "supervisor",
-          position: (s as any)?.position,
-        });
+      if (lectureConfIds.length > 0) {
+        const supervisors = await this.supervisorService.getSupervisorsByIds(lectureConfIds, dataSource);
+        for (const s of supervisors) {
+          const id = (s as any)?.id ?? (s as any)?._id;
+          if (id) {
+            presenterMap.set(id, {
+              name: (s as any)?.fullName ?? "—",
+              role: "supervisor",
+              position: (s as any)?.position,
+            });
+          }
+        }
+      }
+      for (const id of journalIds) {
+        if (!presenterMap.has(id)) presenterMap.set(id, { name: "—", role: "candidate" });
+      }
+      for (const id of lectureConfIds) {
+        if (!presenterMap.has(id)) presenterMap.set(id, { name: "—", role: "supervisor" });
       }
 
       const events: IEventPointsItem[] = [];
@@ -560,13 +578,21 @@ export class EventProvider {
       const idsToFetch = addLoggedIn
         ? [...top10.map((r) => r.candidateId), loggedInUserId!]
         : top10.map((r) => r.candidateId);
+      const candidates = await this.candService.getCandsByIds(idsToFetch, dataSource);
       const candidateMap = new Map<string, { fullName: string; regDeg: string }>();
+      for (const c of candidates) {
+        const id = (c as any)?.id;
+        if (id) {
+          candidateMap.set(id, {
+            fullName: (c as any)?.fullName ?? "—",
+            regDeg: (c as any)?.regDeg ?? "",
+          });
+        }
+      }
       for (const id of idsToFetch) {
-        const c = await this.candService.getCandById(id, dataSource);
-        candidateMap.set(id, {
-          fullName: (c as any)?.fullName ?? "—",
-          regDeg: (c as any)?.regDeg ?? "",
-        });
+        if (!candidateMap.has(id)) {
+          candidateMap.set(id, { fullName: "—", regDeg: "" });
+        }
       }
 
       const result: { candidateId: string; candidateName: string; rank: number; academicPoints: number; regDeg: string }[] = [];

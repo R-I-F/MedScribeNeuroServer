@@ -249,6 +249,58 @@ export class ReportsRouter {
         }
       }
     );
+
+    // Main Diagnosis Links Map Report
+    this.router.get(
+      "/main-diagnosis-links-map",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireInstituteAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          const pdfBuffer = await this.reportsController.handleGetMainDiagnosisLinksMapReport(
+            req,
+            res
+          );
+
+          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const filename = `main-diagnosis-links-map-${timestamp}.pdf`;
+
+          res.setHeader("Content-Type", "application/pdf");
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${filename}"`
+          );
+          res.status(StatusCodes.OK);
+          res.send(pdfBuffer);
+        } catch (err: any) {
+          console.error("PDF Generation Error:", err);
+          if (err.message.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({
+              status: "error",
+              statusCode: StatusCodes.UNAUTHORIZED,
+              message: "Unauthorized",
+              error: err.message,
+            });
+          } else if (err.message.includes("Forbidden")) {
+            res.status(StatusCodes.FORBIDDEN).json({
+              status: "error",
+              statusCode: StatusCodes.FORBIDDEN,
+              message: "Forbidden",
+              error: err.message,
+            });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+              status: "error",
+              statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+              message: "Internal Server Error",
+              error: `Failed to generate PDF report: ${err.message || err}`,
+            });
+          }
+        }
+      }
+    );
   }
 }
 

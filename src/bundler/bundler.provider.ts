@@ -8,6 +8,9 @@ import { ApproachesProvider } from "../approaches/approaches.provider";
 import { RegionsProvider } from "../regions/regions.provider";
 import { PositionsProvider } from "../positions/positions.provider";
 import { SubController } from "../sub/sub.controller";
+import { SubProvider } from "../sub/sub.provider";
+import { toCandidateSubmissionsResponse } from "../sub/sub.mapper";
+import { ISubDoc } from "../sub/interfaces/sub.interface";
 import { EventController } from "../event/event.controller";
 import { ActivityTimelineController } from "../activityTimeline/activityTimeline.controller";
 import { ClinicalSubController } from "../clinicalSub/clinicalSub.controller";
@@ -30,6 +33,7 @@ export class BundlerProvider {
     @inject(RegionsProvider) private regionsProvider: RegionsProvider,
     @inject(PositionsProvider) private positionsProvider: PositionsProvider,
     @inject(SubController) private subController: SubController,
+    @inject(SubProvider) private subProvider: SubProvider,
     @inject(EventController) private eventController: EventController,
     @inject(ActivityTimelineController) private activityTimelineController: ActivityTimelineController,
     @inject(ClinicalSubController) private clinicalSubController: ClinicalSubController
@@ -80,6 +84,7 @@ export class BundlerProvider {
 
   /**
    * Candidate dashboard bundle: aggregates 9 candidate endpoints into one response.
+   * Single submission load per request: fetches submissions once, then derives stats, list, CPT, ICD, supervisor analytics in memory.
    * When institution.isClinical is true, also includes clinicalSubCand (GET /clinicalSub/cand).
    * No server-side caching.
    */
@@ -88,34 +93,36 @@ export class BundlerProvider {
     res: Response,
     institution: IInstitution
   ): Promise<ICandidateDashboardDoc> {
-    const basePromises: Promise<unknown>[] = [
-      this.subController.handleGetCandidateSubmissionsStats(req, res),
-      this.eventController.handleGetMyPoints(req, res),
-      this.subController.handleGetCandidateSubmissions(req, res),
-      this.subController.handleGetCptAnalytics(req, res),
-      this.subController.handleGetIcdAnalytics(req, res),
-      this.subController.handleGetSupervisorAnalytics(req, res),
-      this.activityTimelineController.handleGetActivityTimeline(req, res),
-      this.subController.handleGetSubmissionRanking(req, res),
-      this.eventController.handleGetAcademicRanking(req, res),
-    ];
+    const dataSource = (req as any).institutionDataSource as DataSource;
+    if (!dataSource) {
+      throw new Error("Institution DataSource not resolved");
+    }
+    const jwt = res.locals.jwt as { id?: string; _id?: string; role?: string } | undefined;
+    const candidateId = jwt?.id ?? jwt?._id;
+    const role = jwt?.role ?? "candidate";
+    if (!candidateId) {
+      throw new Error("Unauthorized: No candidate ID found in token");
+    }
+
+    const subs = await this.subProvider.getCandidateSubmissions(candidateId, dataSource);
+    const approved = subs.filter((s: ISubDoc) => s.subStatus === "approved");
+    const stats = this.subProvider.getCandidateSubmissionsStatsFromSubs(subs);
+    const submissions = toCandidateSubmissionsResponse(subs as unknown as Record<string, unknown>[]);
+    const cptAnalytics = this.subProvider.getCptAnalyticsFromSubs(approved, role);
+    const icdAnalytics = this.subProvider.getIcdAnalyticsFromSubs(approved);
+    const supervisorAnalytics = this.subProvider.getSupervisorAnalyticsFromSubs(approved);
 
     const clinicalPromise = institution.isClinical
       ? this.clinicalSubController.handleGetMine(req, res)
       : Promise.resolve(null as unknown[] | null);
 
-    const [
-      stats,
-      points,
-      submissions,
-      cptAnalytics,
-      icdAnalytics,
-      supervisorAnalytics,
-      activityTimeline,
-      submissionRanking,
-      academicRanking,
-      clinicalSubCand,
-    ] = await Promise.all([...basePromises, clinicalPromise]);
+    const [points, activityTimeline, submissionRanking, academicRanking, clinicalSubCand] = await Promise.all([
+      this.eventController.handleGetMyPoints(req, res),
+      this.activityTimelineController.handleGetActivityTimeline(req, res),
+      this.subController.handleGetSubmissionRanking(req, res),
+      this.eventController.handleGetAcademicRanking(req, res),
+      clinicalPromise,
+    ]);
 
     const result: ICandidateDashboardDoc = {
       stats,
@@ -137,23 +144,29 @@ export class BundlerProvider {
   /**
    * Practical-only dashboard bundle: stats, submissions, cpt/icd/supervisor analytics,
    * activity timeline, submission ranking. No points or academic ranking.
-   * No server-side caching.
+   * Single submission load per request; no server-side caching.
    */
   public async getCandidateDashboardPractical(req: Request, res: Response): Promise<IPracticalCandidateDashboardDoc> {
-    const [
-      stats,
-      submissions,
-      cptAnalytics,
-      icdAnalytics,
-      supervisorAnalytics,
-      activityTimeline,
-      submissionRanking,
-    ] = await Promise.all([
-      this.subController.handleGetCandidateSubmissionsStats(req, res),
-      this.subController.handleGetCandidateSubmissions(req, res),
-      this.subController.handleGetCptAnalytics(req, res),
-      this.subController.handleGetIcdAnalytics(req, res),
-      this.subController.handleGetSupervisorAnalytics(req, res),
+    const dataSource = (req as any).institutionDataSource as DataSource;
+    if (!dataSource) {
+      throw new Error("Institution DataSource not resolved");
+    }
+    const jwt = res.locals.jwt as { id?: string; _id?: string; role?: string } | undefined;
+    const candidateId = jwt?.id ?? jwt?._id;
+    const role = jwt?.role ?? "candidate";
+    if (!candidateId) {
+      throw new Error("Unauthorized: No candidate ID found in token");
+    }
+
+    const subs = await this.subProvider.getCandidateSubmissions(candidateId, dataSource);
+    const approved = subs.filter((s: ISubDoc) => s.subStatus === "approved");
+    const stats = this.subProvider.getCandidateSubmissionsStatsFromSubs(subs);
+    const submissions = toCandidateSubmissionsResponse(subs as unknown as Record<string, unknown>[]);
+    const cptAnalytics = this.subProvider.getCptAnalyticsFromSubs(approved, role);
+    const icdAnalytics = this.subProvider.getIcdAnalyticsFromSubs(approved);
+    const supervisorAnalytics = this.subProvider.getSupervisorAnalyticsFromSubs(approved);
+
+    const [activityTimeline, submissionRanking] = await Promise.all([
       this.activityTimelineController.handleGetActivityTimeline(req, res),
       this.subController.handleGetSubmissionRanking(req, res),
     ]);

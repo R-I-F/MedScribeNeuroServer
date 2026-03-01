@@ -32,6 +32,14 @@ export class SupervisorService {
     }
   }
 
+  public async getSupervisorsByIds(ids: string[], dataSource: DataSource): Promise<ISupervisorDoc[]> | never {
+    try {
+      return await this.supervisorProvider.getSupervisorsByIds(ids, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async getSupervisorByEmail(email: string, dataSource: DataSource): Promise<ISupervisorDoc | null> | never {
     try {
       return await this.supervisorProvider.getSupervisorByEmail(email, dataSource);

@@ -1,5 +1,6 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
+import { In } from "typeorm";
 import { ISupervisor, ISupervisorDoc } from "./supervisor.interface";
 import { SupervisorEntity } from "./supervisor.mDbSchema";
 import { Repository } from "typeorm";
@@ -48,6 +49,22 @@ export class SupervisorProvider {
         where: { id },
       });
       return supervisor as unknown as ISupervisorDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getSupervisorsByIds(ids: string[], dataSource: DataSource): Promise<ISupervisorDoc[]> | never {
+    try {
+      if (ids.length === 0) return [];
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validIds = ids.filter((id) => uuidRegex.test(id));
+      if (validIds.length === 0) return [];
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
+      const supervisors = await supervisorRepository.find({
+        where: { id: In(validIds) },
+      });
+      return supervisors as unknown as ISupervisorDoc[];
     } catch (err: any) {
       throw new Error(err);
     }

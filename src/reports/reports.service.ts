@@ -13,6 +13,8 @@ import { HospitalService } from "../hospital/hospital.service";
 import { EventService } from "../event/event.service";
 import { ICanceledEventReportItem } from "./reports.interface";
 import { DataSource } from "typeorm";
+import { MainDiagService } from "../mainDiag/mainDiag.service";
+import { IMainDiagDoc } from "../mainDiag/mainDiag.interface";
 
 @injectable()
 export class ReportsService {
@@ -22,8 +24,20 @@ export class ReportsService {
     @inject(CandService) private candService: CandService,
     @inject(CalSurgService) private calSurgService: CalSurgService,
     @inject(HospitalService) private hospitalService: HospitalService,
-    @inject(EventService) private eventService: EventService
+    @inject(EventService) private eventService: EventService,
+    @inject(MainDiagService) private mainDiagService: MainDiagService
   ) {}
+
+  public async getAllMainDiagsForInstitution(dataSource?: DataSource): Promise<IMainDiagDoc[]> | never {
+    try {
+      if (!dataSource) {
+        throw new Error("DataSource is required for reports operations");
+      }
+      return await this.mainDiagService.getAllMainDiags(dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 
   public async getAllSupervisors(dataSource?: DataSource): Promise<ISupervisorDoc[]> | never {
     try {

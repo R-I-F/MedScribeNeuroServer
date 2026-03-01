@@ -16,6 +16,7 @@ import { IHospitalDoc } from "../hospital/hospital.interface";
 import * as path from "path";
 import * as fs from "fs";
 import { DataSource } from "typeorm";
+import { IMainDiagDoc } from "../mainDiag/mainDiag.interface";
 
 @injectable()
 export class ReportsProvider {
@@ -134,7 +135,9 @@ export class ReportsProvider {
 
   // Helper: Add footer with logos
   private addFooter(
-    doc: InstanceType<typeof PDFDocument>
+    doc: InstanceType<typeof PDFDocument>,
+    departmentText?: string,
+    hideNeurosurgeryLogo: boolean = false
   ): void {
     // Ensure we're on a valid page and footer area is within bounds
     const pageHeight = doc.page.height;
@@ -203,37 +206,39 @@ export class ReportsProvider {
         }
       }
 
-      // Right side: English text + Neurosurgery logo
+      // Right side: English text + optional Neurosurgery logo
       if (logos.neurosurgery) {
         try {
           // English text
           const text1 = "Faculty of Medicine Qasr Al Aini - Cairo University";
-          const text2 = "Department of Neurosurgery";
-          
+          const text2 =
+            departmentText && departmentText.trim().length > 0
+              ? departmentText
+              : "Department of Neurosurgery";
+
           // Position Neurosurgery logo on the right edge (using larger size)
           const logoX = pageWidth - rightMargin - neurosurgeryLogoSize;
           const logoY = footerY;
           const logoCenterY = footerCenterY;
-          
+
           // Set font for text measurement
-          doc.fontSize(8)
-             .font("Helvetica");
-          
+          doc.fontSize(8).font("Helvetica");
+
           // Measure text widths
           const text1Width = doc.widthOfString(text1);
           const text2Width = doc.widthOfString(text2);
           const maxTextWidth = Math.max(text1Width, text2Width);
-          
+
           // Calculate text block height (2 lines with 10px spacing)
           const lineHeight = 10;
           const textBlockHeight = lineHeight * 2; // Two lines
-          
+
           // Position text to the left of logo with 10px gap
           // Center the text block vertically with the logo
           const textX = logoX - maxTextWidth - 10;
-          const textY1 = logoCenterY - (textBlockHeight / 2);
+          const textY1 = logoCenterY - textBlockHeight / 2;
           const textY2 = textY1 + lineHeight;
-          
+
           // Ensure text doesn't overlap with left section
           const leftSectionEnd = leftMargin + logoSize + 120;
           if (textX >= leftSectionEnd) {
@@ -242,20 +247,22 @@ export class ReportsProvider {
             try {
               // First line - absolute position, no line break
               doc.text(text1, textX, textY1, { lineBreak: false });
-              
+
               // Second line - absolute position directly below, no line break
               doc.text(text2, textX, textY2, { lineBreak: false });
             } catch (textErr) {
               console.error("Error rendering footer text:", textErr);
             }
           }
-          
-          // Draw Neurosurgery logo to the right of text (1.5x bigger)
-          doc.image(logos.neurosurgery, logoX, logoY, { 
-            width: neurosurgeryLogoSize, 
-            height: neurosurgeryLogoSize,
-            fit: [neurosurgeryLogoSize, neurosurgeryLogoSize]
-          });
+
+          // Draw Neurosurgery logo to the right of text (1.5x bigger), unless hidden
+          if (!hideNeurosurgeryLogo) {
+            doc.image(logos.neurosurgery, logoX, logoY, {
+              width: neurosurgeryLogoSize,
+              height: neurosurgeryLogoSize,
+              fit: [neurosurgeryLogoSize, neurosurgeryLogoSize],
+            });
+          }
         } catch (err) {
           console.error("Error adding footer:", err);
         }
@@ -269,10 +276,370 @@ export class ReportsProvider {
 
   // Helper: Add page with footer
   private addPageWithFooter(
-    doc: InstanceType<typeof PDFDocument>
+    doc: InstanceType<typeof PDFDocument>,
+    departmentText?: string,
+    hideNeurosurgeryLogo: boolean = false
   ): void {
     doc.addPage();
-    this.addFooter(doc);
+    this.addFooter(doc, departmentText, hideNeurosurgeryLogo);
+  }
+
+  private toTitleCase(value: string): string {
+    return value
+      ? value
+          .toLowerCase()
+          .split(" ")
+          .filter((part) => part.length > 0)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ")
+      : value;
+  }
+
+  public async generateMainDiagnosisLinksMapReport(
+    dataSource?: DataSource,
+    institutionDepartment?: string
+  ): Promise<Buffer> | never {
+    try {
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+
+      return new Promise((resolve, reject) => {
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", (err) => reject(new Error(err.message)));
+
+        this.addHeader(
+          doc,
+          "Main Diagnosis Links Map",
+          "Overview of main diagnoses and their linked procedure CPTs and ICD-11 diagnoses."
+        );
+        this.addFooter(doc, institutionDepartment, true);
+
+        this.reportsService
+          .getAllMainDiagsForInstitution(dataSource)
+          .then((mainDiags: IMainDiagDoc[]) => {
+            if (!mainDiags.length) {
+              doc
+                .moveDown(2)
+                .fontSize(14)
+                .font("Helvetica")
+                .fillColor("#000000")
+                .text("No main diagnoses configured for this institution.", {
+                  align: "center",
+                });
+              doc.end();
+              return;
+            }
+
+            const sortedMainDiags = [...mainDiags].sort((a, b) =>
+              (a.title || "").localeCompare(b.title || "", undefined, {
+                sensitivity: "base",
+              })
+            );
+
+            let isFirst = true;
+            for (const md of sortedMainDiags) {
+              const procs: any[] = Array.isArray((md as any).procs)
+                ? ((md as any).procs as any[])
+                : [];
+              const diagnoses: any[] = Array.isArray((md as any).diagnosis)
+                ? ((md as any).diagnosis as any[])
+                : [];
+
+              if (!isFirst) {
+                this.addPageWithFooter(doc, institutionDepartment, true);
+                this.addHeader(
+                  doc,
+                  "Main Diagnosis Links Map",
+                  "Overview of main diagnoses and their linked procedure CPTs and ICD-11 diagnoses."
+                );
+              }
+              isFirst = false;
+
+              const displayTitle = this.toTitleCase(md.title);
+
+              doc
+                .moveDown(1)
+                .fontSize(16)
+                .font("Helvetica-Bold")
+                .fillColor("#000000")
+                .text(displayTitle, 50, doc.y);
+
+              const procCount = procs.length;
+              const diagCount = diagnoses.length;
+
+              doc
+                .moveDown(0.3)
+                .fontSize(11)
+                .font("Helvetica")
+                .fillColor("#555555")
+                .text(
+                  `${procCount} procedures • ${diagCount} diagnoses`,
+                  50,
+                  doc.y
+                );
+
+              // Procedures section
+              doc
+                .moveDown(0.8)
+                .fontSize(13)
+                .font("Helvetica-Bold")
+                .fillColor("#000000")
+                .text("Procedure CPTs", 50, doc.y);
+
+              if (!procCount) {
+                doc
+                  .moveDown(0.3)
+                  .fontSize(11)
+                  .font("Helvetica")
+                  .fillColor("#777777")
+                  .text("No procedures linked.", 50, doc.y);
+              } else {
+                const sortedProcs = [...procs].sort((a, b) => {
+                  const numA = (a.numCode || "").toString();
+                  const numB = (b.numCode || "").toString();
+                  if (numA === numB) {
+                    return (a.alphaCode || "").localeCompare(
+                      b.alphaCode || "",
+                      undefined,
+                      { sensitivity: "base" }
+                    );
+                  }
+                  return numA.localeCompare(numB, undefined, {
+                    numeric: true,
+                    sensitivity: "base",
+                  });
+                });
+
+                const colWidths = [100, 100, 160, 160];
+                const baseRowHeight = 20;
+                let currentY = doc.y + 10;
+
+                doc
+                  .fontSize(11)
+                  .font("Helvetica-Bold")
+                  .fillColor("#000000");
+                let x = 50;
+                const headers = [
+                  "CPT Code",
+                  "Alpha Code",
+                  "Title",
+                  "Description",
+                ];
+                headers.forEach((header, i) => {
+                  doc.text(header, x, currentY, { width: colWidths[i] });
+                  x += colWidths[i];
+                });
+
+                doc
+                  .moveTo(50, currentY + baseRowHeight - 5)
+                  .lineTo(
+                    50 + colWidths.reduce((a, b) => a + b, 0),
+                    currentY + baseRowHeight - 5
+                  )
+                  .strokeColor("#000000")
+                  .lineWidth(1)
+                  .stroke();
+
+                currentY += baseRowHeight;
+
+                doc
+                  .fontSize(10)
+                  .font("Helvetica")
+                  .fillColor("#000000");
+
+                for (const p of sortedProcs) {
+                  const descriptionText = p.description || "";
+                  const descriptionHeight = doc.heightOfString(descriptionText, {
+                    width: colWidths[3],
+                  });
+                  const rowHeight = Math.max(baseRowHeight, descriptionHeight + 4);
+
+                  if (currentY + rowHeight > doc.page.height - 100) {
+                    this.addPageWithFooter(doc);
+                    this.addHeader(
+                      doc,
+                      "Main Diagnosis Links Map",
+                      "Overview of main diagnoses and their linked procedure CPTs and ICD-11 diagnoses."
+                    );
+                    currentY = doc.y + 40;
+
+                    doc
+                      .fontSize(11)
+                      .font("Helvetica-Bold")
+                      .fillColor("#000000");
+                    x = 50;
+                    headers.forEach((header, i) => {
+                      doc.text(header, x, currentY, { width: colWidths[i] });
+                      x += colWidths[i];
+                    });
+                    doc
+                      .moveTo(50, currentY + baseRowHeight - 5)
+                      .lineTo(
+                        50 + colWidths.reduce((a, b) => a + b, 0),
+                        currentY + baseRowHeight - 5
+                      )
+                      .strokeColor("#000000")
+                      .lineWidth(1)
+                      .stroke();
+                    currentY += baseRowHeight;
+
+                    doc
+                      .fontSize(10)
+                      .font("Helvetica")
+                      .fillColor("#000000");
+                  }
+
+                  const values = [
+                    p.numCode || "",
+                    p.alphaCode || "",
+                    p.title || "",
+                    descriptionText,
+                  ];
+                  x = 50;
+                  values.forEach((value, i) => {
+                    doc.text(value, x, currentY, {
+                      width: colWidths[i],
+                    });
+                    x += colWidths[i];
+                  });
+
+                  currentY += rowHeight;
+                }
+
+                doc.y = currentY;
+              }
+
+              // Diagnoses section
+              doc
+                .moveDown(0.8)
+                .fontSize(13)
+                .font("Helvetica-Bold")
+                .fillColor("#000000")
+                .text("Diagnoses (ICD-11)", 50, doc.y);
+
+              if (!diagCount) {
+                doc
+                  .moveDown(0.3)
+                  .fontSize(11)
+                  .font("Helvetica")
+                  .fillColor("#777777")
+                  .text("No diagnoses linked.", 50, doc.y);
+              } else {
+                const sortedDiags = [...diagnoses].sort((a, b) =>
+                  (a.icdCode || "").localeCompare(b.icdCode || "", undefined, {
+                    sensitivity: "base",
+                  })
+                );
+
+                const colWidthsDiag = [120, 300];
+                const baseRowHeightDiag = 20;
+                let currentYDiag = doc.y + 10;
+
+                doc
+                  .fontSize(11)
+                  .font("Helvetica-Bold")
+                  .fillColor("#000000");
+                let xDiag = 50;
+                const diagHeaders = ["ICD Code", "Diagnosis Title"];
+                diagHeaders.forEach((header, i) => {
+                  doc.text(header, xDiag, currentYDiag, {
+                    width: colWidthsDiag[i],
+                  });
+                  xDiag += colWidthsDiag[i];
+                });
+
+                doc
+                  .moveTo(50, currentYDiag + baseRowHeightDiag - 5)
+                  .lineTo(
+                    50 + colWidthsDiag.reduce((a, b) => a + b, 0),
+                    currentYDiag + baseRowHeightDiag - 5
+                  )
+                  .strokeColor("#000000")
+                  .lineWidth(1)
+                  .stroke();
+
+                currentYDiag += baseRowHeightDiag;
+
+                doc
+                  .fontSize(10)
+                  .font("Helvetica")
+                  .fillColor("#000000");
+
+                for (const d of sortedDiags) {
+                  const rawTitle = d.icdName || d.title || "";
+                  const displayDiagTitle = this.toTitleCase(rawTitle);
+                  const titleHeight = doc.heightOfString(displayDiagTitle, {
+                    width: colWidthsDiag[1],
+                  });
+                  const rowHeightDiag = Math.max(
+                    baseRowHeightDiag,
+                    titleHeight + 4
+                  );
+
+                  if (currentYDiag + rowHeightDiag > doc.page.height - 100) {
+                    this.addPageWithFooter(doc);
+                    this.addHeader(
+                      doc,
+                      "Main Diagnosis Links Map",
+                      "Overview of main diagnoses and their linked procedure CPTs and ICD-11 diagnoses."
+                    );
+                    currentYDiag = doc.y + 40;
+
+                    doc
+                      .fontSize(11)
+                      .font("Helvetica-Bold")
+                      .fillColor("#000000");
+                    xDiag = 50;
+                    diagHeaders.forEach((header, i) => {
+                      doc.text(header, xDiag, currentYDiag, {
+                        width: colWidthsDiag[i],
+                      });
+                      xDiag += colWidthsDiag[i];
+                    });
+                    doc
+                      .moveTo(50, currentYDiag + baseRowHeightDiag - 5)
+                      .lineTo(
+                        50 + colWidthsDiag.reduce((a, b) => a + b, 0),
+                        currentYDiag + baseRowHeightDiag - 5
+                      )
+                      .strokeColor("#000000")
+                      .lineWidth(1)
+                      .stroke();
+                    currentYDiag += baseRowHeightDiag;
+
+                    doc
+                      .fontSize(10)
+                      .font("Helvetica")
+                      .fillColor("#000000");
+                  }
+
+                  const valuesDiag = [d.icdCode || "", displayDiagTitle];
+                  xDiag = 50;
+                  valuesDiag.forEach((value, i) => {
+                    doc.text(value, xDiag, currentYDiag, {
+                      width: colWidthsDiag[i],
+                    });
+                    xDiag += colWidthsDiag[i];
+                  });
+
+                  currentYDiag += rowHeightDiag;
+                }
+
+                doc.y = currentYDiag;
+              }
+            }
+
+            doc.end();
+          })
+          .catch((err) => {
+            reject(new Error(err?.message || err || "Unknown error occurred"));
+          });
+      });
+    } catch (err: any) {
+      throw new Error(err?.message || err || "Unknown error occurred");
+    }
   }
 
   // Generate Supervisors Submission Count Report

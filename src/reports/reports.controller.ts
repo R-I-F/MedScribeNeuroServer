@@ -81,5 +81,20 @@ export class ReportsController {
       throw new Error(err);
     }
   }
+
+  public async handleGetMainDiagnosisLinksMapReport(
+    req: Request,
+    res: Response
+  ): Promise<Buffer> | never {
+    try {
+      const pdfBuffer = await this.reportsProvider.generateMainDiagnosisLinksMapReport(
+        (req as any).institutionDataSource,
+        (req as any).institutionDepartment
+      );
+      return pdfBuffer;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
 }
 

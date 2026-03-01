@@ -41,10 +41,23 @@ function getDefaultDbConfig(): DataSourceOptions {
     subscribers: [],
     connectTimeout: 10000,
     extra: {
-      connectionLimit: 10,
+      connectionLimit: 20,
     },
     ...sslOpts,
   };
 }
 
 export const DefaultDbDataSource = new DataSource(getDefaultDbConfig());
+
+// Close defaultdb connection (for graceful shutdown)
+export async function closeDefaultDatabase(): Promise<void> {
+  try {
+    if (DefaultDbDataSource.isInitialized) {
+      await DefaultDbDataSource.destroy();
+      console.log("✅ DefaultDB connection closed");
+    }
+  } catch (error: any) {
+    console.error("❌ Error closing DefaultDB connection:", error.message);
+    throw new Error(`DefaultDB disconnection failed: ${error.message}`);
+  }
+}

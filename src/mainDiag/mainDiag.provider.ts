@@ -9,6 +9,7 @@ import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQu
 import { Repository, In } from "typeorm";
 import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
 import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
+import { AdditionalQuestionEntity } from "../additionalQuestions/additionalQuestions.mDbSchema";
 
 @injectable()
 export class MainDiagProvider {
@@ -78,6 +79,18 @@ export class MainDiagProvider {
 
       // Save with relationships
       const finalMainDiag = await mainDiagRepository.save(savedMainDiag);
+
+      // Create corresponding row in additional_questions (all flags default 0)
+      const aqRepo = dataSource.getRepository(AdditionalQuestionEntity);
+      await aqRepo.insert({
+        mainDiagDocId: finalMainDiag.id,
+        spOrCran: 0,
+        pos: 0,
+        approach: 0,
+        region: 0,
+        clinPres: 0,
+        intEvents: 0,
+      });
 
       // Load with relations for return
       const result = await mainDiagRepository.findOne({
@@ -231,6 +244,9 @@ export class MainDiagProvider {
       if (!uuidRegex.test(id)) {
         throw new Error("Invalid mainDiag ID format");
       }
+      // Delete child rows that reference this main_diag so the FK constraint allows the delete
+      const aqRepo = dataSource.getRepository(AdditionalQuestionEntity);
+      await aqRepo.delete({ mainDiagDocId: id });
       const result = await mainDiagRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {

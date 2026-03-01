@@ -18,6 +18,17 @@
 
 ---
 
+## Load testing
+
+A JMeter test plan and scripts are provided to load-test the candidate dashboard and login flow (e.g. 100 concurrent candidates: landing, login, dashboard GETs). **Prerequisites:** Apache JMeter 5.x installed; optional: set `JMETER_HOME` or add JMeter `bin` to PATH. From the project root:
+
+- **Run test:** `.\scripts\jmeter\run-login-test.ps1` — runs the test in non-GUI mode and writes `scripts/jmeter/results.jtl`. See `scripts/jmeter/README.md` for prerequisites (e.g. seeded test candidates, server running, host/port in the test plan).
+- **Generate HTML report:** After the test, run `.\scripts\jmeter\generate-report.ps1` — generates the dashboard from `results.jtl` into `scripts/jmeter/report/`. Open `scripts/jmeter/report/index.html` in a browser.
+
+Results file: `scripts/jmeter/results.jtl`. For full details (JMETER_HOME, CSV credentials, User Defined Variables), see [scripts/jmeter/README.md](./scripts/jmeter/README.md).
+
+---
+
 ## Response Format
 
 **⚠️ IMPORTANT: ALL API responses (except `/auth/validate`) automatically follow this standardized JSON structure.** The response formatter middleware wraps every response, so you must always access data from the `data` field for success responses or `error` field for error responses.
@@ -444,6 +455,7 @@ The following routes are **disabled**: they remain registered but return **410 G
 30. [Events](#events)
 31. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
 32. [Error Responses](#error-responses)
+33. [Load testing](#load-testing)
 
 ---
 
@@ -10042,11 +10054,12 @@ Deletes a main diagnosis from the system. The `id` parameter must be a valid UUI
 
 **⚠️ Multi-Tenancy Note:** All additional questions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access additional questions from their own institution.
 
-These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
+**GET** endpoints are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access for **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **PUT** (update flags only) is allowed for **Super Admin and Institute Admin** only.
 
 ### Rate Limiting
 
 - **GET** `/additionalQuestions`, **GET** `/additionalQuestions/:mainDiagDocId`: 200 requests per 15 minutes per user
+- **PUT** `/additionalQuestions/:mainDiagDocId`: 50 requests per 15 minutes per user (strict)
 
 **Rate Limit Response (429 Too Many Requests):**
 ```json
@@ -10158,6 +10171,76 @@ Returns the additional-question configuration for a specific main diagnosis.
 ```
 
 **Error Response (400 Bad Request - Invalid UUID):** Validation errors array. **Other errors:** 401 Unauthorized, 403 Forbidden, 429 Too Many Requests.
+
+---
+
+### Update Additional Question (flags)
+**PUT** `/additionalQuestions/:mainDiagDocId`
+
+**Requires:** Authentication (Super Admin or Institute Admin only)
+
+**Rate Limit:** 50 requests per 15 minutes per user (strict)
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+OR
+```
+Cookie: auth_token=<token>
+```
+
+**URL Parameters:**
+- `mainDiagDocId` (required): Main Diagnosis UUID (must be a valid UUID format)
+
+**Request Body (JSON):** All fields are optional. Only provided fields are updated. Each value must be **0** or **1**.
+- `spOrCran` (number, 0 or 1): Spine/Cranial question enabled
+- `pos` (number, 0 or 1): Position question enabled
+- `approach` (number, 0 or 1): Approach question enabled
+- `region` (number, 0 or 1): Region question enabled
+- `clinPres` (number, 0 or 1): Clinical presentation question enabled
+- `intEvents` (number, 0 or 1): Intraoperative events question enabled
+
+**Example Request:**
+```json
+{
+  "spOrCran": 1,
+  "approach": 1
+}
+```
+
+**Description:**  
+Updates the boolean (0/1) flags for the additional-question row for the given main diagnosis. The row must already exist (e.g. created with the main diagnosis). No new rows are created; only existing rows are updated.
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "mainDiagDocId": "550e8400-e29b-41d4-a716-446655440000",
+    "spOrCran": 1,
+    "pos": 0,
+    "approach": 1,
+    "region": 0,
+    "clinPres": 0,
+    "intEvents": 0
+  }
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "status": "error",
+  "statusCode": 404,
+  "message": "Not Found",
+  "error": "Additional question not found"
+}
+```
+
+**Error Response (400 Bad Request):** Invalid UUID for `mainDiagDocId`, or any body field not 0 or 1 — validation errors array. **Other errors:** 401 Unauthorized, 403 Forbidden, 429 Too Many Requests.
 
 ---
 
@@ -10684,6 +10767,8 @@ Returns all reference lists in one response: consumables, equipment, approaches,
 This endpoint is implemented by the **bundler** module (same module as GET /references). The bundler module provides aggregated responses to reduce round-trips: **GET /references** (five reference lists) and **GET /candidate/dashboard** (candidate dashboard bundle).
 
 **⚠️ Multi-Tenancy Note:** The dashboard bundle uses the institution's database based on the `institutionId` in the JWT token or `X-Institution-Id` header. Data is scoped to the candidate and institution.
+
+**Implementation note:** The dashboard is optimized for throughput: one submission load per request (candidate submissions fetched once), with stats, CPT/ICD/supervisor analytics and the submissions list derived in memory. Event points and submission/academic rankings use batched candidate and supervisor lookups to avoid N+1 queries. There is no server-side caching; each request computes fresh data for the authenticated candidate.
 
 **GET** `/candidate/dashboard` returns a single response whose **shape depends on the institution type**:
 
@@ -14173,6 +14258,93 @@ All PDF reports include MedScribe branding in the header:
   ]
 }
 ```
+
+**401 Unauthorized:**
+```json
+{
+  "status": "error",
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized: No token provided"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "status": "error",
+  "statusCode": 403,
+  "message": "Forbidden",
+  "error": "Forbidden: Insufficient permissions"
+}
+```
+
+**429 Too Many Requests:**
+```json
+{
+  "status": "error",
+  "statusCode": 429,
+  "message": "Too Many Requests",
+  "error": "Too many requests from this user, please try again later."
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "status": "error",
+  "statusCode": 500,
+  "message": "Internal Server Error",
+  "error": "Failed to generate PDF report: <error message>"
+}
+```
+
+---
+
+#### Main Diagnosis Links Map Report
+**GET** `/instituteAdmin/reports/main-diagnosis-links-map`
+
+**Requires:** Institute Admin authentication
+
+**Rate Limit:** 50 requests per 15 minutes per user
+
+**Description:** Generates a PDF report showing all main diagnoses for the current institution and their linked procedure CPTs and ICD-11 diagnoses, mirroring the data used by the Main Diagnosis Links Map page.
+
+**Request Parameters:** None.
+
+The institution is resolved from the authenticated Institute Admin's JWT (or `X-Institution-Id` header where applicable) using the standard institution routing, identical to the `/mainDiag` endpoints.
+
+**PDF Content:**
+1. **Report Header** with MedScribe branding (logo, "MedScribe" text, report title, generated date/time)
+2. **Title:** `Main Diagnosis Links Map`
+3. **Subtitle:** `Overview of main diagnoses and their linked procedure CPTs and ICD-11 diagnoses.`
+4. **For each main diagnosis** (sorted alphabetically by title):
+   - Main diagnosis header with title in title case
+   - Summary line: `N procedures • M diagnoses`
+   - **Procedures section** — heading `Procedure CPTs`, table:
+     - Columns: `CPT Code` (from `numCode`), `Alpha Code` (from `alphaCode`), `Title`, `Description`
+     - Sorted by `numCode` ascending, then `alphaCode` ascending
+   - **Diagnoses section** — heading `Diagnoses (ICD-11)`, table:
+     - Columns: `ICD Code` (from `icdCode`), `Diagnosis Title`
+     - `Diagnosis Title` uses `icdName` if present, otherwise `title`, rendered in title case
+     - Sorted by `icdCode` ascending
+   - Layout:
+     - Sections may span multiple pages
+     - The report may start a new page for each main diagnosis to keep sections readable
+
+**Empty States:**
+- If there are **no main diagnoses** for the institution, the PDF still renders the header and a message:
+  - `No main diagnoses configured for this institution.`
+- If a main diagnosis has no linked procedures or diagnoses:
+  - The section is still included with:
+    - `No procedures linked.` and/or
+    - `No diagnoses linked.`
+
+**Response (200 OK):**
+- PDF file with `Content-Type: application/pdf`
+- Filename format: `main-diagnosis-links-map-<timestamp>.pdf`
+
+**Error Responses:**
 
 **401 Unauthorized:**
 ```json

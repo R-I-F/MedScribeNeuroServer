@@ -19,34 +19,11 @@ export type TOtherSurgRank =
 | "specialist" 
 | "other";
 
-export type TInsUsed = 
-  "endoscope" 
-| "microscope" 
-| "high speed drill" 
-| "neuro-monitoring" 
-| "ultrasonic aspirator" 
-| "ultrasound and or doppler /intraoperative" 
-| "stereotactic frame" 
-| "radiofrequency device" 
-| "neuronavigation" 
-| "c-Arm" 
-| "none";
+/** Instrument(s) used — validated as string (institution options from reference API). */
+export type TInsUsed = string;
 
-export type TConsUsed = 
-  "artificial dural graft" 
-| "external ventricular drain" 
-| "bone cement" 
-| "intervertebral cage" 
-| "nervous system stimulator" 
-| "pedicle screws" 
-| "lp shunt" 
-| "omaya resevoir, ventricular stent" 
-| "titanium mesh/ and or miniplates" 
-| "vp shunt- fixed pressure" 
-| "vp shunt- programmable" 
-| "csf drainage system, otherwise than vp, lp and evd" 
-| "other" 
-| "none";
+/** Consumable(s) used — validated as string (institution options from reference API). */
+export type TConsUsed = string;
 
 
 
@@ -144,8 +121,8 @@ export interface ICongAnom extends IDiagProc, INotesIntEvents {}
 
 export interface ICnsTumor extends IDiagProc, INotesIntEvents {
   spOrCran?: "spinal" | "cranial";
-  pos: "supine" | 'prone' | 'lateral' | 'concorde' | 'other';
-  approach: string ;
+  pos: string;
+  approach: string;
 }
 
 export interface ICnsInf extends IDiagProc, INotesIntEvents {}
@@ -155,7 +132,7 @@ export interface ICranTrauma extends IDiagProc, INotesIntEvents {}
 export interface ISpTrauma extends IDiagProc, INotesIntEvents {}
 
 export interface ISpDegenDis extends IDiagProc, INotesIntEvents {
-  region: "craniocervical" | "cervical" | "dorsal" | "lumbar"
+  region: string;
 }
 
 export interface IPrhp extends IDiagProc, INotesIntEvents {}

@@ -17,7 +17,13 @@
     "db:import-sub-ka-from-row-1479": "ts-node scripts/import-sub-ka-from-row-1479.ts",
     "db:import-event-attendance-ka-from-row-483": "ts-node scripts/import-event-attendance-ka-from-row-483.ts",
     "create-clerk-masr-el-dawly": "ts-node scripts/create-clerk-masr-el-dawly.ts",
-    "announce-events-next-thursday-ka": "ts-node scripts/announce-events-next-thursday-ka.ts"
+    "announce-events-next-thursday-ka": "ts-node scripts/announce-events-next-thursday-ka.ts",
+    "db:seed-ka-test-candidates": "ts-node scripts/seed-ka-test-candidates.ts",
+    "get-ka-institution-id": "ts-node scripts/get-ka-institution-id.ts",
+    "db:migrate:backup": "ts-node scripts/run-index-migrations-backup.ts",
+    "db:migrate:production": "ts-node scripts/run-index-migrations-production.ts",
+    "db:migrate:production:ka-cts": "ts-node scripts/run-index-migrations-production-ka-cts.ts",
+    "db:migrate:production:md": "ts-node scripts/run-index-migrations-production-md.ts"
   },
   "keywords": [],
   "author": "",
