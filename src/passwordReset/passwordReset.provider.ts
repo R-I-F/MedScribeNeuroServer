@@ -223,7 +223,7 @@ export class PasswordResetProvider {
 
       await this.mailerService.sendMail({
         to: toAddress,
-        subject: "Password Reset Request - MedScribe Neuro",
+        subject: "Password Reset Request - LibelusPro",
         html: emailHtml,
         text: emailText,
       });
@@ -386,7 +386,7 @@ export class PasswordResetProvider {
 
       await this.mailerService.sendMail({
         to: userEmail,
-        subject: "Password Change Request - MedScribe Neuro",
+        subject: "Password Change Request - LibelusPro",
         html: emailHtml,
         text: emailText,
       });
@@ -488,7 +488,7 @@ export class PasswordResetProvider {
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width: 480px; margin: 0 auto;">
     <tr>
       <td style="padding: 24px 0 8px; text-align: center;">
-        <span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 14px; font-weight: 600; border-radius: 9999px;">NeuroLogBook</span>
+        <span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 14px; font-weight: 600; border-radius: 9999px;">LibelusPro</span>
       </td>
     </tr>
     <tr>
@@ -512,7 +512,7 @@ export class PasswordResetProvider {
       </td>
     </tr>
     <tr>
-      <td style="padding: 16px 0 0; font-size: 12px; color: #6b7280; text-align: center;">NeuroLogBook — The intelligent logbook for medical training and practice.</td>
+      <td style="padding: 16px 0 0; font-size: 12px; color: #6b7280; text-align: center;">LibelusPro — The intelligent logbook for medical training and practice.</td>
     </tr>
   </table>
 </body>
@@ -525,7 +525,7 @@ export class PasswordResetProvider {
    */
   private getPasswordResetEmailText(userName: string, resetLink: string): string {
     return `
-Password reset request — NeuroLogBook
+Password reset request — LibelusPro
 
 Hello ${userName},
 
@@ -538,7 +538,7 @@ This link expires in 1 hour.
 Security: If you did not request this, ignore this email. Your password will not change.
 
 —
-NeuroLogBook — The intelligent logbook for medical training and practice.
+LibelusPro — The intelligent logbook for medical training and practice.
     `.trim();
   }
 
@@ -558,7 +558,7 @@ NeuroLogBook — The intelligent logbook for medical training and practice.
   <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px;">
     <h2 style="color: #2c3e50;">Password Change Request</h2>
     <p>Hello ${userName},</p>
-    <p>You requested to change your password for your MedScribe Neuro account.</p>
+    <p>You requested to change your password for your LibelusPro account.</p>
     <p>Click the button below to change your password:</p>
     <div style="text-align: center; margin: 30px 0;">
       <a href="${changeLink}" style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Change Password</a>
@@ -579,11 +579,11 @@ NeuroLogBook — The intelligent logbook for medical training and practice.
    */
   private getPasswordChangeEmailText(userName: string, changeLink: string): string {
     return `
-Password Change Request - MedScribe Neuro
+Password Change Request - LibelusPro
 
 Hello ${userName},
 
-You requested to change your password for your MedScribe Neuro account.
+You requested to change your password for your LibelusPro account.
 
 Click the link below to change your password:
 ${changeLink}

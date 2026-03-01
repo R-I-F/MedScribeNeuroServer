@@ -23,7 +23,8 @@
     "db:migrate:backup": "ts-node scripts/run-index-migrations-backup.ts",
     "db:migrate:production": "ts-node scripts/run-index-migrations-production.ts",
     "db:migrate:production:ka-cts": "ts-node scripts/run-index-migrations-production-ka-cts.ts",
-    "db:migrate:production:md": "ts-node scripts/run-index-migrations-production-md.ts"
+    "db:migrate:production:md": "ts-node scripts/run-index-migrations-production-md.ts",
+    "mailgun:test": "ts-node scripts/send-mailgun-test.ts"
   },
   "keywords": [],
   "author": "",

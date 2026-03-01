@@ -1703,7 +1703,7 @@ export class SubProvider {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 448px; margin: 0 auto;">
           <tr>
             <td style="padding: 0 0 16px; text-align: center;">
-              <span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">NeuroLogBook</span>
+              <span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">LibelusPro</span>
             </td>
           </tr>
           <tr>
@@ -1740,7 +1740,7 @@ export class SubProvider {
           </tr>
           <tr>
             <td style="padding: 16px 0 0; font-size: 0.75rem; color: #6b7280; text-align: center;">
-              <p style="margin: 0 0 4px;">NeuroLogBook is developed by MedScribe. © MedScribe. All rights reserved.</p>
+              <p style="margin: 0 0 4px;">LibelusPro. All rights reserved.</p>
               <p style="margin: 0;">This is an automated message. Please do not reply to this email, as this inbox is not monitored.</p>
             </td>
           </tr>
@@ -1770,7 +1770,7 @@ export class SubProvider {
     const mainDiagTitle = mainDiag?.title ?? "—";
     const hospitalName = calSurg?.hospital?.engName ?? calSurg?.hospital?.arabName ?? "—";
     return [
-      "NeuroLogBook — New submission to review",
+      "LibelusPro — New submission to review",
       "",
       `Dear ${supervisorName},`,
       "",
@@ -1789,7 +1789,7 @@ export class SubProvider {
       "Review submission:",
       reviewLink,
       "",
-      "NeuroLogBook is developed by MedScribe. © MedScribe. All rights reserved.",
+      "LibelusPro. All rights reserved.",
       "This is an automated message. Please do not reply to this email, as this inbox is not monitored.",
     ].join("\n");
   }
@@ -1895,7 +1895,7 @@ export class SubProvider {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; margin: 0 auto;">
           <tr>
             <td style="padding: 0 0 16px; text-align: center;">
-              <span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">NeuroLogBook</span>
+              <span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">LibelusPro</span>
             </td>
           </tr>
           <tr>
@@ -1996,7 +1996,7 @@ export class SubProvider {
           </tr>
           <tr>
             <td style="padding: 16px 0 0; font-size: 0.75rem; color: #6b7280; text-align: center;">
-              <p style="margin: 0 0 4px;">NeuroLogBook is developed by MedScribe. © MedScribe. All rights reserved.</p>
+              <p style="margin: 0 0 4px;">LibelusPro. All rights reserved.</p>
               <p style="margin: 0;">This is an automated message. Please do not reply to this email, as this inbox is not monitored.</p>
             </td>
           </tr>
@@ -2194,7 +2194,7 @@ export class SubProvider {
     text += `═══════════════════════════════════════════════════════════\n`;
     text += `Name: ${supervisorName}\n\n`;
     
-    text += `NeuroLogBook is developed by MedScribe. © MedScribe. All rights reserved.\n`;
+    text += `LibelusPro. All rights reserved.\n`;
     text += `This is an automated message. Please do not reply to this email, as this inbox is not monitored.`;
     
     return text;

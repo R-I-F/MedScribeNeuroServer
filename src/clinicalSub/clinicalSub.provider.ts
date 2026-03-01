@@ -268,7 +268,7 @@ export class ClinicalSubProvider {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #eff6ff;">
     <tr><td style="padding: 32px 20px;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 448px; margin: 0 auto;">
-        <tr><td style="padding: 0 0 16px; text-align: center;"><span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">NeuroLogBook</span></td></tr>
+        <tr><td style="padding: 0 0 16px; text-align: center;"><span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">LibelusPro</span></td></tr>
         <tr><td style="padding: 0 0 8px; font-size: 1.5rem; font-weight: 700; color: #111827; text-align: center;">New clinical submission to review</td></tr>
         <tr><td style="padding: 24px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1);">
           <p style="margin: 0 0 16px;">Dear ${supervisorName},</p>
@@ -338,7 +338,7 @@ export class ClinicalSubProvider {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #eff6ff;">
     <tr><td style="padding: 32px 20px;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 448px; margin: 0 auto;">
-        <tr><td style="padding: 0 0 16px; text-align: center;"><span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">NeuroLogBook</span></td></tr>
+        <tr><td style="padding: 0 0 16px; text-align: center;"><span style="display: inline-block; padding: 8px 16px; background-color: #dbeafe; color: #1d4ed8; font-size: 0.875rem; font-weight: 600; border-radius: 9999px;">LibelusPro</span></td></tr>
         <tr><td style="padding: 0 0 8px; font-size: 1.5rem; font-weight: 700; color: #111827; text-align: center;">Clinical submission ${statusText}</td></tr>
         <tr><td style="padding: 24px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 0.5rem;">
           <p style="margin: 0 0 16px;">Dear ${candidateName},</p>

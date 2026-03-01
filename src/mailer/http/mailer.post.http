@@ -6,6 +6,6 @@ Content-Type: application/json
   "to": "medscribeeg@gmail.com",
   "subject": "Test email from MedScribeNeuroServer",
   "text": "Plain text fallback.",
-  "html": "<p>This is a <strong>test</strong> email sent from the MedScribe Neuro backend.</p>"
+  "html": "<p>This is a <strong>test</strong> email sent from the LibelusPro backend.</p>"
 }
 

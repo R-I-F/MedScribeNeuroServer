@@ -45,7 +45,8 @@ export class MailerService {
       );
     }
     const { domain, fromAddress: defaultFrom } = this.resolveMailgunDomain(domainRaw);
-    const fromAddress = from ?? process.env.EMAIL_USER ?? defaultFrom;
+    // Use MAILGUN_DOMAIN-derived sender (noreply@MAILGUN_DOMAIN) unless caller provides explicit from
+    const fromAddress = from ?? defaultFrom;
     try {
       const mg = this.getMailgunClient();
       const messageData: MailgunMessageData = {
