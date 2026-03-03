@@ -6,41 +6,20 @@ import { EventAttendanceEntity } from "./eventAttendance.mDbSchema";
 import { Repository, In, MoreThanOrEqual } from "typeorm";
 import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
-import { createTtlCache } from "../utils/ttlCache";
 
 export interface IAttendanceWithEvent {
   att: EventAttendanceEntity;
   event: EventEntity;
 }
 
-/** TTL for academic points cache (ms). Ranking can be up to this many ms stale. Env: CACHE_TTL_ACADEMIC_POINTS_MS */
-const CACHE_TTL_ACADEMIC_POINTS_MS = Math.max(0, parseInt(process.env.CACHE_TTL_ACADEMIC_POINTS_MS ?? "60000", 10)) || 60000;
-/** TTL for events dashboard cache (ms). Env: CACHE_TTL_EVENTS_DASHBOARD_MS */
-const CACHE_TTL_EVENTS_DASHBOARD_MS = Math.max(0, parseInt(process.env.CACHE_TTL_EVENTS_DASHBOARD_MS ?? "60000", 10)) || 60000;
-
 @injectable()
 export class EventService {
   private uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-  private readonly academicPointsCache = createTtlCache<Map<string, number>>();
-  private readonly academicPointsLoadPromises = new Map<string, Promise<Map<string, number>>>();
-  private readonly eventsDashboardCache = createTtlCache<any[]>();
-  private readonly eventsDashboardLoadPromises = new Map<string, Promise<any[]>>();
 
   constructor(
     @inject(CandService) private candService: CandService,
     @inject(SupervisorService) private supervisorService: SupervisorService
   ) {}
-
-  /**
-   * Stable cache key per tenant. Read-only from DataSource options.
-   */
-  private getTenantCacheKey(dataSource: DataSource): string {
-    const opts = dataSource.options as { database?: string; host?: string };
-    const db = opts.database ?? "";
-    const host = opts.host ?? "";
-    return host && db ? `${host}:${db}` : db || "default";
-  }
 
   /**
    * Populates the presenter field based on event type
@@ -271,37 +250,17 @@ export class EventService {
 
   /**
    * Dashboard: events from last 30 days through all future, stripped of createdAt and updatedAt.
-   * Cached per tenant with TTL (CACHE_TTL_EVENTS_DASHBOARD_MS). Concurrent requests for same tenant coalesce.
    */
   public async getEventsDashboard(dataSource: DataSource): Promise<any[]> | never {
     try {
-      const key = this.getTenantCacheKey(dataSource);
-      const cached = this.eventsDashboardCache.get(key);
-      if (cached !== undefined) {
-        return cached;
-      }
-      const inProgress = this.eventsDashboardLoadPromises.get(key);
-      if (inProgress) {
-        await inProgress;
-        const after = this.eventsDashboardCache.get(key);
-        if (after !== undefined) return after;
-      }
-      const loadPromise = this.computeEventsDashboard(dataSource);
-      this.eventsDashboardLoadPromises.set(key, loadPromise);
-      try {
-        const result = await loadPromise;
-        this.eventsDashboardCache.set(key, result, CACHE_TTL_EVENTS_DASHBOARD_MS);
-        return result;
-      } finally {
-        this.eventsDashboardLoadPromises.delete(key);
-      }
+      return await this.computeEventsDashboard(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
   /**
-   * Fetches and shapes events for dashboard. Used by getEventsDashboard (cached).
+   * Fetches and shapes events for dashboard. Used by getEventsDashboard.
    */
   private async computeEventsDashboard(dataSource: DataSource): Promise<any[]> {
     const eventRepository = dataSource.getRepository(EventEntity);
@@ -741,33 +700,13 @@ export class EventService {
    * Intentional full table scan: we need all attendance + event data to compute points per candidate;
    * indexes do not apply here. The index on event_attendance(candidateId) benefits other endpoints
    * (e.g. "my points", activity timeline) that filter by candidateId.
-   * Cached per tenant with TTL (CACHE_TTL_ACADEMIC_POINTS_MS). Concurrent requests for same tenant coalesce.
    */
   public async getAcademicPointsPerCandidate(dataSource: DataSource): Promise<Map<string, number>> {
-    const key = this.getTenantCacheKey(dataSource);
-    const cached = this.academicPointsCache.get(key);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const inProgress = this.academicPointsLoadPromises.get(key);
-    if (inProgress) {
-      await inProgress;
-      const after = this.academicPointsCache.get(key);
-      if (after !== undefined) return after;
-    }
-    const loadPromise = this.computeAcademicPointsPerCandidate(dataSource);
-    this.academicPointsLoadPromises.set(key, loadPromise);
-    try {
-      const result = await loadPromise;
-      this.academicPointsCache.set(key, result, CACHE_TTL_ACADEMIC_POINTS_MS);
-      return result;
-    } finally {
-      this.academicPointsLoadPromises.delete(key);
-    }
+    return this.computeAcademicPointsPerCandidate(dataSource);
   }
 
   /**
-   * Full scan: all attendance + events, compute points per candidate. Used by getAcademicPointsPerCandidate (cached).
+   * Full scan: all attendance + events, compute points per candidate. Used by getAcademicPointsPerCandidate.
    */
   private async computeAcademicPointsPerCandidate(dataSource: DataSource): Promise<Map<string, number>> {
     const attRepo = dataSource.getRepository(EventAttendanceEntity);

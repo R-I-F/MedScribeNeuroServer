@@ -1,27 +1,11 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
 import { Between, In, MoreThanOrEqual } from "typeorm";
-import { createTtlCache } from "../utils/ttlCache";
 import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
 import { CalSurgEntity } from "./calSurg.mDbSchema";
 
-/** TTL for CalSurg dashboard cache (ms). Env: CACHE_TTL_CALSURG_DASHBOARD_MS */
-const CACHE_TTL_CALSURG_DASHBOARD_MS = Math.max(0, parseInt(process.env.CACHE_TTL_CALSURG_DASHBOARD_MS ?? "60000", 10)) || 60000;
-
 @injectable()
 export class CalSurgService {
-  private readonly calSurgDashboardCache = createTtlCache<any[]>();
-  private readonly calSurgDashboardLoadPromises = new Map<string, Promise<any[]>>();
-
-  /**
-   * Stable cache key per tenant. Read-only from DataSource options.
-   */
-  private getTenantCacheKey(dataSource: DataSource): string {
-    const opts = dataSource.options as { database?: string; host?: string };
-    const db = opts.database ?? "";
-    const host = opts.host ?? "";
-    return host && db ? `${host}:${db}` : db || "default";
-  }
   public async createCalSurg(calSurgData: ICalSurg, dataSource: DataSource): Promise<ICalSurgDoc> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
@@ -126,37 +110,18 @@ export class CalSurgService {
 
   /**
    * Dashboard: calSurg within last 60 days, stripped of formLink and google_uid.
-   * Cached per tenant with TTL (CACHE_TTL_CALSURG_DASHBOARD_MS). Concurrent requests for same tenant coalesce.
+   * Bounded by DASHBOARD_TAKE; ensure idx_cal_surgs_proc_date exists for performance.
    */
   public async getCalSurgDashboard(dataSource: DataSource): Promise<any[]> | never {
     try {
-      const key = this.getTenantCacheKey(dataSource);
-      const cached = this.calSurgDashboardCache.get(key);
-      if (cached !== undefined) {
-        return cached;
-      }
-      const inProgress = this.calSurgDashboardLoadPromises.get(key);
-      if (inProgress) {
-        await inProgress;
-        const after = this.calSurgDashboardCache.get(key);
-        if (after !== undefined) return after;
-      }
-      const loadPromise = this.computeCalSurgDashboard(dataSource);
-      this.calSurgDashboardLoadPromises.set(key, loadPromise);
-      try {
-        const result = await loadPromise;
-        this.calSurgDashboardCache.set(key, result, CACHE_TTL_CALSURG_DASHBOARD_MS);
-        return result;
-      } finally {
-        this.calSurgDashboardLoadPromises.delete(key);
-      }
+      return await this.computeCalSurgDashboard(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
   /**
-   * Fetches and shapes CalSurg dashboard. Used by getCalSurgDashboard (cached).
+   * Fetches and shapes CalSurg dashboard. Used by getCalSurgDashboard.
    * Bounded by DASHBOARD_TAKE; ensure idx_cal_surgs_proc_date exists for performance.
    */
   private async computeCalSurgDashboard(dataSource: DataSource): Promise<any[]> {
