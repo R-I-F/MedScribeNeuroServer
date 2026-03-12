@@ -522,12 +522,14 @@ export class EventProvider {
         };
 
         const eventInfo: IEventPointsEvent = { id: eventId, title: eventTitle };
+        const dateStr = event.dateTime ? new Date(event.dateTime).toLocaleDateString() : undefined;
         events.push({
           eventId: att.eventId,
           type,
           presenter,
           event: eventInfo,
           points,
+          date: dateStr,
         });
       }
 

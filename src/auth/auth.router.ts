@@ -213,6 +213,14 @@ export class AuthRouter {
       "/superAdmin/login",
       superAdminLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
+        // Restrict Super Admin login to development environment only
+        const nodeEnv = (process.env.NODE_ENV || "").toLowerCase();
+        if (nodeEnv !== "development") {
+          return res.status(StatusCodes.FORBIDDEN).json({
+            error: "Super Admin login is disabled in this environment",
+          });
+        }
+
         const result = validationResult(req);
         if(result.isEmpty()){
           try {

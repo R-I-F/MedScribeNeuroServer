@@ -72,7 +72,7 @@ export class AdditionalQuestionsRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN),
+      authorize(UserRole.SUPER_ADMIN),
       updateAdditionalQuestionValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

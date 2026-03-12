@@ -3,7 +3,7 @@ import express, { Router, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { ReportsController } from "./reports.controller";
 import extractJWT from "../middleware/extractJWT";
-import { requireInstituteAdmin } from "../middleware/authorize.middleware";
+import { requireInstituteAdmin, requireSuperAdmin } from "../middleware/authorize.middleware";
 import { validationResult } from "express-validator";
 import { getCanceledEventsPdfValidator } from "../validators/getCanceledEventsPdf.validator";
 import { getSupervisorsSubmissionCountValidator } from "../validators/getSupervisorsSubmissionCount.validator";
@@ -256,7 +256,7 @@ export class ReportsRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireInstituteAdmin,
+      requireSuperAdmin,
       async (req: Request, res: Response) => {
         try {
           const pdfBuffer = await this.reportsController.handleGetMainDiagnosisLinksMapReport(

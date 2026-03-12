@@ -26,11 +26,7 @@ export class DiagnosisRouter {
   }
 
   private async initRoutes() {
-    // Custom authorization for GET: allows superAdmin and instituteAdmin
-    const requireSuperAdminOrInstituteAdmin = authorize(
-      UserRole.SUPER_ADMIN,
-      UserRole.INSTITUTE_ADMIN
-    );
+    // Custom authorization for GET/POST/PATCH/DELETE: superAdmin only
 
     // GET endpoint - Get all diagnoses
     this.router.get(
@@ -38,7 +34,7 @@ export class DiagnosisRouter {
       extractJWT,
       institutionResolver,
       userBasedRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       async (req: Request, res: Response) => {
         try {
           const allDiagnoses = await this.diagnosisController.handleGetAllDiagnoses(req, res);
@@ -76,7 +72,7 @@ export class DiagnosisRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       createDiagnosisValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -104,7 +100,7 @@ export class DiagnosisRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       updateDiagnosisValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -130,7 +126,7 @@ export class DiagnosisRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       deleteDiagnosisValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

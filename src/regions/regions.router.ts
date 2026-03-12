@@ -9,7 +9,7 @@ import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
-import { authorize } from "../middleware/authorize.middleware";
+import { authorize, requireSuperAdmin } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import institutionResolver from "../middleware/institutionResolver.middleware";
 
@@ -22,8 +22,6 @@ export class RegionsRouter {
     this.router = express.Router();
     this.initRoutes();
   }
-
-  private requireSuperAdminOrInstituteAdmin = authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN);
 
   public async initRoutes() {
     this.router.get(
@@ -73,7 +71,7 @@ export class RegionsRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      this.requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       createRegionValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -95,7 +93,7 @@ export class RegionsRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      this.requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       updateRegionValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -121,7 +119,7 @@ export class RegionsRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      this.requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       deleteRegionValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

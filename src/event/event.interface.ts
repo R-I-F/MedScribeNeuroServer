@@ -120,6 +120,8 @@ export interface IEventPointsItem {
   presenter: IEventPointsPresenter;
   event: IEventPointsEvent;
   points: number;
+  /** Event date (ISO or locale string) for display in reports */
+  date?: string;
 }
 
 export interface ICandidateEventPointsResponse {

@@ -56,6 +56,7 @@ export const updateSupervisorValidator = checkSchema({
     isBoolean: {
       errorMessage: "supervisor approval status must be a boolean value",
     },
+    toBoolean: true,
   },
   canValidate: {
     in: ["body"],
@@ -63,6 +64,15 @@ export const updateSupervisorValidator = checkSchema({
     isBoolean: {
       errorMessage: "canValidate must be a boolean value",
     },
+    toBoolean: true,
+  },
+  canValClin: {
+    in: ["body"],
+    optional: true,
+    isBoolean: {
+      errorMessage: "canValClin must be a boolean value",
+    },
+    toBoolean: true,
   },
   position: {
     in: ["body"],

@@ -124,6 +124,57 @@ export class InstituteAdminController {
     }
   }
 
+  public async handleGenerateSupervisorReportPdf(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { supervisorId: string };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      if (!institution) {
+        throw new Error("Institution not resolved");
+      }
+      const { buffer: pdfBuffer, suggestedFilename } = await this.instituteAdminService.generateSupervisorReportPdf(
+        validatedReq.supervisorId,
+        dataSource,
+        institution
+      );
+      res.setHeader("Content-Type", "application/pdf");
+      const safeName = suggestedFilename.replace(/[\r\n"]/g, "").trim() || "Supervisor-Ecertificate.pdf";
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`
+      );
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGenerateSupervisorsReportPdf(req: Request, res: Response) {
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      if (!institution) {
+        throw new Error("Institution not resolved");
+      }
+      const { buffer: pdfBuffer, suggestedFilename } = await this.instituteAdminService.generateSupervisorsReportPdf(
+        dataSource,
+        institution
+      );
+      res.setHeader("Content-Type", "application/pdf");
+      const safeName = suggestedFilename.replace(/[\r\n"]/g, "").trim() || "Supervisors-Ecertificate.pdf";
+      res.setHeader("Content-Disposition", `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async handleGetAllCandidates(req: Request, res: Response) {
     try {
       const dataSource = (req as any).institutionDataSource;
@@ -131,6 +182,123 @@ export class InstituteAdminController {
         throw new Error("Institution DataSource not resolved");
       }
       return await this.instituteAdminService.getAllCandidates(dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCandidateDashboards(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { page?: number; pageSize?: number };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      if (!institution) {
+        throw new Error("Institution not resolved");
+      }
+      const page = validatedReq.page && validatedReq.page > 0 ? validatedReq.page : 1;
+      const pageSize = validatedReq.pageSize && validatedReq.pageSize > 0 ? validatedReq.pageSize : 20;
+      return await this.instituteAdminService.getCandidateDashboards({ page, pageSize }, dataSource, institution);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCandidateSummaryList(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { search?: string };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      if (!institution) {
+        throw new Error("Institution not resolved");
+      }
+      return await this.instituteAdminService.getCandidateSummaryList(
+        { search: validatedReq.search },
+        dataSource,
+        institution
+      );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetCandidateDashboardByCandidateId(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { candidateId: string };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      if (!institution) {
+        throw new Error("Institution not resolved");
+      }
+      return await this.instituteAdminService.getCandidateDashboardByCandidateId(
+        validatedReq.candidateId,
+        dataSource,
+        institution
+      );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGenerateCandidateReportPdf(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { candidateId: string };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      if (!institution) {
+        throw new Error("Institution not resolved");
+      }
+      const { buffer: pdfBuffer, suggestedFilename } = await this.instituteAdminService.generateCandidateReportPdf(
+        validatedReq.candidateId,
+        dataSource,
+        institution
+      );
+      res.setHeader("Content-Type", "application/pdf");
+      const safeName = suggestedFilename.replace(/[\r\n"]/g, "").trim() || "Ecertificate.pdf";
+      res.setHeader("Content-Disposition", `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetSubmissionReportPdf(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { submissionId: string };
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      if (!institution) {
+        throw new Error("Institution not resolved");
+      }
+      const { buffer: pdfBuffer, suggestedFilename } = await this.instituteAdminService.generateSubmissionReportPdf(
+        validatedReq.submissionId,
+        dataSource,
+        institution
+      );
+      res.setHeader("Content-Type", "application/pdf");
+      const safeName = suggestedFilename.replace(/[\r\n"]/g, "").trim() || "Submission-Report.pdf";
+      const inline = req.query?.inline === "1" || req.query?.view === "1";
+      res.setHeader(
+        "Content-Disposition",
+        inline
+          ? `inline; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`
+          : `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`
+      );
+      res.send(pdfBuffer);
     } catch (err: any) {
       throw new Error(err);
     }

@@ -8,7 +8,7 @@ import { updateHospitalValidator } from "../validators/updateHospital.validator"
 import { deleteHospitalValidator } from "../validators/deleteHospital.validator";
 import { getHospitalByIdValidator } from "../validators/getHospitalById.validator";
 import extractJWT from "../middleware/extractJWT";
-import { requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { requireCandidate, requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
@@ -69,16 +69,14 @@ export class HospitalRouter {
       }
     );
 
-    const requireSuperAdminOrInstituteAdmin = authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN);
-
     // Create hospital
-    // Accessible to: superAdmin, instituteAdmin
+    // Accessible to: superAdmin only
     this.router.post(
       "/create",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       createHospitalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -99,13 +97,13 @@ export class HospitalRouter {
     );
 
     // Update hospital
-    // Accessible to: superAdmin, instituteAdmin
+    // Accessible to: superAdmin only
     this.router.put(
       "/:id",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       updateHospitalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -127,13 +125,13 @@ export class HospitalRouter {
     );
 
     // Delete hospital
-    // Accessible to: superAdmin, instituteAdmin
+    // Accessible to: superAdmin only
     this.router.delete(
       "/:id",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       deleteHospitalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

@@ -8,9 +8,13 @@ import { deleteInstituteAdminValidator } from "../validators/deleteInstituteAdmi
 import { getSupervisorSubmissionsValidator } from "../validators/getSupervisorSubmissions.validator";
 import { getCandidateSubmissionsValidator } from "../validators/getCandidateSubmissions.validator";
 import { getCandidateSubmissionByIdValidator } from "../validators/getCandidateSubmissionById.validator";
+import { getSubmissionReportValidator } from "../validators/getSubmissionReport.validator";
 import { getCalendarProceduresValidator } from "../validators/getCalendarProcedures.validator";
 import { getArabicProceduresValidator } from "../validators/getArabicProcedures.validator";
 import { getHospitalAnalysisValidator } from "../validators/getHospitalAnalysis.validator";
+import { getCandidateDashboardsValidator } from "../validators/getCandidateDashboards.validator";
+import { getCandidateSummaryValidator } from "../validators/getCandidateSummary.validator";
+import { getCandidateDashboardByIdValidator } from "../validators/getCandidateDashboardById.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
@@ -86,6 +90,50 @@ export class InstituteAdminRouter {
       }
     );
 
+    // Dashboard endpoints - Generate PDF report for one supervisor
+    this.router.get(
+      "/supervisors/:supervisorId/report",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      getSupervisorSubmissionsValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            await this.instituteAdminController.handleGenerateSupervisorReportPdf(req, res);
+          } catch (err: any) {
+            if (err.message === "Invalid supervisor ID") {
+              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+            } else if (err.message === "Supervisor not found or does not belong to the requested institution") {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Dashboard endpoints - Download PDF of all supervisors (same style as candidate report)
+    this.router.get(
+      "/supervisors/report",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          await this.instituteAdminController.handleGenerateSupervisorsReportPdf(req, res);
+        } catch (err: any) {
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
     // Dashboard endpoints - Get supervisor submissions (MUST be before /:id route)
     this.router.get(
       "/supervisors/:supervisorId/submissions",
@@ -126,6 +174,109 @@ export class InstituteAdminRouter {
           res.status(StatusCodes.OK).json(resp);
         } catch (err: any) {
           res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
+    // Dashboard endpoints - Get candidate summary list (lightweight, full list, optional search)
+    this.router.get(
+      "/candidates/summary",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      getCandidateSummaryValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.instituteAdminController.handleGetCandidateSummaryList(req, res);
+            res.status(StatusCodes.OK).json(resp);
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Dashboard endpoints - Get candidate dashboards (paginated, MUST be before /:id route)
+    this.router.get(
+      "/candidates/dashboard",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      getCandidateDashboardsValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.instituteAdminController.handleGetCandidateDashboards(req, res);
+            res.status(StatusCodes.OK).json(resp);
+          } catch (err: any) {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Dashboard endpoints - Get full dashboard snapshot for one candidate (MUST be before /candidates/:candidateId/submissions)
+    this.router.get(
+      "/candidates/:candidateId/dashboard",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      getCandidateDashboardByIdValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            const resp = await this.instituteAdminController.handleGetCandidateDashboardByCandidateId(req, res);
+            res.status(StatusCodes.OK).json(resp);
+          } catch (err: any) {
+            if (err.message === "Invalid candidate ID") {
+              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+            } else if (err.message === "Candidate not found or does not belong to the requested institution") {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Dashboard endpoints - Generate PDF report for one candidate
+    this.router.get(
+      "/candidates/:candidateId/report",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      getCandidateDashboardByIdValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            await this.instituteAdminController.handleGenerateCandidateReportPdf(req, res);
+          } catch (err: any) {
+            if (err.message === "Invalid candidate ID") {
+              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+            } else if (err.message === "Candidate not found or does not belong to the requested institution") {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
         }
       }
     );
@@ -271,6 +422,34 @@ export class InstituteAdminRouter {
             res.status(StatusCodes.OK).json(resp);
           } catch (err: any) {
             res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        } else {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Submission case report PDF (institute admin only) — single submission by ID
+    this.router.get(
+      "/submissions/:submissionId/report",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireInstituteAdmin,
+      getSubmissionReportValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (result.isEmpty()) {
+          try {
+            await this.instituteAdminController.handleGetSubmissionReportPdf(req, res);
+          } catch (err: any) {
+            if (err.message === "Invalid submission ID" || err.message === "Invalid submission ID format") {
+              res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
+            } else if (err.message === "Submission not found") {
+              res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
+            } else {
+              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+            }
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());

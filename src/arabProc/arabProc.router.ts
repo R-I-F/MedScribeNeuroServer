@@ -9,7 +9,7 @@ import { deleteArabProcValidator } from "../validators/deleteArabProc.validator"
 import { updateArabProcValidator } from "../validators/updateArabProc.validator";
 import { getArabProcByIdValidator } from "../validators/getArabProcById.validator";
 import extractJWT from "../middleware/extractJWT";
-import { authorize } from "../middleware/authorize.middleware";
+import { authorize, requireSuperAdmin } from "../middleware/authorize.middleware";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import { UserRole } from "../types/role.types";
 import institutionResolver from "../middleware/institutionResolver.middleware";
@@ -25,7 +25,7 @@ export class ArabProcRouter {
   }
 
   private initRoutes() {
-    // All CRUD: Super Admin, Institute Admin, Clerk
+    // All CRUD/write: Super Admin only, read: superAdmin/instituteAdmin/clerk
     const requireSuperAdminOrInstituteAdminOrClerk = authorize(
       UserRole.SUPER_ADMIN,
       UserRole.INSTITUTE_ADMIN,
@@ -80,7 +80,7 @@ export class ArabProcRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdminOrClerk,
+      requireSuperAdmin,
       createArabProcValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -101,7 +101,7 @@ export class ArabProcRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdminOrClerk,
+      requireSuperAdmin,
       createFromExternalValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -127,7 +127,7 @@ export class ArabProcRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdminOrClerk,
+      requireSuperAdmin,
       updateArabProcValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -153,7 +153,7 @@ export class ArabProcRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdminOrClerk,
+      requireSuperAdmin,
       deleteArabProcValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

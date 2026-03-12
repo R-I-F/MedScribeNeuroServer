@@ -27,11 +27,7 @@ export class ProcCptRouter {
   }
 
   private async initRoutes() {
-    // Custom authorization for GET: allows superAdmin and instituteAdmin
-    const requireSuperAdminOrInstituteAdmin = authorize(
-      UserRole.SUPER_ADMIN,
-      UserRole.INSTITUTE_ADMIN
-    );
+    // Custom authorization for GET/POST/PUT/DELETE: superAdmin only
 
     // GET endpoint - Get all procedure codes
     this.router.get(
@@ -39,7 +35,7 @@ export class ProcCptRouter {
       extractJWT,
       institutionResolver,
       userBasedRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       async (req: Request, res: Response) => {
         try {
           const allProcCpts = await this.procCptController.handleGetAllProcCpts(req, res);
@@ -56,7 +52,7 @@ export class ProcCptRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       createProcCptValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -83,7 +79,7 @@ export class ProcCptRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       updateProcCptValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -131,7 +127,7 @@ export class ProcCptRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       upsertProcCptValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -153,7 +149,7 @@ export class ProcCptRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       deleteProcCptValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

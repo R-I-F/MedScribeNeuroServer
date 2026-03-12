@@ -72,6 +72,29 @@ export class InstituteAdminService {
     }
   }
 
+  public async generateSupervisorReportPdf(
+    supervisorId: string,
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution
+  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    try {
+      return await this.instituteAdminProvider.generateSupervisorReportPdf(supervisorId, dataSource, institution);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async generateSupervisorsReportPdf(
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution
+  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    try {
+      return await this.instituteAdminProvider.generateSupervisorsReportPdf(dataSource, institution);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async getAllCandidates(dataSource: DataSource) {
     try {
       return await this.instituteAdminProvider.getAllCandidates(dataSource);
@@ -138,6 +161,78 @@ export class InstituteAdminService {
   }, dataSource: DataSource) {
     try {
       return await this.instituteAdminProvider.getHospitalAnalysis(filters, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getCandidateDashboards(
+    params: { page: number; pageSize: number },
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution
+  ) {
+    try {
+      return await this.instituteAdminProvider.getCandidateDashboards(params, dataSource, institution);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getCandidateSummaryList(
+    params: { search?: string },
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution
+  ) {
+    try {
+      return await this.instituteAdminProvider.getCandidateSummaryList(params, dataSource, institution);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getCandidateDashboardByCandidateId(
+    candidateId: string,
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution
+  ) {
+    try {
+      return await this.instituteAdminProvider.getCandidateDashboardByCandidateId(
+        candidateId,
+        dataSource,
+        institution
+      );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async generateCandidateReportPdf(
+    candidateId: string,
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution
+  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    try {
+      return await this.instituteAdminProvider.generateCandidateReportPdf(
+        candidateId,
+        dataSource,
+        institution
+      );
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async generateSubmissionReportPdf(
+    submissionId: string,
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution
+  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    try {
+      return await this.instituteAdminProvider.generateSubmissionReportPdf(
+        submissionId,
+        dataSource,
+        institution
+      );
     } catch (err: any) {
       throw new Error(err);
     }

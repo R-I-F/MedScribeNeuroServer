@@ -279,9 +279,13 @@ export class EventRouter {
                 .json({ error: "Event not found" });
             }
           } catch (err: any) {
-            res
-              .status(StatusCodes.INTERNAL_SERVER_ERROR)
-              .json({ error: err.message });
+          const msg = err?.message || "Internal Server Error";
+          // Business-rule validation errors (e.g. invalid status change) should not be 500
+          if (msg.includes("Cannot change status")) {
+            res.status(StatusCodes.BAD_REQUEST).json({ error: msg });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: msg });
+          }
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());

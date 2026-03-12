@@ -10,7 +10,7 @@ import { removeMainDiagDiagnosisValidator } from "../validators/removeMainDiagDi
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
-import { requireCandidate, authorize } from "../middleware/authorize.middleware";
+import { requireCandidate, requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
@@ -26,14 +26,13 @@ export class MainDiagRouter {
   }
 
   public async initRoutes() {
-    // Create mainDiag - superAdmin, instituteAdmin
-    const requireSuperAdminOrInstituteAdmin = authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN);
+    // Create/update/delete mainDiag - superAdmin only
     this.router.post(
       "/",
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       createMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -102,7 +101,7 @@ export class MainDiagRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       updateMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -129,7 +128,7 @@ export class MainDiagRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       removeMainDiagProcsValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -156,7 +155,7 @@ export class MainDiagRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       removeMainDiagDiagnosisValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
@@ -183,7 +182,7 @@ export class MainDiagRouter {
       extractJWT,
       institutionResolver,
       userBasedStrictRateLimiter,
-      requireSuperAdminOrInstituteAdmin,
+      requireSuperAdmin,
       deleteMainDiagValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
