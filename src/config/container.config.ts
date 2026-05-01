@@ -150,6 +150,11 @@ import { ClinicalSubRouter } from "../clinicalSub/clinicalSub.router";
 import { ClinicalSubService } from "../clinicalSub/clinicalSub.service";
 import { ClinicalSubProvider } from "../clinicalSub/clinicalSub.provider";
 
+import { WaBotController } from "../waBot/waBot.controller";
+import { WaBotRouter } from "../waBot/waBot.router";
+import { WaBotService } from "../waBot/waBot.service";
+import { WaBotProvider } from "../waBot/waBot.provider";
+
 export const container: Container = new Container();
 
 container.bind(UtilService).toSelf().inTransientScope();
@@ -302,3 +307,8 @@ container.bind(ClinicalSubController).toSelf().inTransientScope();
 container.bind(ClinicalSubRouter).toSelf().inTransientScope();
 container.bind(ClinicalSubService).toSelf().inTransientScope();
 container.bind(ClinicalSubProvider).toSelf().inTransientScope();
+
+container.bind(WaBotController).toSelf().inTransientScope();
+container.bind(WaBotRouter).toSelf().inTransientScope();
+container.bind(WaBotService).toSelf().inTransientScope();
+container.bind(WaBotProvider).toSelf().inTransientScope();

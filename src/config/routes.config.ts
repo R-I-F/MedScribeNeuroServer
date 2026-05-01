@@ -94,6 +94,9 @@ export function addRoutes(app: Application) {
   const { ClinicalSubRouter } = require("../clinicalSub/clinicalSub.router");
   const clinicalSubRouter = container.get(ClinicalSubRouter) as any;
 
+  const { WaBotRouter } = require("../waBot/waBot.router");
+  const waBotRouter = container.get(WaBotRouter) as any;
+
   const { healthRateLimiter } = require("../middleware/rateLimiter.middleware");
   // Health check: use GET /health for load balancer / k8s probes. Rate-limited to throttle bot traffic.
   // Unhandled GET / and POST / return 404 (bots/scanners get 404, not 200).
@@ -130,6 +133,7 @@ export function addRoutes(app: Application) {
   app.use("/clinicalSub", clinicalSubRouter.router);
   app.use("/references", bundlerRouter.router);
   app.use("/candidate", bundlerRouter.router);
+  app.use("/waBot", waBotRouter.router);
 
   return app;
 }

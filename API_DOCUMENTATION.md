@@ -14342,6 +14342,138 @@ Retrieves Arabic procedure data from external source.
 
 ---
 
+## WhatsApp Bot (`/waBot`)
+
+The `waBot` module exposes the Meta WhatsApp Cloud API webhook endpoints used as the **Callback URL** in the Meta App dashboard (`Customize use case > Configuration > Webhook`). Both endpoints are public (no JWT) because they are called server-to-server by Meta, but they are protected by request validation, IP rate limiting, and provider signature verification.
+
+### Required Environment Variables
+
+| Variable | Where to find it | Used by |
+| --- | --- | --- |
+| `WA_PHONE_NUMBER_ID` | Meta App > WhatsApp > API Setup ("Phone number ID") | Outbound (future), test scripts |
+| `WA_API_KEY` | Meta App > WhatsApp > API Setup ("Temporary access token" or your permanent token) | Outbound (future) |
+| `WA_VERIFY_TOKEN` | Random string you choose; paste the same value into Meta's "Verify token" field | `GET /waBot/webhook` handshake |
+| `WA_APP_SECRET` | Meta App > Settings > Basic > "App Secret" | `POST /waBot/webhook` HMAC signature verification |
+
+The webhook fails closed (returns `503 Service Unavailable`) if `WA_VERIFY_TOKEN` or `WA_APP_SECRET` is missing.
+
+### Rate Limiting
+
+Both routes use the strict IP-based limiter: **50 requests per 15 minutes per IP** on top of the global limiter (400 / 15 min per IP).
+
+---
+
+### Verify Webhook (Meta handshake)
+
+**GET** `/waBot/webhook`
+
+**Authentication:** None (called by Meta).
+
+**Description:**
+Meta calls this endpoint once when you click **"Verify and save"** on the Configuration page, and any time the Callback URL is re-verified. The server compares `hub.verify_token` against `WA_VERIFY_TOKEN` (constant-time) and echoes back the raw `hub.challenge` value as plain text.
+
+**Query Parameters:**
+- `hub.mode` (required): must be `subscribe`.
+- `hub.verify_token` (required): must equal the `WA_VERIFY_TOKEN` env var.
+- `hub.challenge` (required): non-empty string Meta expects echoed back verbatim.
+
+**Response (200 OK):**
+- `Content-Type: text/plain`
+- Body: the raw value of `hub.challenge` (no JSON wrapper). This is intentional and required by Meta - the standard response wrapper does not apply to this endpoint.
+
+**Error Responses:**
+- `400 Bad Request`: missing or malformed query parameters.
+- `403 Forbidden`: wrong `hub.mode` or `hub.verify_token`.
+- `429 Too Many Requests`: rate limit exceeded.
+- `503 Service Unavailable`: server is missing `WA_VERIFY_TOKEN`.
+- `500 Internal Server Error`: unexpected error.
+
+---
+
+### Receive Webhook Events
+
+**POST** `/waBot/webhook`
+
+**Authentication:** None for the user, but the request **must** carry a valid `X-Hub-Signature-256` header signed with the Meta App Secret.
+
+**Description:**
+Meta delivers inbound message and message-status events here. The server:
+1. Verifies the HMAC-SHA256 signature against the **raw** request body using `WA_APP_SECRET` (constant-time comparison).
+2. Parses the payload into messages and statuses.
+3. Logs structured info for each event.
+4. Acknowledges quickly with `200 OK { "received": true }` (Meta retries on non-2xx).
+
+**Headers:**
+- `Content-Type: application/json` (required).
+- `X-Hub-Signature-256: sha256=<hex>` (required) - HMAC-SHA256 of the request body using the Meta App Secret.
+
+**Request Body Shape:**
+```json
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "1234567890",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "201234567890",
+              "phone_number_id": "1143759322143647"
+            },
+            "contacts": [
+              { "wa_id": "201090650946", "profile": { "name": "Jane Doe" } }
+            ],
+            "messages": [
+              {
+                "id": "wamid.XXXX",
+                "from": "201090650946",
+                "timestamp": "1714000000",
+                "type": "text",
+                "text": { "body": "hello" }
+              }
+            ],
+            "statuses": [
+              {
+                "id": "wamid.YYYY",
+                "status": "delivered",
+                "timestamp": "1714000001",
+                "recipient_id": "201090650946"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": { "received": true }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: payload does not match the expected shape (`object`, `entry`).
+- `401 Unauthorized`: missing or invalid `X-Hub-Signature-256` header (`error: "missing_signature"` or `"invalid_signature"`).
+- `429 Too Many Requests`: rate limit exceeded.
+- `503 Service Unavailable`: server is missing `WA_APP_SECRET`.
+- `500 Internal Server Error`: unexpected error.
+
+**Notes:**
+- `src/index.ts` captures the raw request body via `express.json({ verify })` so HMAC can be computed over the exact bytes Meta sent. Do not modify or remove that hook unless you also rework the signature path.
+- This endpoint currently logs events only. Persistence and per-type handlers (text, button, interactive) will be added in follow-up work.
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -15118,6 +15250,8 @@ The institution is resolved from the authenticated Institute Admin's JWT (or `X-
 | `/mailer/*` | Yes | Institute Admin or Super Admin |
 | `/mailer/send` | Yes | Institute Admin or Super Admin |
 | `/external/*` | No | - |
+| `/waBot/webhook` (GET) | No | - (Public, called by Meta. Verified via `WA_VERIFY_TOKEN`.) |
+| `/waBot/webhook` (POST) | No | - (Public, called by Meta. Verified via HMAC `X-Hub-Signature-256` against `WA_APP_SECRET`.) |
 
 ---
 

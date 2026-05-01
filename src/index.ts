@@ -54,8 +54,18 @@ app.use(cors({
   optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
 }));
 
-// Body size limit to reduce DoS via huge payloads (e.g. bots sending large bodies)
-app.use(express.json({ limit: "500kb" }));
+// Body size limit to reduce DoS via huge payloads (e.g. bots sending large bodies).
+// `verify` stashes the raw request bytes on req.rawBody so endpoints that need to
+// validate provider signatures (e.g. Meta's X-Hub-Signature-256 for the WhatsApp
+// webhook) can recompute HMAC over the exact bytes Meta sent.
+app.use(
+  express.json({
+    limit: "500kb",
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(cookieParser()); // Parse httpOnly cookies
 app.use(requestLogger);
 app.use(responseFormatter);
