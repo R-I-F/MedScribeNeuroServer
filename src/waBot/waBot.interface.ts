@@ -15,8 +15,12 @@ export interface IWaMessage {
   timestamp: string;
   type: string;
   text?: { body?: string };
-  // other message-type fields (image, audio, button, interactive, etc.) intentionally
-  // left as unknown until handlers are implemented for each type
+  interactive?: {
+    type?: string;
+    button_reply?: { id?: string; title?: string };
+    list_reply?: { id?: string; title?: string };
+  };
+  // other message-type fields (image, audio, etc.)
   [key: string]: unknown;
 }
 

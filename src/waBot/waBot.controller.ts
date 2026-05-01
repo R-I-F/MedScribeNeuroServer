@@ -29,7 +29,7 @@ export class WaBotController {
       if (!sigCheck.ok) return sigCheck;
 
       const events = this.waBotProvider.parseEvents(input.payload);
-      this.waBotProvider.dispatchEvents(events);
+      await this.waBotProvider.handleInboundMessages(events);
       return { ok: true };
     } catch (err: any) {
       throw new Error(err);
