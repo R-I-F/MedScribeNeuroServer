@@ -2,12 +2,34 @@ import { inject, injectable } from "inversify";
 import { WaBotService } from "./waBot.service";
 import {
   IWaParsedEvents,
-  IWaVerifyQuery,
   IWaWebhookPayload,
   WaHandshakeResult,
 } from "./waBot.interface";
 
 const NAMESPACE = "WaBot";
+
+/**
+ * Express / `qs` may represent Meta's `hub.*` query params as either flat keys
+ * (`"hub.mode"`) or a nested `hub` object. `express-validator` `matchedData()` can
+ * also drop dotted keys, so we always read from the raw query object.
+ */
+function pickHubQueryString(
+  q: Record<string, unknown>,
+  dottedKey: string,
+  nestedKey: string,
+): string | undefined {
+  const flat = q[dottedKey];
+  if (typeof flat === "string" && flat.length > 0) return flat;
+  if (Array.isArray(flat) && typeof flat[0] === "string") return flat[0];
+
+  const hub = q.hub;
+  if (hub && typeof hub === "object" && !Array.isArray(hub)) {
+    const nest = (hub as Record<string, unknown>)[nestedKey];
+    if (typeof nest === "string" && nest.length > 0) return nest;
+    if (Array.isArray(nest) && typeof nest[0] === "string") return nest[0];
+  }
+  return undefined;
+}
 
 @injectable()
 export class WaBotProvider {
@@ -17,7 +39,7 @@ export class WaBotProvider {
    * Validates Meta's GET handshake. Returns the challenge to echo back when valid.
    * Fails closed if env config is missing.
    */
-  public handleVerification(query: IWaVerifyQuery): WaHandshakeResult | never {
+  public handleVerification(query: Record<string, unknown>): WaHandshakeResult | never {
     try {
       const verifyToken = process.env.WA_VERIFY_TOKEN;
       if (!verifyToken) {
@@ -25,9 +47,9 @@ export class WaBotProvider {
         return { ok: false, reason: "server_misconfigured" };
       }
 
-      const mode = query["hub.mode"];
-      const token = query["hub.verify_token"];
-      const challenge = query["hub.challenge"];
+      const mode = pickHubQueryString(query, "hub.mode", "mode");
+      const token = pickHubQueryString(query, "hub.verify_token", "verify_token");
+      const challenge = pickHubQueryString(query, "hub.challenge", "challenge");
 
       if (mode !== "subscribe") {
         return { ok: false, reason: "invalid_mode" };

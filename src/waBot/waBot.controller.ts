@@ -1,17 +1,13 @@
 import { inject, injectable } from "inversify";
 import { WaBotProvider } from "./waBot.provider";
-import {
-  IWaVerifyQuery,
-  IWaWebhookPayload,
-  WaHandshakeResult,
-} from "./waBot.interface";
+import { IWaWebhookPayload, WaHandshakeResult } from "./waBot.interface";
 
 @injectable()
 export class WaBotController {
   constructor(@inject(WaBotProvider) private waBotProvider: WaBotProvider) {}
 
   public async handleVerification(
-    query: IWaVerifyQuery,
+    query: Record<string, unknown>,
   ): Promise<WaHandshakeResult> | never {
     try {
       return this.waBotProvider.handleVerification(query);

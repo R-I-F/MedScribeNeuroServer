@@ -3,7 +3,7 @@ import { inject, injectable } from "inversify";
 import { matchedData, validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import { WaBotController } from "./waBot.controller";
-import { IWaVerifyQuery, IWaWebhookPayload } from "./waBot.interface";
+import { IWaWebhookPayload } from "./waBot.interface";
 import { verifyWaWebhookValidator } from "../validators/verifyWaWebhook.validator";
 import { receiveWaWebhookValidator } from "../validators/receiveWaWebhook.validator";
 import { strictRateLimiter } from "../middleware/rateLimiter.middleware";
@@ -38,13 +38,10 @@ export class WaBotRouter {
         }
 
         try {
-          const validated = matchedData(req, {
-            locations: ["query"],
-            includeOptionals: true,
-          }) as IWaVerifyQuery;
-
+          // Do not use `matchedData` here: it can omit dotted keys like `hub.mode`, so
+          // the provider would see undefined and return `invalid_mode` even for valid requests.
           const outcome = await this.waBotController.handleVerification(
-            validated,
+            req.query as Record<string, unknown>,
           );
 
           if (!outcome.ok) {
