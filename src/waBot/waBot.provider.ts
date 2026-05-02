@@ -172,6 +172,75 @@ export class WaBotProvider {
     };
   }
 
+  /** Optional overrides for tutorial / promo links after signup. */
+  private tutorialUrls(): {
+    candidateDrive: string;
+    candidateYoutube: string;
+    supervisorDrive: string;
+  } {
+    return {
+      candidateDrive:
+        process.env.LIBELUS_TUTORIAL_CANDIDATE_DRIVE_URL ||
+        "https://drive.google.com/file/d/1QsYdA_AAo31vgUDDnAvfkDg09c8a5clR/view?usp=sharing",
+      candidateYoutube:
+        process.env.LIBELUS_TUTORIAL_CANDIDATE_YOUTUBE_URL ||
+        "https://www.youtube.com/shorts/vkfg19cfdbg?feature=share",
+      supervisorDrive:
+        process.env.LIBELUS_TUTORIAL_SUPERVISOR_DRIVE_URL ||
+        "https://drive.google.com/file/d/1ipWqBHfVX_i1xD7SoLls_UTq9EPf39Ye/view?usp=sharing",
+    };
+  }
+
+  /** Message 1 of 3 for signup flows (candidate & supervisor). */
+  private signupInstructionMessage(): string {
+    return [
+      "LibelusPro registration — please follow these steps:",
+      "",
+      "1) Open the signup link we send in the next message and complete the form.",
+      "2) Enter your union registry number in the field:",
+      "رقم القيد على كارنيه النقابة",
+      "3) After you finish registration, send a clear photo of your ID card here in this chat.",
+    ].join("\n");
+  }
+
+  private async sendCandidateSignupSequence(to: string): Promise<void> {
+    const signupUrl = this.signupUrls().candidate;
+    const tut = this.tutorialUrls();
+    await this.waBotService.sendTextMessage(to, this.signupInstructionMessage(), true);
+    await this.waBotService.sendTextMessage(
+      to,
+      `Your signup link:\n${signupUrl}`,
+      true,
+    );
+    await this.waBotService.sendTextMessage(
+      to,
+      [
+        "Coordination tutorial (video):",
+        tut.candidateDrive,
+        "",
+        "New AI voice-to-text feature for surgical notes:",
+        tut.candidateYoutube,
+      ].join("\n"),
+      true,
+    );
+  }
+
+  private async sendSupervisorSignupSequence(to: string): Promise<void> {
+    const signupUrl = this.signupUrls().supervisor;
+    const tut = this.tutorialUrls();
+    await this.waBotService.sendTextMessage(to, this.signupInstructionMessage(), true);
+    await this.waBotService.sendTextMessage(
+      to,
+      `Your signup link:\n${signupUrl}`,
+      true,
+    );
+    await this.waBotService.sendTextMessage(
+      to,
+      ["Coordination tutorial (video):", tut.supervisorDrive].join("\n"),
+      true,
+    );
+  }
+
   private extractButtonReplyId(msg: IWaMessage): string | undefined {
     if (msg.type !== "interactive") return undefined;
     const inter = msg.interactive as
@@ -216,19 +285,11 @@ export class WaBotProvider {
 
     const buttonId = this.extractButtonReplyId(msg);
     if (buttonId === BTN_SIGNUP_CANDIDATE) {
-      const url = this.signupUrls().candidate;
-      await this.waBotService.sendTextMessage(
-        from,
-        `Open this link to create your LibelusPro account:\n${url}`,
-      );
+      await this.sendCandidateSignupSequence(from);
       return;
     }
     if (buttonId === BTN_SIGNUP_SUPERVISOR) {
-      const url = this.signupUrls().supervisor;
-      await this.waBotService.sendTextMessage(
-        from,
-        `Open this link to create your LibelusPro account:\n${url}`,
-      );
+      await this.sendSupervisorSignupSequence(from);
       return;
     }
     if (buttonId === BTN_CREATE_ACCOUNT) {
