@@ -9,6 +9,20 @@ import {
 
 const NAMESPACE = "WaBot";
 
+/** Users who completed the signup link step and must upload union ID; tutorials sent after upload. */
+const ID_UPLOAD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const awaitingIdUpload = new Map<
+  string,
+  { role: "candidate" | "supervisor"; expiresAt: number }
+>();
+
+function pruneExpiredIdSessions(): void {
+  const now = Date.now();
+  for (const [phone, v] of awaitingIdUpload) {
+    if (v.expiresAt < now) awaitingIdUpload.delete(phone);
+  }
+}
+
 /** Reply button ids we send; must match inbound `interactive.button_reply.id`. */
 const BTN_SIGNUP_CANDIDATE = "signup_candidate";
 const BTN_SIGNUP_SUPERVISOR = "signup_supervisor";
@@ -133,7 +147,7 @@ export class WaBotProvider {
   }
 
   /**
-   * Inbound flow: any text → main menu (“Create new account”) → role picker → signup URL.
+   * Inbound flow: text → main menu → role → signup (2 msgs) → user sends ID image/PDF → under review + tutorials.
    */
   public async handleInboundMessages(events: IWaParsedEvents): Promise<void> {
     try {
@@ -172,6 +186,30 @@ export class WaBotProvider {
     };
   }
 
+  private registerAwaitingIdUpload(
+    phone: string,
+    role: "candidate" | "supervisor",
+  ): void {
+    pruneExpiredIdSessions();
+    awaitingIdUpload.set(phone, {
+      role,
+      expiresAt: Date.now() + ID_UPLOAD_TTL_MS,
+    });
+  }
+
+  private takeAwaitingIdRole(
+    phone: string,
+  ): "candidate" | "supervisor" | undefined {
+    pruneExpiredIdSessions();
+    const v = awaitingIdUpload.get(phone);
+    if (!v || v.expiresAt < Date.now()) {
+      awaitingIdUpload.delete(phone);
+      return undefined;
+    }
+    awaitingIdUpload.delete(phone);
+    return v.role;
+  }
+
   /** Optional overrides for tutorial / promo links after signup. */
   private tutorialUrls(): {
     candidateDrive: string;
@@ -191,54 +229,86 @@ export class WaBotProvider {
     };
   }
 
-  /** Message 1 of 3 for signup flows (candidate & supervisor). */
+  /** Message 1 of 2: instructions (WhatsApp *bold* and "- " bullets). */
   private signupInstructionMessage(): string {
     return [
-      "LibelusPro registration — please follow these steps:",
+      "*LibelusPro — Account registration*",
       "",
-      "1) Open the signup link we send in the next message and complete the form.",
-      "2) Enter your union registry number in the field:",
-      "رقم القيد على كارنيه النقابة",
-      "3) After you finish registration, send a clear photo of your ID card here in this chat.",
+      "Please follow these steps:",
+      "",
+      "- *Step 1:* Open the *signup link* we send in the next message and complete the form.",
+      "- *Step 2:* Enter your union registry number in the field *رقم القيد على كارنيه النقابة*.",
+      "- *Step 3:* After registration, send a *photo* or *PDF* of your union ID here in this chat.",
+      "",
+      "Tutorial videos will be sent *after* we receive your document. Your account will then be *under review*.",
     ].join("\n");
   }
 
   private async sendCandidateSignupSequence(to: string): Promise<void> {
     const signupUrl = this.signupUrls().candidate;
-    const tut = this.tutorialUrls();
     await this.waBotService.sendTextMessage(to, this.signupInstructionMessage(), true);
     await this.waBotService.sendTextMessage(
       to,
-      `Your signup link:\n${signupUrl}`,
+      `*Your signup link:*\n${signupUrl}`,
       true,
     );
-    await this.waBotService.sendTextMessage(
-      to,
-      [
-        "Coordination tutorial (video):",
-        tut.candidateDrive,
-        "",
-        "New AI voice-to-text feature for surgical notes:",
-        tut.candidateYoutube,
-      ].join("\n"),
-      true,
-    );
+    this.registerAwaitingIdUpload(to, "candidate");
   }
 
   private async sendSupervisorSignupSequence(to: string): Promise<void> {
     const signupUrl = this.signupUrls().supervisor;
-    const tut = this.tutorialUrls();
     await this.waBotService.sendTextMessage(to, this.signupInstructionMessage(), true);
     await this.waBotService.sendTextMessage(
       to,
-      `Your signup link:\n${signupUrl}`,
+      `*Your signup link:*\n${signupUrl}`,
       true,
     );
+    this.registerAwaitingIdUpload(to, "supervisor");
+  }
+
+  /** After user sends image or PDF of union ID while session is active. */
+  private async sendPostIdSubmissionSequence(
+    to: string,
+    role: "candidate" | "supervisor",
+  ): Promise<void> {
     await this.waBotService.sendTextMessage(
       to,
-      ["Coordination tutorial (video):", tut.supervisorDrive].join("\n"),
+      [
+        "*Thank you — we received your document.*",
+        "",
+        "Your LibelusPro account is *under review*. Our team will verify your details and follow up as needed.",
+        "",
+        "Below are tutorial resources you can use while you wait:",
+      ].join("\n"),
       true,
     );
+
+    const tut = this.tutorialUrls();
+    if (role === "candidate") {
+      await this.waBotService.sendTextMessage(
+        to,
+        [
+          "*Coordination tutorial (video):*",
+          tut.candidateDrive,
+          "",
+          "*New AI voice-to-text feature for surgical notes:*",
+          tut.candidateYoutube,
+        ].join("\n"),
+        true,
+      );
+    } else {
+      await this.waBotService.sendTextMessage(
+        to,
+        ["*Coordination tutorial (video):*", tut.supervisorDrive].join("\n"),
+        true,
+      );
+    }
+  }
+
+  private isUnionIdMediaMessage(msg: IWaMessage): boolean {
+    if (msg.type === "image") return true;
+    if (msg.type === "document") return true;
+    return false;
   }
 
   private extractButtonReplyId(msg: IWaMessage): string | undefined {
@@ -282,6 +352,14 @@ export class WaBotProvider {
 
     const from = msg.from;
     if (!from) return;
+
+    if (this.isUnionIdMediaMessage(msg)) {
+      const role = this.takeAwaitingIdRole(from);
+      if (role) {
+        await this.sendPostIdSubmissionSequence(from, role);
+      }
+      return;
+    }
 
     const buttonId = this.extractButtonReplyId(msg);
     if (buttonId === BTN_SIGNUP_CANDIDATE) {
