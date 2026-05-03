@@ -95,14 +95,23 @@ export class WaBotService {
   }
 
   private logGraphError(op: string, err: unknown): void {
-    const ax = err as AxiosError<{ error?: { message?: string; code?: number } }>;
+    const ax = err as AxiosError<{
+      error?: { message?: string; code?: number; type?: string };
+    }>;
     const status = ax.response?.status;
     const data = ax.response?.data;
+    const graphError = data?.error ?? data;
     console.error(`[WaBotService] ${op} failed`, {
       status,
       message: ax.message,
-      graphError: data?.error ?? data,
+      graphError,
     });
+    const code = data?.error?.code;
+    if (status === 403 && code === 131005) {
+      console.error(
+        "[WaBotService] 131005: Check WA_API_KEY in Access Token Debugger — need whatsapp_business_messaging (and usually whatsapp_business_management). Token must be for a System User with access to the WABA that owns WA_PHONE_NUMBER_ID. Regenerate if expired or from wrong app.",
+      );
+    }
   }
 
   /**

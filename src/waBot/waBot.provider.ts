@@ -1,5 +1,9 @@
 import { inject, injectable } from "inversify";
-import { getAllActiveInstitutions, getInstitutionById } from "../institution/institution.service";
+import {
+  getAllActiveInstitutions,
+  getInstitutionById,
+  type IInstitution,
+} from "../institution/institution.service";
 import { WaBotService } from "./waBot.service";
 import { WaSessionService } from "./waSession.service";
 import {
@@ -319,6 +323,31 @@ export class WaBotProvider {
     );
   }
 
+  /** Body text for picker: name plus department when set (disambiguates duplicate names). */
+  private formatInstitutionPickerLine(inst: IInstitution): string {
+    const dept = (inst.department ?? "").trim();
+    if (!dept) return inst.name.trim();
+    return `${inst.name.trim()} — ${dept}`;
+  }
+
+  /** Reply-button titles are capped at 20 chars by WhatsApp; prefer department/code over long names. */
+  private institutionPickerButtonTitle(order: number, inst: IInstitution): string {
+    const short =
+      (inst.department ?? "").trim() ||
+      (inst.code ?? "").trim() ||
+      inst.name.trim();
+    return `${order}. ${short}`.slice(0, 20);
+  }
+
+  /** Opening lines on the first institution-picker message (same voice as the main menu). */
+  private institutionPickerFirstMessageIntro(): string[] {
+    return [
+      "Hello, this is the LibelusPro chat bot.",
+      "Please choose your institution below.",
+      "",
+    ];
+  }
+
   /**
    * Lists active institutions: full names in the body, up to 3 reply buttons per message
    * (Graph API limit). Button ids: `inst_<institutionUuid>`.
@@ -336,16 +365,23 @@ export class WaBotProvider {
 
     for (let offset = 0; offset < institutions.length; offset += 3) {
       const chunk = institutions.slice(offset, offset + 3);
+      const prefix =
+        offset === 0
+          ? this.institutionPickerFirstMessageIntro()
+          : ["More institutions:", ""];
       const bodyLines = [
+        ...prefix,
         "*Choose your institution*",
         "",
-        ...chunk.map((inst, idx) => `${offset + idx + 1}. ${inst.name}`),
+        ...chunk.map((inst, idx) =>
+          `${offset + idx + 1}. ${this.formatInstitutionPickerLine(inst)}`,
+        ),
         "",
         "Tap a button below to continue.",
       ];
       const buttons = chunk.map((inst, idx) => ({
         id: `${WA_INST_BUTTON_PREFIX}${inst.id}`,
-        title: `${offset + idx + 1}. ${inst.name}`.slice(0, 20),
+        title: this.institutionPickerButtonTitle(offset + idx + 1, inst),
       }));
       await this.waBotService.sendInteractiveReplyButtons(to, bodyLines.join("\n"), buttons);
     }
