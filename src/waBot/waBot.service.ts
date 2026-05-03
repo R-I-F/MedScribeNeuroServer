@@ -4,6 +4,16 @@ import axios, { AxiosError } from "axios";
 
 @injectable()
 export class WaBotService {
+  /** Trim whitespace; strip accidental `Bearer ` prefix if pasted into WA_API_KEY. */
+  private normalizeGraphAccessToken(raw: string): string {
+    let t = raw.trim();
+    const lower = t.slice(0, 7).toLowerCase();
+    if (lower === "bearer ") {
+      t = t.slice(7).trim();
+    }
+    return t;
+  }
+
   private messagesEndpoint(): string {
     const phoneId = process.env.WA_PHONE_NUMBER_ID;
     const version = process.env.WA_GRAPH_API_VERSION || "v25.0";
@@ -14,9 +24,13 @@ export class WaBotService {
   }
 
   private authHeaders(): Record<string, string> {
-    const token = process.env.WA_API_KEY;
-    if (!token) {
+    const raw = process.env.WA_API_KEY;
+    if (!raw) {
       throw new Error("WA_API_KEY is not configured");
+    }
+    const token = this.normalizeGraphAccessToken(raw);
+    if (!token) {
+      throw new Error("WA_API_KEY is empty after trim");
     }
     return {
       Authorization: `Bearer ${token}`,
@@ -110,6 +124,11 @@ export class WaBotService {
     if (status === 403 && code === 131005) {
       console.error(
         "[WaBotService] 131005: Check WA_API_KEY in Access Token Debugger — need whatsapp_business_messaging (and usually whatsapp_business_management). Token must be for a System User with access to the WABA that owns WA_PHONE_NUMBER_ID. Regenerate if expired or from wrong app.",
+      );
+    }
+    if (status === 401) {
+      console.error(
+        "[WaBotService] 401 Authentication Error: WA_API_KEY is invalid, expired, or revoked. Dashboard temporary tokens expire quickly — use a long-lived System User token (Business Settings) or regenerate in WhatsApp > API setup. Paste only the token value (no `Bearer `). Verify at developers.facebook.com/tools/debug/accesstoken/",
       );
     }
   }
