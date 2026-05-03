@@ -4,6 +4,7 @@ import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
 import { InstitutionEntity } from "../institution/institution.mDbSchema";
+import { WaSessionRoutingEntity } from "../waBot/waSessionRouting.mDbSchema";
 
 dotenv.config();
 
@@ -33,7 +34,7 @@ function getDefaultDbConfig(): DataSourceOptions {
     database: process.env.SQL_DB_NAME_DEFAULT || "defaultdb",
     synchronize: false,
     logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-    entities: [InstitutionEntity],
+    entities: [InstitutionEntity, WaSessionRoutingEntity],
     migrations: [
       __dirname + "/../migrations/1735000060000-CreateInstitutionsTable.ts",
       __dirname + "/../migrations/1735000060001-AddDepartmentToInstitutions.ts",

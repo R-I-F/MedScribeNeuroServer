@@ -154,6 +154,7 @@ import { WaBotController } from "../waBot/waBot.controller";
 import { WaBotRouter } from "../waBot/waBot.router";
 import { WaBotService } from "../waBot/waBot.service";
 import { WaBotProvider } from "../waBot/waBot.provider";
+import { WaSessionService } from "../waBot/waSession.service";
 
 export const container: Container = new Container();
 
@@ -311,4 +312,5 @@ container.bind(ClinicalSubProvider).toSelf().inTransientScope();
 container.bind(WaBotController).toSelf().inTransientScope();
 container.bind(WaBotRouter).toSelf().inTransientScope();
 container.bind(WaBotService).toSelf().inTransientScope();
+container.bind(WaSessionService).toSelf().inTransientScope();
 container.bind(WaBotProvider).toSelf().inTransientScope();

@@ -1,5 +1,12 @@
 import { inject, injectable } from "inversify";
+import { getAllActiveInstitutions, getInstitutionById } from "../institution/institution.service";
 import { WaBotService } from "./waBot.service";
+import { WaSessionService } from "./waSession.service";
+import {
+  WA_CONV_AWAITING_ID,
+  WA_CONV_ROLE_PICK,
+  WA_INST_BUTTON_PREFIX,
+} from "./waSession.constants";
 import {
   IWaMessage,
   IWaParsedEvents,
@@ -8,20 +15,6 @@ import {
 } from "./waBot.interface";
 
 const NAMESPACE = "WaBot";
-
-/** Users who completed the signup link step and must upload union ID; tutorials sent after upload. */
-const ID_UPLOAD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const awaitingIdUpload = new Map<
-  string,
-  { role: "candidate" | "supervisor"; expiresAt: number }
->();
-
-function pruneExpiredIdSessions(): void {
-  const now = Date.now();
-  for (const [phone, v] of awaitingIdUpload) {
-    if (v.expiresAt < now) awaitingIdUpload.delete(phone);
-  }
-}
 
 /** Reply button ids we send; must match inbound `interactive.button_reply.id`. */
 const BTN_SIGNUP_CANDIDATE = "signup_candidate";
@@ -54,7 +47,10 @@ function pickHubQueryString(
 
 @injectable()
 export class WaBotProvider {
-  constructor(@inject(WaBotService) private waBotService: WaBotService) {}
+  constructor(
+    @inject(WaBotService) private waBotService: WaBotService,
+    @inject(WaSessionService) private waSessionService: WaSessionService,
+  ) {}
 
   /**
    * Validates Meta's GET handshake. Returns the challenge to echo back when valid.
@@ -147,7 +143,7 @@ export class WaBotProvider {
   }
 
   /**
-   * Inbound flow: text → main menu → role → signup (2 msgs) → user sends ID image/PDF → under review + tutorials.
+   * Inbound flow: institution picker → main menu → role → signup (2 msgs) → user sends ID image/PDF → under review + tutorials.
    */
   public async handleInboundMessages(events: IWaParsedEvents): Promise<void> {
     try {
@@ -186,30 +182,6 @@ export class WaBotProvider {
     };
   }
 
-  private registerAwaitingIdUpload(
-    phone: string,
-    role: "candidate" | "supervisor",
-  ): void {
-    pruneExpiredIdSessions();
-    awaitingIdUpload.set(phone, {
-      role,
-      expiresAt: Date.now() + ID_UPLOAD_TTL_MS,
-    });
-  }
-
-  private takeAwaitingIdRole(
-    phone: string,
-  ): "candidate" | "supervisor" | undefined {
-    pruneExpiredIdSessions();
-    const v = awaitingIdUpload.get(phone);
-    if (!v || v.expiresAt < Date.now()) {
-      awaitingIdUpload.delete(phone);
-      return undefined;
-    }
-    awaitingIdUpload.delete(phone);
-    return v.role;
-  }
-
   /** Optional overrides for tutorial / promo links after signup. */
   private tutorialUrls(): {
     candidateDrive: string;
@@ -244,7 +216,10 @@ export class WaBotProvider {
     ].join("\n");
   }
 
-  private async sendCandidateSignupSequence(to: string): Promise<void> {
+  private async sendCandidateSignupSequence(
+    to: string,
+    institutionId: string,
+  ): Promise<void> {
     const signupUrl = this.signupUrls().candidate;
     await this.waBotService.sendTextMessage(to, this.signupInstructionMessage(), true);
     await this.waBotService.sendTextMessage(
@@ -252,10 +227,13 @@ export class WaBotProvider {
       `*Your signup link:*\n${signupUrl}`,
       true,
     );
-    this.registerAwaitingIdUpload(to, "candidate");
+    await this.waSessionService.setAwaitingIdUpload(institutionId, to, "candidate");
   }
 
-  private async sendSupervisorSignupSequence(to: string): Promise<void> {
+  private async sendSupervisorSignupSequence(
+    to: string,
+    institutionId: string,
+  ): Promise<void> {
     const signupUrl = this.signupUrls().supervisor;
     await this.waBotService.sendTextMessage(to, this.signupInstructionMessage(), true);
     await this.waBotService.sendTextMessage(
@@ -263,7 +241,7 @@ export class WaBotProvider {
       `*Your signup link:*\n${signupUrl}`,
       true,
     );
-    this.registerAwaitingIdUpload(to, "supervisor");
+    await this.waSessionService.setAwaitingIdUpload(institutionId, to, "supervisor");
   }
 
   /** After user sends image or PDF of union ID while session is active. */
@@ -341,6 +319,38 @@ export class WaBotProvider {
     );
   }
 
+  /**
+   * Lists active institutions: full names in the body, up to 3 reply buttons per message
+   * (Graph API limit). Button ids: `inst_<institutionUuid>`.
+   */
+  private async sendInstitutionPicker(to: string): Promise<void> {
+    const institutions = await getAllActiveInstitutions();
+    if (institutions.length === 0) {
+      await this.waBotService.sendTextMessage(
+        to,
+        "No institutions are available at the moment. Please try again later.",
+        true,
+      );
+      return;
+    }
+
+    for (let offset = 0; offset < institutions.length; offset += 3) {
+      const chunk = institutions.slice(offset, offset + 3);
+      const bodyLines = [
+        "*Choose your institution*",
+        "",
+        ...chunk.map((inst, idx) => `${offset + idx + 1}. ${inst.name}`),
+        "",
+        "Tap a button below to continue.",
+      ];
+      const buttons = chunk.map((inst, idx) => ({
+        id: `${WA_INST_BUTTON_PREFIX}${inst.id}`,
+        title: `${offset + idx + 1}. ${inst.name}`.slice(0, 20),
+      }));
+      await this.waBotService.sendInteractiveReplyButtons(to, bodyLines.join("\n"), buttons);
+    }
+  }
+
   private async handleOneInboundMessage(msg: IWaMessage): Promise<void> {
     console.log(`[${NAMESPACE}] inbound message`, {
       id: msg.id,
@@ -353,24 +363,93 @@ export class WaBotProvider {
     const from = msg.from;
     if (!from) return;
 
+    const routedInstitutionId = await this.waSessionService.getRoutedInstitutionId(from);
+
     if (this.isUnionIdMediaMessage(msg)) {
-      const role = this.takeAwaitingIdRole(from);
-      if (role) {
-        await this.sendPostIdSubmissionSequence(from, role);
+      if (!routedInstitutionId) {
+        await this.waBotService.sendTextMessage(
+          from,
+          "Please choose your institution first by sending a text message.",
+          true,
+        );
+        return;
       }
+      let session = await this.waSessionService.ensureTenantSession(routedInstitutionId, from);
+      session = await this.waSessionService.expireAwaitingIdIfNeeded(
+        routedInstitutionId,
+        session,
+      );
+      if (session.conversationState !== WA_CONV_AWAITING_ID) {
+        return;
+      }
+      const role =
+        session.linkedRole === "candidate" || session.linkedRole === "supervisor"
+          ? session.linkedRole
+          : undefined;
+      if (!role) {
+        return;
+      }
+      await this.sendPostIdSubmissionSequence(from, role);
+      await this.waSessionService.clearAfterIdSubmission(routedInstitutionId, from);
       return;
     }
 
     const buttonId = this.extractButtonReplyId(msg);
+
+    if (buttonId?.startsWith(WA_INST_BUTTON_PREFIX)) {
+      const institutionId = buttonId.slice(WA_INST_BUTTON_PREFIX.length);
+      const inst = await getInstitutionById(institutionId);
+      if (!inst) {
+        await this.waBotService.sendTextMessage(
+          from,
+          "That institution is not available. Please open the list again from a text message.",
+          true,
+        );
+        return;
+      }
+      await this.waSessionService.setRoutedInstitution(from, institutionId);
+      await this.waSessionService.ensureTenantSession(institutionId, from);
+      await this.sendMainMenuPrompt(from);
+      return;
+    }
+
+    if (!routedInstitutionId) {
+      if (
+        buttonId === BTN_SIGNUP_CANDIDATE ||
+        buttonId === BTN_SIGNUP_SUPERVISOR ||
+        buttonId === BTN_CREATE_ACCOUNT
+      ) {
+        await this.sendInstitutionPicker(from);
+        return;
+      }
+      if (msg.type === "text") {
+        const body = (msg.text?.body ?? "").trim();
+        if (body.length === 0) return;
+        await this.sendInstitutionPicker(from);
+      }
+      return;
+    }
+
+    const tenantSession = await this.waSessionService.ensureTenantSession(
+      routedInstitutionId,
+      from,
+    );
+    await this.waSessionService.expireAwaitingIdIfNeeded(routedInstitutionId, tenantSession);
+
     if (buttonId === BTN_SIGNUP_CANDIDATE) {
-      await this.sendCandidateSignupSequence(from);
+      await this.sendCandidateSignupSequence(from, routedInstitutionId);
       return;
     }
     if (buttonId === BTN_SIGNUP_SUPERVISOR) {
-      await this.sendSupervisorSignupSequence(from);
+      await this.sendSupervisorSignupSequence(from, routedInstitutionId);
       return;
     }
     if (buttonId === BTN_CREATE_ACCOUNT) {
+      await this.waSessionService.setConversationState(
+        routedInstitutionId,
+        from,
+        WA_CONV_ROLE_PICK,
+      );
       await this.sendSignupRolePrompt(from);
       return;
     }
@@ -378,6 +457,7 @@ export class WaBotProvider {
     if (msg.type === "text") {
       const body = (msg.text?.body ?? "").trim();
       if (body.length === 0) return;
+      await this.waSessionService.resetToMainMenu(routedInstitutionId, from);
       await this.sendMainMenuPrompt(from);
     }
   }

@@ -28,6 +28,7 @@ import { PositionEntity } from "../positions/positions.mDbSchema";
 import { ApproachEntity } from "../approaches/approaches.mDbSchema";
 import { RegionEntity } from "../regions/regions.mDbSchema";
 import { ClinicalSubEntity } from "../clinicalSub/clinicalSub.mDbSchema";
+import { WhatsappSessionEntity } from "../waBot/whatsappSession.mDbSchema";
 
 /**
  * DataSource Manager - Singleton for managing multi-tenant database connections
@@ -143,6 +144,7 @@ export class DataSourceManager {
         ApproachEntity,
         RegionEntity,
         ClinicalSubEntity,
+        WhatsappSessionEntity,
       ],
       migrations: [__dirname + "/../migrations/*.ts"],
       synchronize: false, // NEVER set to true in production
