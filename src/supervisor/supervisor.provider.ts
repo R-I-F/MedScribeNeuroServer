@@ -78,6 +78,32 @@ export class SupervisorProvider {
     return n.slice(0, at).replace(/\./g, "") + n.slice(at);
   }
 
+  /**
+   * Match a supervisor by digit-only equality of `phoneNum` against the input.
+   *
+   * Internal: only called from the WhatsApp bot (`WaBotProvider`) via `SupervisorService`.
+   * Not exposed via any controller/router and must not be reused for end-user HTTP login.
+   *
+   * Strategy (per WhatsApp digit-only `from`): strip non-digits from both sides and require full equality.
+   */
+  public async getSupervisorByPhoneDigits(
+    phoneInput: string,
+    dataSource: DataSource,
+  ): Promise<ISupervisorDoc | null> | never {
+    try {
+      const digits = (phoneInput || "").replace(/\D+/g, "");
+      if (!/^\d{6,20}$/.test(digits)) return null;
+      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
+      const supervisor = await supervisorRepository
+        .createQueryBuilder("s")
+        .where("REGEXP_REPLACE(s.phoneNum, '[^0-9]+', '') = :digits", { digits })
+        .getOne();
+      return supervisor as unknown as ISupervisorDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async getSupervisorByEmail(email: string, dataSource: DataSource): Promise<ISupervisorDoc | null> | never {
     try {
       const supervisorRepository = dataSource.getRepository(SupervisorEntity);

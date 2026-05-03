@@ -4,6 +4,9 @@ import {
   getInstitutionById,
   type IInstitution,
 } from "../institution/institution.service";
+import { DataSourceManager } from "../config/datasource.manager";
+import { CandService } from "../cand/cand.service";
+import { SupervisorService } from "../supervisor/supervisor.service";
 import { WaBotService } from "./waBot.service";
 import { WaSessionService } from "./waSession.service";
 import {
@@ -23,8 +26,8 @@ const NAMESPACE = "WaBot";
 /** Reply button ids we send; must match inbound `interactive.button_reply.id`. */
 const BTN_SIGNUP_CANDIDATE = "signup_candidate";
 const BTN_SIGNUP_SUPERVISOR = "signup_supervisor";
-/** Reserved for a future main-menu “Create account” button. */
 const BTN_CREATE_ACCOUNT = "create_account";
+const BTN_EXISTING_USER = "existing_user";
 
 /**
  * Express / `qs` may represent Meta's `hub.*` query params as either flat keys
@@ -54,6 +57,8 @@ export class WaBotProvider {
   constructor(
     @inject(WaBotService) private waBotService: WaBotService,
     @inject(WaSessionService) private waSessionService: WaSessionService,
+    @inject(CandService) private candService: CandService,
+    @inject(SupervisorService) private supervisorService: SupervisorService,
   ) {}
 
   /**
@@ -302,12 +307,15 @@ export class WaBotProvider {
     return undefined;
   }
 
-  /** Step 1: greeting + single entry point for account creation. */
+  /** Step 1: greeting + entry points for account creation and existing-user lookup. */
   private async sendMainMenuPrompt(to: string): Promise<void> {
     await this.waBotService.sendInteractiveReplyButtons(
       to,
       "Hello, this is the LibelusPro chat bot. Please choose an option from the list.",
-      [{ id: BTN_CREATE_ACCOUNT, title: "Create new account" }],
+      [
+        { id: BTN_CREATE_ACCOUNT, title: "Create new account" },
+        { id: BTN_EXISTING_USER, title: "Existing user" },
+      ],
     );
   }
 
@@ -453,7 +461,8 @@ export class WaBotProvider {
       if (
         buttonId === BTN_SIGNUP_CANDIDATE ||
         buttonId === BTN_SIGNUP_SUPERVISOR ||
-        buttonId === BTN_CREATE_ACCOUNT
+        buttonId === BTN_CREATE_ACCOUNT ||
+        buttonId === BTN_EXISTING_USER
       ) {
         await this.sendInstitutionPicker(from);
         return;
@@ -489,6 +498,10 @@ export class WaBotProvider {
       await this.sendSignupRolePrompt(from);
       return;
     }
+    if (buttonId === BTN_EXISTING_USER) {
+      await this.handleExistingUserLookup(from, routedInstitutionId);
+      return;
+    }
 
     if (msg.type === "text") {
       const body = (msg.text?.body ?? "").trim();
@@ -496,5 +509,75 @@ export class WaBotProvider {
       await this.waSessionService.resetToMainMenu(routedInstitutionId, from);
       await this.sendMainMenuPrompt(from);
     }
+  }
+
+  /**
+   * Existing-user flow: digit-only match `msg.from` against `phoneNum` on the routed
+   * tenant DB. Candidates are checked first, supervisors second. On match we link the
+   * user on `whatsapp_sessions` and send a placeholder greeting. On miss we tell the
+   * user the number isn't registered and re-show the main menu.
+   */
+  private async handleExistingUserLookup(
+    waFrom: string,
+    institutionId: string,
+  ): Promise<void> {
+    const digits = (waFrom || "").replace(/\D+/g, "");
+    if (!/^\d{6,20}$/.test(digits)) {
+      await this.sendNotRegisteredAndMainMenu(waFrom, institutionId);
+      return;
+    }
+
+    const ds = await DataSourceManager.getInstance().getDataSource(institutionId);
+
+    const candidate = await this.candService.getCandByPhoneDigits(digits, ds);
+    if (candidate) {
+      await this.waSessionService.linkUser(institutionId, waFrom, {
+        role: "candidate",
+        userId: candidate.id,
+        candidateId: candidate.id,
+      });
+      await this.waBotService.sendTextMessage(
+        waFrom,
+        [
+          `Welcome back, *${candidate.fullName}*.`,
+          "Your user menu will be available soon.",
+        ].join("\n"),
+        true,
+      );
+      return;
+    }
+
+    const supervisor = await this.supervisorService.getSupervisorByPhoneDigits(digits, ds);
+    if (supervisor) {
+      await this.waSessionService.linkUser(institutionId, waFrom, {
+        role: "supervisor",
+        userId: supervisor.id,
+        supervisorId: supervisor.id,
+      });
+      await this.waBotService.sendTextMessage(
+        waFrom,
+        [
+          `Welcome back, *${supervisor.fullName}*.`,
+          "Your user menu will be available soon.",
+        ].join("\n"),
+        true,
+      );
+      return;
+    }
+
+    await this.sendNotRegisteredAndMainMenu(waFrom, institutionId);
+  }
+
+  private async sendNotRegisteredAndMainMenu(
+    waFrom: string,
+    institutionId: string,
+  ): Promise<void> {
+    await this.waBotService.sendTextMessage(
+      waFrom,
+      "This phone number is not registered as a user on LibelusPro.",
+      true,
+    );
+    await this.waSessionService.resetToMainMenu(institutionId, waFrom);
+    await this.sendMainMenuPrompt(waFrom);
   }
 }

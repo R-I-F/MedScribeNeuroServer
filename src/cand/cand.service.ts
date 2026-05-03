@@ -74,6 +74,32 @@ export class CandService {
     return n.slice(0, at).replace(/\./g, "") + n.slice(at);
   }
 
+  /**
+   * Match a candidate by digit-only equality of `phoneNum` against the input.
+   *
+   * Internal: only called from the WhatsApp bot (`WaBotProvider`).
+   * Not exposed via any controller/router and must not be reused for end-user HTTP login.
+   *
+   * Strategy (per WhatsApp digit-only `from`): strip non-digits from both sides and require full equality.
+   */
+  public async getCandByPhoneDigits(
+    phoneInput: string,
+    dataSource: DataSource,
+  ): Promise<ICandDoc | null> | never {
+    try {
+      const digits = (phoneInput || "").replace(/\D+/g, "");
+      if (!/^\d{6,20}$/.test(digits)) return null;
+      const candRepository = dataSource.getRepository(CandidateEntity);
+      const cand = await candRepository
+        .createQueryBuilder("c")
+        .where("REGEXP_REPLACE(c.phoneNum, '[^0-9]+', '') = :digits", { digits })
+        .getOne();
+      return cand as unknown as ICandDoc | null;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async getCandByEmail(email: string, dataSource: DataSource): Promise<ICandDoc | null> | never {
     try {
       const candRepository = dataSource.getRepository(CandidateEntity);

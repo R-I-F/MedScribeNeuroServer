@@ -48,6 +48,23 @@ export class SupervisorService {
     }
   }
 
+  /**
+   * Match a supervisor by digit-only equality of `phoneNum` against the input.
+   *
+   * Internal: only called from the WhatsApp bot (`WaBotProvider`).
+   * Not exposed via any controller/router and must not be reused for end-user HTTP login.
+   */
+  public async getSupervisorByPhoneDigits(
+    phoneInput: string,
+    dataSource: DataSource,
+  ): Promise<ISupervisorDoc | null> | never {
+    try {
+      return await this.supervisorProvider.getSupervisorByPhoneDigits(phoneInput, dataSource);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async updateSupervisor(validatedReq: Partial<ISupervisor> & { id: string }, dataSource: DataSource): Promise<ISupervisorDoc | null> | never {
     try {
       return await this.supervisorProvider.updateSupervisor(validatedReq, dataSource);

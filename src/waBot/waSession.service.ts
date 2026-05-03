@@ -6,9 +6,17 @@ import { WhatsappSessionEntity } from "./whatsappSession.mDbSchema";
 import {
   WA_CONV_AWAITING_ID,
   WA_CONV_MAIN_MENU,
+  WA_CONV_USER_HOME,
   WA_ID_UPLOAD_TTL_MS,
 } from "./waSession.constants";
 import type { WaLinkedRole } from "./whatsappSession.mDbSchema";
+
+export interface IWaLinkUserInput {
+  role: Extract<WaLinkedRole, "candidate" | "supervisor">;
+  userId: string;
+  candidateId?: string | null;
+  supervisorId?: string | null;
+}
 
 async function ensureDefaultDbInitialized(): Promise<void> {
   if (!DefaultDbDataSource.isInitialized) {
@@ -138,6 +146,25 @@ export class WaSessionService {
     session.conversationState = WA_CONV_MAIN_MENU;
     session.expiresAt = null;
     session.linkedRole = "unknown";
+    await this.saveTenantSession(institutionId, session);
+  }
+
+  /**
+   * Persist the matched candidate/supervisor on the tenant `whatsapp_sessions` row and
+   * advance state to `user_home` (placeholder until the real user menu lands).
+   */
+  public async linkUser(
+    institutionId: string,
+    waFrom: string,
+    input: IWaLinkUserInput,
+  ): Promise<void> {
+    const session = await this.ensureTenantSession(institutionId, waFrom);
+    session.linkedRole = input.role;
+    session.linkedUserId = input.userId;
+    session.linkedCandidateId = input.candidateId ?? null;
+    session.linkedSupervisorId = input.supervisorId ?? null;
+    session.conversationState = WA_CONV_USER_HOME;
+    session.expiresAt = null;
     await this.saveTenantSession(institutionId, session);
   }
 }
