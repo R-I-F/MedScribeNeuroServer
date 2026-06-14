@@ -97,6 +97,9 @@ export function addRoutes(app: Application) {
   const { WaBotRouter } = require("../waBot/waBot.router");
   const waBotRouter = container.get(WaBotRouter) as any;
 
+  const { McpRouter } = require("../mcp/mcp.router");
+  const mcpRouter = container.get(McpRouter) as any;
+
   const { healthRateLimiter } = require("../middleware/rateLimiter.middleware");
   // Health check: use GET /health for load balancer / k8s probes. Rate-limited to throttle bot traffic.
   // Unhandled GET / and POST / return 404 (bots/scanners get 404, not 200).
@@ -134,6 +137,7 @@ export function addRoutes(app: Application) {
   app.use("/references", bundlerRouter.router);
   app.use("/candidate", bundlerRouter.router);
   app.use("/waBot", waBotRouter.router);
+  app.use("/mcp", mcpRouter.router);
 
   return app;
 }

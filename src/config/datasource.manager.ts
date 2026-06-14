@@ -112,7 +112,7 @@ export class DataSourceManager {
         : {};
 
     const dataSourceOptions: DataSourceOptions = {
-      type: "mysql",
+      type: "postgres",
       host: institution.database.host,
       port: institution.database.port,
       database: institution.database.database,
@@ -149,9 +149,8 @@ export class DataSourceManager {
       migrations: [__dirname + "/../migrations/*.ts"],
       synchronize: false, // NEVER set to true in production
       logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-      connectTimeout: 10000, // 10 seconds
       extra: {
-        connectionLimit: 20, // Max connections per institution
+        max: 20,
       },
       ...sslOpts,
     };

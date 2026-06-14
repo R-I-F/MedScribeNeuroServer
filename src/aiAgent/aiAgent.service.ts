@@ -82,5 +82,51 @@ export class AiAgentService {
       throw new Error(message);
     }
   }
+
+  /**
+   * Produce a semantic embedding vector for a piece of text via Gemini.
+   *
+   * The same model + dimensionality must be used for indexing (RETRIEVAL_DOCUMENT,
+   * used by the embeddings backfill) and for querying (RETRIEVAL_QUERY, used by
+   * the diagnosis search). Dimensionality (768) must match the `vector(768)` column.
+   *
+   * @param text     Text to embed.
+   * @param taskType "RETRIEVAL_DOCUMENT" when embedding stored items, "RETRIEVAL_QUERY" for search queries.
+   * @returns The embedding as a number[].
+   */
+  public async embedText(
+    text: string,
+    taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY"
+  ): Promise<number[]> {
+    try {
+      if (!this.genAI) {
+        throw new Error("GEMINI_API_KEY is not configured");
+      }
+      if (!text || !text.trim()) {
+        throw new Error("Cannot embed empty text");
+      }
+
+      const modelName = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
+
+      const response = await this.genAI.models.embedContent({
+        model: modelName,
+        contents: text,
+        config: {
+          taskType,
+          outputDimensionality: 768,
+        },
+      });
+
+      const values = response.embeddings?.[0]?.values;
+      if (!values || values.length === 0) {
+        throw new Error("No embedding returned from AI model");
+      }
+
+      return values;
+    } catch (err: any) {
+      const message = err?.message || err?.toString?.() || "Failed to embed text";
+      throw new Error(message);
+    }
+  }
 }
 

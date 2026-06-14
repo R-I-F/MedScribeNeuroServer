@@ -26,12 +26,12 @@ function getDefaultDbConfig(): DataSourceOptions {
       : {};
 
   return {
-    type: "mysql",
-    host: process.env.SQL_HOST_DEFAULT!,
-    port: parseInt(process.env.SQL_PORT_DEFAULT || "3306", 10),
-    username: process.env.SQL_USERNAME_DEFAULT!,
-    password: process.env.SQL_PASSWORD_DEFAULT!,
-    database: process.env.SQL_DB_NAME_DEFAULT || "defaultdb",
+    type: "postgres",
+    host: process.env.PSQL_HOST_DEFAULT!,
+    port: parseInt(process.env.PSQL_PORT_DEFAULT || "5432", 10),
+    username: process.env.PSQL_USERNAME_DEFAULT!,
+    password: process.env.PSQL_PASSWORD_DEFAULT!,
+    database: process.env.PSQL_DB_NAME_DEFAULT || "defaultdb",
     synchronize: false,
     logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     entities: [InstitutionEntity, WaSessionRoutingEntity],
@@ -40,9 +40,8 @@ function getDefaultDbConfig(): DataSourceOptions {
       __dirname + "/../migrations/1735000060001-AddDepartmentToInstitutions.ts",
     ],
     subscribers: [],
-    connectTimeout: 10000,
     extra: {
-      connectionLimit: 20,
+      max: 20,
     },
     ...sslOpts,
   };

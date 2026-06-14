@@ -31,6 +31,9 @@ import { DiagnosisController } from "../diagnosis/diagnosis.controller";
 import { DiagnosisRouter } from "../diagnosis/diagnosis.router";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
 import { DiagnosisProvider } from "../diagnosis/diagnosis.provider";
+import { DiagnosisSearchService } from "../diagnosis/diagnosisSearch.service";
+
+import { McpRouter } from "../mcp/mcp.router";
 
 import { SupervisorController } from "../supervisor/supervisor.controller";
 import { SupervisorRouter } from "../supervisor/supervisor.router";
@@ -190,6 +193,9 @@ container.bind(DiagnosisController).toSelf().inTransientScope();
 container.bind(DiagnosisRouter).toSelf().inTransientScope();
 container.bind(DiagnosisService).toSelf().inTransientScope();
 container.bind(DiagnosisProvider).toSelf().inTransientScope();
+container.bind(DiagnosisSearchService).toSelf().inTransientScope();
+
+container.bind(McpRouter).toSelf().inTransientScope();
 
 container.bind(SupervisorController).toSelf().inTransientScope();
 container.bind(SupervisorRouter).toSelf().inTransientScope();

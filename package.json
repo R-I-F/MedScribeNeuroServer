@@ -7,6 +7,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "start:dev": "nodemon src/index.ts",
+    "start:staging": "dotenv -e .env.staging -- nodemon src/index.ts",
+    "db:migrate:staging": "dotenv -e .env.staging -- ts-node scripts/run-staging-migrations.ts",
+    "db:migrate:staging:revert": "dotenv -e .env.staging -- ts-node scripts/revert-staging-migrations.ts",
+    "db:backfill-embeddings:staging": "dotenv -e .env.staging -- ts-node scripts/backfill-diagnosis-embeddings.ts",
     "db:import-calSurg-from-external": "ts-node scripts/import-calSurg-from-external.ts",
     "db:import-sub-from-external": "ts-node scripts/import-sub-from-external.ts",
     "db:import-calSurg-ka-from-row-3303": "ts-node scripts/import-calSurg-ka-from-row-3303.ts",
@@ -18,6 +22,7 @@
     "db:import-event-attendance-ka-from-row-483": "ts-node scripts/import-event-attendance-ka-from-row-483.ts",
     "create-clerk-masr-el-dawly": "ts-node scripts/create-clerk-masr-el-dawly.ts",
     "announce-events-next-thursday-ka": "ts-node scripts/announce-events-next-thursday-ka.ts",
+    "announce-events-three-thursdays-ka": "ts-node scripts/announce-events-three-thursdays-ka.ts",
     "db:seed-ka-test-candidates": "ts-node scripts/seed-ka-test-candidates.ts",
     "get-ka-institution-id": "ts-node scripts/get-ka-institution-id.ts",
     "db:migrate:backup": "ts-node scripts/run-index-migrations-backup.ts",
@@ -32,6 +37,7 @@
   "description": "",
   "dependencies": {
     "@google/genai": "^1.33.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/pdfkit": "^0.17.4",
@@ -52,9 +58,11 @@
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.16.0",
     "pdfkit": "^0.17.2",
+    "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.28",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -63,6 +71,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^1.4.12",
     "@types/node": "^24.3.0",
+    "@types/pg": "^8.20.0",
+    "dotenv-cli": "^11.0.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2"
   }

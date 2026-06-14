@@ -10,6 +10,17 @@ src/migrations/
 
 # Environment files (secrets)
 .env
+.env.*
+!.env.example
+
+# TLS certs / keys (secrets)
+*.pem
+
+# Local debug / test artifacts (do not commit)
+*.log
+report-debug.*
+tempor.md
+*.code-workspace
 
 # Local backup / one-off SQL and script outputs (do not commit)
 *_backup.sql

@@ -12,6 +12,7 @@ import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware";
 import { globalIpRateLimiter } from "./middleware/rateLimiter.middleware";
 import { initializeDatabase, validateDatabaseConfig, closeDatabase } from "./config/database.config";
 import { closeDefaultDatabase } from "./config/defaultdb.config";
+import { closeReferenceDatabase } from "./config/referenceDb.config";
 import { DataSourceManager } from "./config/datasource.manager";
 import { getAllActiveInstitutions } from "./institution/institution.service";
 import { Server } from "http";
@@ -96,6 +97,7 @@ async function gracefulShutdown(): Promise<void> {
     await DataSourceManager.getInstance().closeAll();
     await closeDatabase();
     await closeDefaultDatabase();
+    await closeReferenceDatabase();
     console.log("[App] Shutdown complete");
     process.exit(0);
   } catch (err) {

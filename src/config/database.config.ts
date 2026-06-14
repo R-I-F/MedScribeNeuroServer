@@ -27,6 +27,7 @@ import { EquipmentEntity } from "../equipment/equipment.mDbSchema";
 import { PositionEntity } from "../positions/positions.mDbSchema";
 import { ApproachEntity } from "../approaches/approaches.mDbSchema";
 import { RegionEntity } from "../regions/regions.mDbSchema";
+import { DepartmentEntity } from "../department/department.mDbSchema";
 
 dotenv.config();
 
@@ -46,14 +47,14 @@ function getDbConfig(): DataSourceOptions {
       : {};
 
   return {
-    type: "mysql",
-    host: process.env.SQL_HOST_DEFAULT!,
-    port: parseInt(process.env.SQL_PORT_DEFAULT || "3306", 10),
-    username: process.env.SQL_USERNAME_DEFAULT!,
-    password: process.env.SQL_PASSWORD_DEFAULT!,
+    type: "postgres",
+    host: process.env.PSQL_HOST_DEFAULT!,
+    port: parseInt(process.env.PSQL_PORT_DEFAULT || "5432", 10),
+    username: process.env.PSQL_USERNAME_DEFAULT!,
+    password: process.env.PSQL_PASSWORD_DEFAULT!,
     database: process.env.SQL_DB_DEF_NAME_KA || "kasr-el-ainy",
     synchronize: false, // NEVER set to true in production - use migrations instead
-    logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"], // NODE_ENV is optional
+    logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     entities: [
       HospitalEntity,
       DiagnosisEntity,
@@ -79,14 +80,14 @@ function getDbConfig(): DataSourceOptions {
       PositionEntity,
       ApproachEntity,
       RegionEntity,
+      DepartmentEntity,
     ],
     migrations: [
       __dirname + "/../migrations/*.ts",
     ],
     subscribers: [],
-    connectTimeout: 10000, // 10 seconds as recommended
     extra: {
-      connectionLimit: 20, // Connection pool limit
+      max: 20,
     },
     ...sslOpts,
   };
@@ -103,10 +104,10 @@ export async function initializeDatabase(): Promise<void> {
   try {
     if (!AppDataSource.isInitialized) {
       await AppDataSource.initialize();
-      console.log("✅ MariaDB connection established successfully");
+      console.log("✅ PostgreSQL connection established successfully");
     }
   } catch (error: any) {
-    console.error("❌ Error connecting to MariaDB:", error.message);
+    console.error("❌ Error connecting to PostgreSQL:", error.message);
     throw new Error(`Database connection failed: ${error.message}`);
   }
 }
@@ -116,10 +117,10 @@ export async function closeDatabase(): Promise<void> {
   try {
     if (AppDataSource.isInitialized) {
       await AppDataSource.destroy();
-      console.log("✅ MariaDB connection closed");
+      console.log("✅ PostgreSQL connection closed");
     }
   } catch (error: any) {
-    console.error("❌ Error closing MariaDB connection:", error.message);
+    console.error("❌ Error closing PostgreSQL connection:", error.message);
     throw new Error(`Database disconnection failed: ${error.message}`);
   }
 }
@@ -127,11 +128,11 @@ export async function closeDatabase(): Promise<void> {
 // Validate environment variables for defaultdb bootstrap and fallback connection
 export function validateDatabaseConfig(): void {
   const required = [
-    "SQL_HOST_DEFAULT",
-    "SQL_PORT_DEFAULT",
-    "SQL_DB_NAME_DEFAULT",
-    "SQL_USERNAME_DEFAULT",
-    "SQL_PASSWORD_DEFAULT",
+    "PSQL_HOST_DEFAULT",
+    "PSQL_PORT_DEFAULT",
+    "PSQL_DB_NAME_DEFAULT",
+    "PSQL_USERNAME_DEFAULT",
+    "PSQL_PASSWORD_DEFAULT",
     "SSL_CA_PATH",
   ];
   const missing = required.filter((k) => !process.env[k]);
