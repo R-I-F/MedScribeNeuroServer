@@ -27,13 +27,20 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
 ## 📍 Where we stopped (2026-06-15)
-All on **staging**, **uncommitted beyond the side-branch commits**. Migrations `1750000000011`–`1750000000034` (in `src/migrations/`, gitignored) are applied.
+All on **staging**, committed and pushed to `migration/mysql-to-postgres`. Migrations `1750000000011`–`1750000000034` (in `src/migrations/`, gitignored) are applied.
 
-**Done:**
-- Filled every empty `main_diags` across all 15 departments → **0 empty main_diags**.
-- Full ICD-11 code audit + fixes (migrations 024, 026, 027, 029, 034) — 2 mismaps still left unfixed (see below).
-- **Thin-strengthening (migrations 025, 028–034):** reduced thin main_diags (single-diagnosis) from ~57 → **42**. The remaining 42 are genuine single-entity conditions (appendicitis, ectopic pregnancy, ACL injury, etc.) and are correct as-is.
-- State: **507 diagnoses, all embedded, 0 empty main_diags.**
+### Last session — thin-strengthening pass (migrations 028–034, committed `eeb7180`)
+Removed stale "STILL OPEN" pancreatitis section from `MISMAPPED_ICD11_CODES.md` (already fixed in 027).
+Then ran the full thin-strengthening pass:
+- **028** ENT: added acute mastoiditis (AB11.0), chronic mastoiditis (AB11.1), recurrent respiratory papillomatosis (2F00.1), vocal cord polyp (CA0H.1), laryngeal stenosis (CA0H.5).
+- **029** OPHTHAL: fixed `9A60.0` AMD mismap → `9B75.0`; added neovascular AMD (9B75.04), keratoconus (9A78.50), Fuchs/endothelial corneal dystrophy (9A70.0).
+- **030** ORTHO: added septic arthritis (FA10.0), chronic osteomyelitis (FB84.4), rotator cuff syndrome (FB53.1), impingement (FB53.2), cervical fracture (NA22.Z), thoracic fracture (NA82.0).
+- **031** SOC + UROL: added DCIS (2E65.2), invasive lobular carcinoma (2C61.1), basal cell carcinoma (2C32), classical Hodgkin lymphoma (2B30.1), oral SCC (2B66.0), azoospermia (GB04.0).
+- **032** PEDSURG: added gastroschisis (LB02), congenital hydrocele (KC00).
+- **033** GS + PRS: added type 2 DM bariatric indication (5A11), colorectal adenoma (2E92.4Y), polyposis syndrome (2E92.40), Dupuytren's (FB51.0).
+- **034** Mixed: fixed `BD41.0` AVF mismap → `BD52.1`; added arterial FMD (BD41.0 VASC), metastatic bone disease (2E03 ORTHO), midgut malrotation/volvulus (LB14 PEDSURG), persistent cloaca (LB17.2 PEDSURG), odontogenic keratocyst (DA05.0 MFS).
+
+**State: 507 diagnoses, all embedded, 0 empty main_diags, 42 thin categories (all genuine single-entity conditions).**
 
 **Pending / next steps:**
 1. **2 codes still left as-is** (no distinct ICD-11 atherosclerotic-stenosis leaf — need site extension codes the one-code-per-row schema can't hold): `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis. See `MISMAPPED_ICD11_CODES.md`.
