@@ -82,7 +82,3 @@ blind recoding would create new collisions or imprecise codes. Needs deliberate 
 | `BD42.1` | dissection of thoracic aorta | BD42 = Raynaud phenomenon; dissection = `BD50.x` |
 | `BD50.0` | varicose veins of lower extremity | BD50 = aortic aneurysm/dissection; varicose veins = `BD7x` |
 
-### STILL OPEN — duplicate pancreatitis entries (need merge, not recode)
-`DC94.0` (acute pancreatitis) and `DC94.1` (chronic pancreatitis) duplicate the correct
-`DC31.Z` / `DC32` added earlier. Fix = repoint their links to DC31.Z/DC32 and delete the duplicates.
-
