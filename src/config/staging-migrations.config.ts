@@ -73,6 +73,7 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000042-FixProcCptCasingDuplicates.ts",
       __dirname + "/../migrations/1750000000043-FixCptCodeMismatches.ts",
       __dirname + "/../migrations/1750000000044-ResolvePartialCptMatches.ts",
+      __dirname + "/../migrations/1750000000045-FixNsIcdCodes.ts",
     ],
     subscribers: [],
     extra: { max: 5 },

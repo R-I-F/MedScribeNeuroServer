@@ -26,32 +26,27 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Per-department migration pattern: `INSERT diagnoses (EN + Arabic name + EN/AR description) … ON CONFLICT("icdCode") DO NOTHING` → link `department_diagnoses` (by `dept.code`) → link `main_diag_diagnoses` (by `md.title`). Share existing correct-coded diagnoses across departments rather than duplicating. Always include a clean `down()`.
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
-## 📍 Where we stopped (2026-06-15)
-All on **staging**, committed and pushed to `migration/mysql-to-postgres`. Migrations `1750000000011`–`1750000000041` (in `src/migrations/`, force-added to git this session) are applied.
+## 📍 Where we stopped (2026-06-16)
+All on **staging**, committed and pushed to `migration/mysql-to-postgres`. Migrations `1750000000001`–`1750000000045` applied.
 
-### Previous session — ICD-11 audit + GS biliary (migrations 035–036, committed `d2e81ac`)
-- **035** ICD-11 Audit Batch 2 — 12 confirmed mismaps fixed; **036** GS biliary: DC91.x deleted, DC11.3 inserted.
-- State after 036: 506 diagnoses, all embedded, 0 empty main_diags.
+### Session recap — CPT audit + NS ICD-11 audit + fixes (migrations 042–045)
+- **042** Fixed proc_cpts casing duplicates (0274T/0274t, 0908T/0908t) — lowercase variants removed.
+- **043** Fixed 6 definite CPT code mismatches in NS proc_cpts + 2 title-only corrections.
+- **044** Resolved 10 partial CPT match issues (title/description updates, no numCode changes).
+- **045** Fixed 10 NS ICD-11 code mismatches in `diagnoses` table (3 ❌ + 7 ⚠️ — see `ICD_AUDIT_NS.md`).
 
-### This session — proc_cpts table + NS procedure data (migrations 037–041)
-New tables created in PostgreSQL staging (`defaultdb`):
-- **037** `proc_cpts` table: id (UUID PK), title, alphaCode, numCode, description, ar_title (nullable), ar_description (nullable), createdAt, updatedAt.
-- **038** `main_diag_procs` junction table: mainDiagId ↔ procCptId, composite PK, cascade FKs, indexed.
-- **039** Added `embedding vector(768)` + HNSW cosine index to `proc_cpts` (nullable, not yet backfilled).
-- **040** Imported 94 NS proc_cpts from production KA MySQL (read-only; 96 rows − 2 case-duplicate numCodes: 0274T/0274t, 0908T/0908t). Added Arabic title + description for every row. Unique index on (alphaCode, numCode).
-- **041** Linked all 94 proc_cpts to the 10 NS main_diags (155 total links). Also inserted the one row missed in 040 (LAM 64493-02). Script `scripts/read-production-proc-cpts.ts` reads prod MySQL read-only.
-
-**State: 506 diagnoses (all embedded), 94 proc_cpts (embeddings not yet backfilled), 155 NS main_diag_procs links.**
+**State after 045: 506 diagnoses (all embedded), 94 proc_cpts (embeddings not yet backfilled), 155 NS main_diag_procs links. All NS ICD-11 codes audited and corrected.**
 
 **Pending / next steps:**
-1. Backfill `proc_cpts.embedding` once a backfill script is written (same Gemini model, same 768-dim pattern as diagnoses).
-2. **2 ICD-11 codes still left as-is**: `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis.
-3. **Amblyopia**: needs correct ICD-11 code added to OPHTHAL strabismus category (code not confirmed; somewhere in 9C80–9C8Z range).
-4. Proc_cpts for non-NS departments not yet imported.
+1. **Backfill `proc_cpts.embedding`** — write a script mirroring `scripts/backfill-diagnosis-embeddings.ts` but for `proc_cpts` (same Gemini model `gemini-embedding-001`, 768-dim).
+2. **2 VASC ICD-11 codes still open**: `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis (flagged in `MISMAPPED_ICD11_CODES.md`).
+3. **Amblyopia**: correct ICD-11 code for OPHTHAL strabismus category not yet confirmed (somewhere 9C80–9C8Z).
+4. **Proc_cpts for non-NS departments** not yet imported.
 
 ## 🔴 Handoff note: migrations are now in git (force-added)
-`src/migrations/` is in `.gitignore` but all migration files 037–041 were committed with `git add -f`. Earlier migrations (001–036) were also force-added in this commit. If `.gitignore` is ever respected again (e.g. `git rm --cached`), migration files would disappear from git. Keep force-adding new migrations.
+`src/migrations/` is in `.gitignore` but all migration files (001–045) were committed with `git add -f`. If `.gitignore` is ever respected again (e.g. `git rm --cached`), migration files would disappear from git. Keep force-adding new migrations.
 
 ## Audit/data-quality artifacts
-- `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found and fixed, plus 2 still-open flagged codes.
-- `CPT_AUDIT_NS.md` (repo root) — Full CPT code audit for NS `proc_cpts`: all 94 rows reviewed, 6 code mismatches fixed (migration 043), 10 partial-match title/description issues resolved (migration 044).
+- `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found across all departments; 2 still-open VASC codes.
+- `CPT_AUDIT_NS.md` (repo root) — Full CPT code audit for NS `proc_cpts`: all 94 rows reviewed; 6 code mismatches fixed (043), 10 partial-match issues resolved (044).
+- `ICD_AUDIT_NS.md` (repo root) — Full ICD-11 audit for all 134 NS diagnoses; 10 codes fixed (045). See "Changes Applied" section for details.
