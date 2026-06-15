@@ -63,6 +63,8 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000032-StrengthenPedsurgThin.ts",
       __dirname + "/../migrations/1750000000033-StrengthenGsPrsThin.ts",
       __dirname + "/../migrations/1750000000034-FixVascAvfMismapAndStrengthenRemaining.ts",
+      __dirname + "/../migrations/1750000000035-FixAuditedMismapsBatch2.ts",
+      __dirname + "/../migrations/1750000000036-FixGsBiliaryRecodes.ts",
     ],
     subscribers: [],
     extra: { max: 5 },

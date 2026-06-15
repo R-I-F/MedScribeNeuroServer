@@ -58,6 +58,27 @@ CA43.0→AB31.2, CA44.0→AB31.0, AA05.0→MD20, AA12.0→CA01, AA12.1→CA0A.Z,
 AA40.0→CA03, AA40.2→CA0K.1, 2A10.0→2B90, 2C71.0→2D10, DA22.0→DA21.0, DA24.0→DD50.0,
 LB70.0→2E80.0, FA82.0→NC12.0.
 
+### RESOLVED 2026-06-15 — Audit Batch 2 (migrations `1750000000035`, `1750000000036`)
+14 mismaps found by systematic code/name cross-check across all non-NS departments (verified via findacode.com ICD-11 MMS):
+- `BD11.Z` (CTS) — BD11.Z = Left ventricular failure, not generic heart failure. Fixed: renamed name only.
+- `2C20.0` (SOC) — 2C20.0 = Adenocarcinoma of nasal cavity, not NHL. Fixed: → `2A81.Z` (DLBCL NOS).
+- `2C20.3` (ENT) — 2C20.3 = Olfactory neuroblastoma, not laryngeal carcinoma. Fixed: → `2C23.Z`.
+- `2C20.4` (ENT) — 2C20.4 = SCC of nasal cavity, not nasopharyngeal carcinoma. Fixed: → `2B6B.1`.
+- `9A70.0` (OPHTHAL) — 9A70.0 = Endothelial corneal dystrophy (Fuchs), not amblyopia. Fixed: renamed + removed from strabismus main_diag.
+- `9A71.0` (OPHTHAL) — 9A71.0 = anterior-segment code, not exotropia. Fixed: → `9C80.1`.
+- `9A71.1` (OPHTHAL) — 9A71.1 = anterior-segment code, not esotropia. Fixed: → `9C80.0`.
+- `DC10.0` (HBP) — DC10.0 = Obstruction of gallbladder/bile ducts, not cholelithiasis. Fixed: → `DC11.Z`.
+- `DC10.2` (HBP) — DC10.2 = Fistula of gallbladder, not gallbladder polyp (off by one digit). Fixed: → `DC10.3`.
+- `DC11.0` (HBP) — name "acute cholecystitis" wrong; DC11.0 = calculus WITH acute cholecystitis. Fixed: renamed.
+- `DC12.0` (HBP) — DC12.0 = Acute cholecystitis, not acute cholangitis. Fixed: → `DC13.0`.
+- `DC13.1` (HBP) — DC13.1 = cholangitis subtype, not PSC. Fixed: → `DB96.2Z`.
+- `DC91.0` (GS) — DC91 does not exist in ICD-11; correct code = DC11.0. Fixed: relinked GS to DC11.0, deleted DC91.0.
+- `DC91.2` (GS) — same DC91 issue; correct = DC11.3. Fixed: inserted DC11.3, relinked GS, deleted DC91.2.
+
+**Still open:**
+- `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis — no distinct ICD-11 leaf.
+- Amblyopia: 9A70.0 was renamed (9A70.0 = Fuchs dystrophy). Amblyopia needs its own correct ICD-11 code added to the OPHTHAL strabismus category; code not confirmed in this session.
+
 ### RESOLVED 2026-06-15 — thin-strengthening pass (migrations `1750000000029`, `1750000000034`)
 Two mismaps found incidentally during thin-strengthening:
 - `9A60.0` (OPHTHAL macular degeneration) — 9A60 = Conjunctivitis, not AMD.

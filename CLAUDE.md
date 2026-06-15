@@ -39,12 +39,21 @@ Then ran the full thin-strengthening pass:
 - **032** PEDSURG: added gastroschisis (LB02), congenital hydrocele (KC00).
 - **033** GS + PRS: added type 2 DM bariatric indication (5A11), colorectal adenoma (2E92.4Y), polyposis syndrome (2E92.40), Dupuytren's (FB51.0).
 - **034** Mixed: fixed `BD41.0` AVF mismap → `BD52.1`; added arterial FMD (BD41.0 VASC), metastatic bone disease (2E03 ORTHO), midgut malrotation/volvulus (LB14 PEDSURG), persistent cloaca (LB17.2 PEDSURG), odontogenic keratocyst (DA05.0 MFS).
+- **035** ICD-11 Audit Batch 2 — 12 confirmed mismaps fixed (verified via findacode.com):
+  - BD11.Z renamed: "heart failure - unspecified" → "left ventricular failure, unspecified"
+  - 2C20.0 (SOC NHL) → 2A81.Z (DLBCL NOS); 2C20.3 (ENT larynx) → 2C23.Z; 2C20.4 (ENT NPC) → 2B6B.1
+  - 9A70.0 renamed: "amblyopia" → "endothelial corneal dystrophy"; unlinked from strabismus main_diag
+  - 9A71.0 (exotropia) → 9C80.1; 9A71.1 (esotropia) → 9C80.0
+  - HBP biliary cluster: DC10.0→DC11.Z, DC10.2→DC10.3, DC11.0 renamed, DC12.0→DC13.0, DC13.1→DB96.2Z
+- **036** GS biliary cleanup: DC91.0 and DC91.2 (non-existent ICD-11 codes) deleted; GS relinked to DC11.0 (existing) and new DC11.3 (cholelithiasis without cholecystitis).
 
-**State: 507 diagnoses, all embedded, 0 empty main_diags, 42 thin categories (all genuine single-entity conditions).**
+**State: 506 diagnoses, all embedded, 0 empty main_diags, 42 thin categories (all genuine single-entity conditions).**
+Correction philosophy: names were the clinical intent; codes should match the name. When there's a mismatch, correct the code (or rename if the code accidentally points to something more specific and appropriate).
 
 **Pending / next steps:**
-1. **2 codes still left as-is** (no distinct ICD-11 atherosclerotic-stenosis leaf — need site extension codes the one-code-per-row schema can't hold): `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis. See `MISMAPPED_ICD11_CODES.md`.
-2. Consider whether `src/migrations/` should be force-added to git (see handoff note).
+1. **2 codes still left as-is** (no distinct ICD-11 atherosclerotic-stenosis leaf): `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis.
+2. **Amblyopia**: 9A70.0 was renamed to endothelial corneal dystrophy (correct). Amblyopia needs its own correct ICD-11 code added to the OPHTHAL strabismus category — code not confirmed yet (ICD-11 ophthal amblyopia code is somewhere in 9C80-9C8Z or 9D41-9D7Z range but not pinpointed).
+3. Consider whether `src/migrations/` should be force-added to git (see handoff note).
 
 ## 🔴 Handoff note: migrations are gitignored
 `src/migrations/` is in `.gitignore`, so the 17 migration files that define all the reference-data work exist **only on this machine's disk** and as applied state in the **staging DB** — they are **not in git**. The staging-migrations *config* (`staging-migrations.config.ts`) IS committed, but it references files that aren't. If this working copy is cleaned or moved, that work is lost. To make the work durable/portable, `git add -f src/migrations/*.ts` (the user must decide, given their gitignore choice).
