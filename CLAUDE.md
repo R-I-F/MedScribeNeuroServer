@@ -48,5 +48,5 @@ All on **staging**, committed and pushed to `migration/mysql-to-postgres`. Migra
 
 ## Audit/data-quality artifacts
 - `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found across all departments; 2 still-open VASC codes.
-- `CPT_AUDIT_NS.md` (repo root) — Full CPT code audit for NS `proc_cpts`: all 94 rows reviewed; 6 code mismatches fixed (043), 10 partial-match issues resolved (044).
-- `ICD_AUDIT_NS.md` (repo root) — Full ICD-11 audit for all 134 NS diagnoses; 10 codes fixed (045). See "Changes Applied" section for details.
+- `MEDICAL_CODE_AUDITS/CPT_AUDIT_NS.md` — Full CPT code audit for NS `proc_cpts`: all 94 rows reviewed; 6 code mismatches fixed (043), 10 partial-match issues resolved (044).
+- `MEDICAL_CODE_AUDITS/ICD_AUDIT_NS.md` — Full ICD-11 audit for all 134 NS diagnoses; 10 codes fixed (045). See "Changes Applied" section for details.
