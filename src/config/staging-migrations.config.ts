@@ -70,6 +70,8 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000039-AddProcCptEmbedding.ts",
       __dirname + "/../migrations/1750000000040-ImportNsProcCpts.ts",
       __dirname + "/../migrations/1750000000041-LinkNsProcCptsToMainDiags.ts",
+      __dirname + "/../migrations/1750000000042-FixProcCptCasingDuplicates.ts",
+      __dirname + "/../migrations/1750000000043-FixCptCodeMismatches.ts",
     ],
     subscribers: [],
     extra: { max: 5 },
