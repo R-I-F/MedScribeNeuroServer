@@ -168,3 +168,42 @@ practice for VSG shunts |
 | ➕ Added | `0398T-00` (ultrasonic ablation) | NS — functional neurosurgery | Replaced lost link from deleted 61715-00 |
 | ➕ Added | `61020-01` (tapping) | NS — cns infection | Preserved concept from deleted 61000-00 (61020-01 was already linked to the other 2 main_diags) |
 | ➕ Added | `64568-00` (VNS) | NS — functional neurosurgery | Replaced lost link from deleted 0908T-00 |
+
+---
+
+## Changes Applied — Migration 044 (`ResolvePartialCptMatches`)
+
+> Applied to PostgreSQL staging (`defaultdb`) on 2026-06-15.
+> All ⚠️ partial matches resolved via title/description updates — no numCode changes.
+> Note: `62160-00` "laparoscopic → neuroendoscopic" was already resolved in migration 043.
+> `down()` restores exact original values from migration 040 (or 042 for `0274T-00`).
+
+### Title + description updates
+
+| numCode | Field | Before | After | Reason |
+|---------|-------|--------|-------|--------|
+| `61108-00` (CRAN) | description | 'Small skull openings to relieve pressure or access brain.' | 'Twist drill hole(s) for evacuation or drainage of subdural hematoma' | 61108 is subdural hematoma–specific, not a generic burr hole code |
+| `61304-00` (CRAN) | description | 'Removing skull section for brain surgery access.' | 'Craniectomy or craniotomy for exploration, diagnosis, or decompression of cranial nerves' | Matches actual CPT 61304 definition |
+| `22513-00` (FUSN) | title | 'kyphoplasty' | 'kyphoplasty (thoracic)' | 22513 = thoracic only; lumbar = 22514 (separate code) |
+| `22513-00` (FUSN) | description | 'kyphoplasty' | 'Percutaneous vertebral augmentation (kyphoplasty), thoracic vertebral body, initial level' | Clarifies thoracic-level restriction |
+| `22630-01` (FUSN) | title | 'removal of prolapsed disc' | 'discectomy (as part of interbody fusion)' | 22630 = posterior interbody fusion; discectomy is part of the same code, not standalone (standalone = 63030/63042) |
+| `22630-01` (FUSN) | description | original arthrodesis text | 'Discectomy performed as part of posterior interbody arthrodesis (PLIF/TLIF); included in CPT 22630 — not standalone discectomy' | Prevents misuse as standalone discectomy code |
+| `22842-00` (FUSN) | description | 'posterior spinal instrumentation' | 'Posterior segmental instrumentation via hooks; 3 to 6 vertebral segments' | Adds mandatory 3–6 segment scope from CPT definition |
+| `22842-01` (FUSN) | description | 'posterior spinal instrumentation' | 'Posterior segmental instrumentation via pedicle screws and rods; 3 to 6 vertebral segments' | Same segment scope addition |
+| `22842-02` (FUSN) | description | 'posterior spinal instrumentation' | 'Posterior segmental instrumentation, other method; 3 to 6 vertebral segments' | Same segment scope addition |
+| `0274T-00` (LAM) | title | 'Foraminotomy' | 'percutaneous foraminotomy (cervical / thoracic)' | 0274T is percutaneous + cervical/thoracic only; open lumbar = 63042 (separate code in DB) |
+| `0274T-00` (LAM) | description | 'Percutaneous foraminotomy' | 'Percutaneous laminotomy/foraminotomy, interlaminar approach, cervical or thoracic; soft tissue decompression (Category III tracking code)' | Full CPT definition; Category III status flagged |
+| `0274T-00` (LAM) | ar_title | 'توسيع الثقبة الفقرية' | 'توسيع الثقبة الفقرية بالجلد (عنقي / صدري)' | Arabic clarified to match updated specificity |
+| `0274T-00` (LAM) | ar_description | (short version) | Updated to reflect cervical/thoracic percutaneous approach | |
+| `20660-00` (LAM) | title | 'traction and immobilization' | 'cranial tongs / traction (Gardner-Wells)' | 20660 = cranial tong/caliper application specifically, not general cervical traction |
+| `20660-00` (LAM) | description | 'cervical traction' | 'Application of cranial tongs, caliper, or halo device (eg, Gardner-Wells) for cervical traction or immobilization' | Matches actual CPT 20660 definition |
+| `20660-00` (LAM) | ar_title | 'شد الرقبة وتثبيتها' | 'تثبيت عنقي بالملقط الرأسي (غاردنر-ويلز)' | Arabic updated to name the specific device |
+| `11044-00` (MNR) | title | 'debridment' *(misspelled)* | 'debridement (bone)' | Spelling fix + bone-specificity: 11044 = bone debridement, not general wound debridement |
+| `11044-00` (MNR) | description | 'wound debridement' | 'Debridement of bone (includes epidermis, dermis, subcutaneous tissue, muscle and/or fascia if performed); first 20 sq cm or less' | Matches actual CPT 11044 definition |
+| `11044-01` (MNR) | title | 'tissue excision' | 'debridement (bone), additional' | Same bone-specificity issue; "tissue excision" was misleadingly generic |
+| `11044-01` (MNR) | description | 'wound debridement' | 'Debridement of bone (includes overlying soft tissue if performed); additional 20 sq cm or less' | Matches CPT intent |
+| `13121-00` (MNR) | title | 'wound closure' | 'complex wound repair (scalp / extremity)' | 13121 = complex repair, scalp/arms/legs, 1.1–2.5 cm only — too specific to be a generic "wound closure" |
+| `13121-00` (MNR) | description | 'wound repair' | 'Complex repair of scalp, arms, or legs; 1.1 to 2.5 cm' | Clarifies body-part and size restrictions |
+
+### No main_diag_procs changes
+All updates in migration 044 are title/description only. FK links reference UUID, not numCode or title, so all `main_diag_procs` entries are unaffected.
