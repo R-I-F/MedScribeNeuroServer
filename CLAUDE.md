@@ -27,18 +27,17 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
 ## 📍 Where we stopped (2026-06-15)
-All on **staging**, **uncommitted beyond the side-branch commits**. Migrations `1750000000011`–`1750000000027` (in `src/migrations/`, gitignored) are applied.
+All on **staging**, **uncommitted beyond the side-branch commits**. Migrations `1750000000011`–`1750000000034` (in `src/migrations/`, gitignored) are applied.
 
 **Done:**
-- Filled every empty `main_diags` across all 15 departments → **0 empty main_diags**. Procedure-named categories (transplants, dental implants, bariatric, aesthetic, vascular access) mapped to their codeable **indication**.
-- Added high-volume diagnoses (e.g. NS brain/spinal metastases, subdural empyema, OPLL, concussion).
-- **Full ICD-11 code audit + fixes:** original 5 mismaps (migration 024), 20 clean audited mismaps incl. the whole ENT ear/nose-throat cluster (026), and the tangled cardiovascular cluster + merged the `DC94.0/.1` pancreatitis duplicates (027).
-- State: **480 diagnoses, all embedded, 0 empty main_diags.**
+- Filled every empty `main_diags` across all 15 departments → **0 empty main_diags**.
+- Full ICD-11 code audit + fixes (migrations 024, 026, 027, 029, 034) — 2 mismaps still left unfixed (see below).
+- **Thin-strengthening (migrations 025, 028–034):** reduced thin main_diags (single-diagnosis) from ~57 → **42**. The remaining 42 are genuine single-entity conditions (appendicitis, ectopic pregnancy, ACL injury, etc.) and are correct as-is.
+- State: **507 diagnoses, all embedded, 0 empty main_diags.**
 
 **Pending / next steps:**
-1. **Thin-strengthening (task not finished):** ~57 `main_diags` across 13 departments still have only 1 diagnosis. Only **HBP** was strengthened (migration 025) as the example. Continue department-by-department where a category has genuine additional common entities; leave true single-entity categories alone.
-2. **2 codes left flagged** (no distinct ICD-11 atherosclerotic-stenosis leaf — need site extension codes the one-code-per-row schema can't hold): `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis. See `MISMAPPED_ICD11_CODES.md`.
-3. Consider whether `src/migrations/` should be force-added to git (see handoff note).
+1. **2 codes still left as-is** (no distinct ICD-11 atherosclerotic-stenosis leaf — need site extension codes the one-code-per-row schema can't hold): `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis. See `MISMAPPED_ICD11_CODES.md`.
+2. Consider whether `src/migrations/` should be force-added to git (see handoff note).
 
 ## 🔴 Handoff note: migrations are gitignored
 `src/migrations/` is in `.gitignore`, so the 17 migration files that define all the reference-data work exist **only on this machine's disk** and as applied state in the **staging DB** — they are **not in git**. The staging-migrations *config* (`staging-migrations.config.ts`) IS committed, but it references files that aren't. If this working copy is cleaned or moved, that work is lost. To make the work durable/portable, `git add -f src/migrations/*.ts` (the user must decide, given their gitignore choice).

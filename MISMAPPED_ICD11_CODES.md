@@ -58,6 +58,14 @@ CA43.0→AB31.2, CA44.0→AB31.0, AA05.0→MD20, AA12.0→CA01, AA12.1→CA0A.Z,
 AA40.0→CA03, AA40.2→CA0K.1, 2A10.0→2B90, 2C71.0→2D10, DA22.0→DA21.0, DA24.0→DD50.0,
 LB70.0→2E80.0, FA82.0→NC12.0.
 
+### RESOLVED 2026-06-15 — thin-strengthening pass (migrations `1750000000029`, `1750000000034`)
+Two mismaps found incidentally during thin-strengthening:
+- `9A60.0` (OPHTHAL macular degeneration) — 9A60 = Conjunctivitis, not AMD.
+  Fixed → `9B75.0` (age-related macular degeneration) in migration 029.
+- `BD41.0` (VASC arteriovenous fistula) — BD41.0 = Arterial fibromuscular dysplasia.
+  Fixed → `BD52.1` (arteriovenous fistula, acquired) in migration 034.
+  BD41.0 then added as a new entry (arterial fibromuscular dysplasia) to VASC renal artery disease.
+
 ### RESOLVED 2026-06-15 — cardiovascular remodel (migration `1750000000027`)
 Fixed: BD10.0→BD40.Z, BD10.1→BD4Z, BD10.2→BD40.2, BD10.3→BD40.Y, BD11.0→BD30.2,
 BD40.0→BD50.Z, BD40.1→BD50.3, BD50.0(varicose)→BD74.1, BD42.1→BD50.0.
