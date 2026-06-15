@@ -52,5 +52,6 @@ New tables created in PostgreSQL staging (`defaultdb`):
 ## 🔴 Handoff note: migrations are now in git (force-added)
 `src/migrations/` is in `.gitignore` but all migration files 037–041 were committed with `git add -f`. Earlier migrations (001–036) were also force-added in this commit. If `.gitignore` is ever respected again (e.g. `git rm --cached`), migration files would disappear from git. Keep force-adding new migrations.
 
-## Audit/data-quality artifact
-`MISMAPPED_ICD11_CODES.md` (repo root) records every ICD-11 code mismap found and how it was fixed, plus the 2 still-open flagged codes.
+## Audit/data-quality artifacts
+- `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found and fixed, plus 2 still-open flagged codes.
+- `CPT_AUDIT_NS.md` (repo root) — Full CPT code audit for NS `proc_cpts`: all 94 rows reviewed, 6 code mismatches fixed (migration 043), 10 partial-match title/description issues resolved (migration 044).
