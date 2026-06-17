@@ -11,6 +11,7 @@
     "db:migrate:staging": "dotenv -e .env.staging -- ts-node scripts/run-staging-migrations.ts",
     "db:migrate:staging:revert": "dotenv -e .env.staging -- ts-node scripts/revert-staging-migrations.ts",
     "db:backfill-embeddings:staging": "dotenv -e .env.staging -- ts-node scripts/backfill-diagnosis-embeddings.ts",
+    "db:backfill-proc-cpt-embeddings:staging": "dotenv -e .env.staging -- ts-node scripts/backfill-proc-cpt-embeddings.ts",
     "db:import-calSurg-from-external": "ts-node scripts/import-calSurg-from-external.ts",
     "db:import-sub-from-external": "ts-node scripts/import-sub-from-external.ts",
     "db:import-calSurg-ka-from-row-3303": "ts-node scripts/import-calSurg-ka-from-row-3303.ts",
