@@ -111,3 +111,13 @@ blind recoding would create new collisions or imprecise codes. Needs deliberate 
 | `BD42.1` | dissection of thoracic aorta | BD42 = Raynaud phenomenon; dissection = `BD50.x` |
 | `BD50.0` | varicose veins of lower extremity | BD50 = aortic aneurysm/dissection; varicose veins = `BD7x` |
 
+### RESOLVED 2026-06-19 — ORTHO dept audit (migrations `1750000000070`–`1750000000071`)
+Full ICD-11 audit of all 32 original ORTHO diagnoses (see `MEDICAL_CODE_AUDITS/ORTHO/AUDIT_ORTHO.md`). The dominant error: traumatic fractures/dislocations coded in the **FB\*** (musculoskeletal *disease*) chapter instead of the **N\*** (injury) chapter. 19 codes fixed + 1 leaf refinement (migration 070); 3 mis-coded duplicate rows merged into correctly-coded NS rows (migration 071). Key examples:
+- `NC72.0` "meniscal tear" → was a femur-fracture code → `NC93.3Z` (tear of meniscus).
+- `LA91.1` "osteomyelitis" → was a developmental-anomaly code → `FB84.Z`.
+- `NC90.0`/`NC90.1` osteoarthritis knee/hip → were injury codes → `FA01.Z`/`FA00.Z`.
+- `FA71.0` rotator cuff tear → `NC16.0Y` (FB53.1 was already used for rotator cuff syndrome).
+- `FA30.0` "lumbar disc herniation" → merged into NS `FA80.9`; `FA30.0` (= acquired hallux valgus in ICD-11) reused for that condition.
+
+**None still open for ORTHO** — all ICD-11 codes verified via `icd11_search`.
+
