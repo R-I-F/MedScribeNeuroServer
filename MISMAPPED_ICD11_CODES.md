@@ -121,3 +121,21 @@ Full ICD-11 audit of all 32 original ORTHO diagnoses (see `MEDICAL_CODE_AUDITS/O
 
 **None still open for ORTHO** — all ICD-11 codes verified via `icd11_search`.
 
+### RESOLVED 2026-06-20 — PRS dept audit (migration `1750000000078`)
+Full ICD-11 audit of all 30 original PRS diagnoses (see `MEDICAL_CODE_AUDITS/PRS/AUDIT_PRS.md`). The dominant error: injuries/tumours/ulcers coded in the **skin-disease `E*`** or **developmental `L*`** chapters instead of the correct injury (`N*`), neoplasm (`2C*`) or other chapters. 18 codes fixed + 3 parent→leaf refinements. Key examples:
+- Burns `EJ40.0/.1/.2` (skin chapter) → ICD-11 burn-depth ladder `ND92.1/.2/.3`; frostbite `EJ50.0` → `NE41`.
+- Cleft `ED00.0/.1` → `LA42.Z`/`LA40.Z`; syndactyly/polydactyly `EH61.0`/`EH63.0` → `LB79.Z`/`LB78.Z`.
+- Keloid/hypertrophic scar `ED91.0/.1` → `EE60.0Z`/`EE60.1`; pressure ulcer `EK90.0` → `EH90.Z`; diabetic foot `LA70.0` → `BD54`.
+- Skin cancers coded in benign range: BCC `2F31.0` → `2C32.Z`, SCC `2F33.0` → `2C31.Z`; epidermoid cyst `LB20.0` → `EK70.0Z`.
+
+**Two of the fixes corrected rows shared with other (already-"complete") departments:**
+- `NA14.0` "brachial plexus injury" (shared with **NS**) → `NA41.Z`. NA14.0 was an intracranial-injury code; the shared row is now correct for NS too.
+- `LB20.0` "epidermoid cyst" (shared with **PEDSURG**) → `EK70.0Z`. The shared row is now correct for PEDSURG too.
+
+**Newly noticed NS mismaps (NOT fixed — out of PRS scope, flag for NS re-review):**
+- `2F7C` (NS) is named "hemangioblangioma/hemangioblastoma" but 2F7C = *Neoplasms of uncertain behaviour of connective/soft tissue*.
+- `2F7Z` (NS) is named "epidermoid and dermoid tumors" but 2F7Z = *Neoplasms of uncertain behaviour of unspecified site*.
+  Because both were occupied, PRS "giant cell tumour of soft tissue" (`2B72.0`, wrong) was repurposed to the free `2C35` "Cutaneous sarcoma" instead of the ideal soft-parts GCT code.
+
+**None still open for PRS** — all 100 ICD-11 codes verified via `icd11_search`.
+

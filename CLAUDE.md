@@ -26,8 +26,17 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Per-department migration pattern: `INSERT diagnoses (EN + Arabic name + EN/AR description) … ON CONFLICT("icdCode") DO NOTHING` → link `department_diagnoses` (by `dept.code`) → link `main_diag_diagnoses` (by `md.title`). Share existing correct-coded diagnoses across departments rather than duplicating. Always include a clean `down()`.
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
-## 📍 Where we stopped (2026-06-19)
-All on **staging**. Migrations `1750000000001`–`1750000000077` applied. Migrations 070–077 (ORTHO) were added this session and **force-added to git but not yet committed** (commit only on explicit request).
+## 📍 Where we stopped (2026-06-20)
+All on **staging**. Migrations `1750000000001`–`1750000000084` applied. Migrations 078–084 (PRS) were added this session and **force-added to git but not yet committed** (commit only on explicit request).
+
+### Session recap — PRS full dept audit + coverage extension (migrations 078-084)
+- **078** Fixed 21 ICD-11 codes (18 wrong + 3 parent→leaf). Original PRS data had injuries/tumours/ulcers in skin-disease `E*` / developmental `L*` chapters. Burns `EJ40/41/42`→`ND92.1/.2/.3` (depth ladder), frostbite `EJ50.0`→`NE41`; cleft `ED00.0/.1`→`LA42.Z`/`LA40.Z`; syndactyly/polydactyly→`LB79.Z`/`LB78.Z`; keloid/hypertrophic→`EE60.0Z`/`EE60.1`; pressure ulcer→`EH90.Z`, diabetic foot→`BD54`; necr. fasc.→`1B71.Z`; BCC/SCC `2F31.0`/`2F33.0`→`2C32.Z`/`2C31.Z`; epidermoid cyst→`EK70.0Z`; GCT-soft-tissue `2B72.0`→`2C35` (cutaneous sarcoma — ideal 2F7C/2F7Z occupied by NS). Two shared rows fixed also benefit **NS** (brachial plexus `NA14.0`→`NA41.Z`) and **PEDSURG** (epidermoid cyst).
+- **079** Structural: relinked the recoded scar row (`EH94`) from `contractures` → `scar revision`.
+- **080–081** Added 70 diagnoses (30→**100**), every main_diag now ≥5. 86 diagnosis embeddings backfilled.
+- **082–083** Imported **100** dept-specific proc_cpts across 12 new alpha groups (FLAP, GRFT, HSGY, CLEF, BURN, BRST, AEST, MICR, WND, SCRV, EXCN, CONT). 100 proc embeddings backfilled.
+- **084** Linked all 100 procs to the 12 main_diags + MNR to every category + 4 reused shared procs (BREA 19357/38525, PRPH 64856/64861). All 100 CPTs AAPC-verified (none deleted).
+
+**State after 084: PRS at 100 diagnoses (all embedded, all ICD-11 verified ✅), 100 dept-specific proc_cpts (all AAPC-verified, all embedded). 12 main_diags; every category ≥5 diagnoses & ≥5 procs.**
 
 ### Session recap — ORTHO full dept audit + coverage extension (migrations 070-076)
 - **070** Fixed 17 ICD-11 codes (+1 leaf refinement): traumatic fractures were in the FB* *disease* chapter instead of N* *injury* chapter (e.g. tibial shaft FB50.0→NC92.2, neck of femur FB80.0→NC72.2Z); cross-chapter mismaps fixed: meniscal tear NC72.0→NC93.3Z, osteomyelitis LA91.1→FB84.Z, OA knee/hip NC90.0/.1→FA01.Z/FA00.Z, rotator cuff tear FA71.0→NC16.0Y.
@@ -55,14 +64,16 @@ All on **staging**. Migrations `1750000000001`–`1750000000077` applied. Migrat
 1. **GS diagnoses**: 96 total; +4 to reach 100 (minor gaps: Spigelian hernia, chronic appendicitis, diverticular fistula — low priority)
 2. **2 VASC ICD-11 codes still open**: `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis (flagged in `MISMAPPED_ICD11_CODES.md`).
 3. **Amblyopia**: correct ICD-11 code for OPHTHAL strabismus category not yet confirmed (somewhere 9C80–9C8Z).
-4. **Proc_cpts for remaining departments** (VASC, HBP, MFS, OBGYN, OPHTHAL, ENT, PEDSURG, PRS, SOC, TRS, UROL) not yet imported. (ORTHO done this session.)
+4. **Proc_cpts for remaining departments** (VASC, HBP, MFS, OBGYN, OPHTHAL, ENT, PEDSURG, SOC, TRS, UROL) not yet imported. (ORTHO, PRS done.)
+5. **NS re-review** (flagged in `MISMAPPED_ICD11_CODES.md`): NS uses `2F7C` for "hemangioblastoma" and `2F7Z` for "epidermoid and dermoid tumors" — both are *uncertain-behaviour neoplasm* codes, likely mismapped.
 
 ## 🔴 Handoff note: migrations are now in git (force-added)
-`src/migrations/` is in `.gitignore` but all migration files (001–077) were committed with `git add -f`. If `.gitignore` is ever respected again (e.g. `git rm --cached`), migration files would disappear from git. Keep force-adding new migrations.
+`src/migrations/` is in `.gitignore` but all migration files (001–084) were committed with `git add -f`. If `.gitignore` is ever respected again (e.g. `git rm --cached`), migration files would disappear from git. Keep force-adding new migrations.
 
 ## Audit/data-quality artifacts
-- `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found across all departments; 2 still-open VASC codes. ORTHO mismaps resolved 2026-06-19 (migrations 070-071).
+- `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found across all departments; 2 still-open VASC codes. ORTHO mismaps resolved 2026-06-19 (migrations 070-071); PRS mismaps resolved 2026-06-20 (migration 078).
 - `MEDICAL_CODE_AUDITS/NS/AUDIT_NS.md` — Full audit for NS (ICD-11 + CPT); 10 ICD-11 codes fixed (045); 6 CPT codes fixed (043), 10 CPT title/description updates (044). ✅ **134 diagnoses, 94 proc_cpts — all codes verified. Audit complete.**
 - `MEDICAL_CODE_AUDITS/CTS/AUDIT_CTS.md` — Full audit for CTS (ICD-11 + CPT + gaps); 1 name fix (046), 5 new diagnoses (047), 72 new proc_cpts (048–050); extended to 100 diagnoses + 100 proc_cpts (057–059); 52 ICD-11 errors fixed (060–064). ✅ **All codes verified — audit complete.**
 - `MEDICAL_CODE_AUDITS/GS/AUDIT_GS.md` — Full audit for GS; 3 new diagnoses (052), 64 new proc_cpts (053–055); 23 ICD-11 errors fixed (065); 58 new diagnoses added (066–068); 35 new proc_cpts added (069). ✅ **96 diagnoses, 100 proc_cpts — all ICD-11 verified. Audit complete.**
 - `MEDICAL_CODE_AUDITS/ORTHO/AUDIT_ORTHO.md` — Full audit for ORTHO; 19 ICD-11 errors fixed + 1 leaf refinement (070), 3 duplicate merges + 1 spurious link (071), 73 new diagnoses (072–073), 101 new proc_cpts (074–076), all 101 CPT codes AAPC-verified + 4 corrected (077). ✅ **105 diagnoses, 101 proc_cpts — all ICD-11 and CPT codes verified. Audit complete.**
+- `MEDICAL_CODE_AUDITS/PRS/AUDIT_PRS.md` — Full audit for PRS; 21 ICD-11 codes fixed (078, incl. shared NS brachial-plexus + PEDSURG epidermoid rows), 1 structural relink (079), 70 new diagnoses (080–081), 100 new proc_cpts AAPC-verified (082–084). ✅ **100 diagnoses, 100 proc_cpts — all ICD-11 and CPT codes verified. Audit complete.**
