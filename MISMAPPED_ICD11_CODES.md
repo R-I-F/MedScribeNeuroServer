@@ -76,7 +76,7 @@ LB70.0→2E80.0, FA82.0→NC12.0.
 - `DC91.2` (GS) — same DC91 issue; correct = DC11.3. Fixed: inserted DC11.3, relinked GS, deleted DC91.2.
 
 **Still open:**
-- `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis — no distinct ICD-11 leaf.
+- ~~`BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis~~ — ✅ RESOLVED in migration `1750000000085` (VASC dept-audit, 2026-06-20). See section below.
 - Amblyopia: 9A70.0 was renamed (9A70.0 = Fuchs dystrophy). Amblyopia needs its own correct ICD-11 code added to the OPHTHAL strabismus category; code not confirmed in this session.
 
 ### RESOLVED 2026-06-15 — thin-strengthening pass (migrations `1750000000029`, `1750000000034`)
@@ -92,7 +92,14 @@ Fixed: BD10.0→BD40.Z, BD10.1→BD4Z, BD10.2→BD40.2, BD10.3→BD40.Y, BD11.0�
 BD40.0→BD50.Z, BD40.1→BD50.3, BD50.0(varicose)→BD74.1, BD42.1→BD50.0.
 Merged duplicates: DC94.0→DC31.Z, DC94.1→DC32 (deleted, links repointed).
 **Still left as-is (no distinct ICD-11 stenosis leaf — need site extension codes):**
-`BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis.
+~~`BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis.~~ → ✅ RESOLVED 2026-06-20 (migration 085): `BA41.0`→`BD55` (asymptomatic stenosis of intra/extracranial artery, WHO syn. "stenosis of carotid artery NOS"); `BD10.4`→`8B22.A` (subclavian steal syndrome, WHO syn. "subclavian artery stenosis").
+
+### RESOLVED 2026-06-20 — VASC full ICD-11 audit (migration `1750000000085`)
+VASC reference data was heavily corrupted (17/28 codes wrong — fabricated sequential `BA80.x`/`BD53.x` blocks + cross-concept mis-assignments). 18 codes fixed in migration 085 (see `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md` for the full table). Highlights:
+- The 2 long-open codes: `BA41.0`→`BD55`, `BD10.4`→`8B22.A`.
+- Cross-dept shared-row fixes: `GB60.0`(ESRD, was "acute kidney failure st.1")→`GB61.5` corrects **TRS+UROL+VASC**; `BD50.Z`(aortic root)→`BD50.3Y&XA01A6` corrects **CTS+VASC**.
+- `BD51.0`(DVT, was carotid-aneurysm code)→`BD71.4`; `BD52.0`(chronic venous insufficiency, was in arterial block)→`BD74.Z`; `BD53.0`(lymphoedema)→`BD93.Z`; `BD53.1`(gangrene)→merged into shared `MC85`.
+- Note: some earlier-resolved cardiovascular-remodel targets (e.g. `BD50.Z`, `BD50.3`, `BD74.1`) were themselves imprecise and were further corrected here.
 
 ### (historical) cardiovascular cluster — now resolved above
 This section is tangled: multiple mismapped names compete for the same/adjacent codes, so
