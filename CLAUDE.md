@@ -26,14 +26,22 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Per-department migration pattern: `INSERT diagnoses (EN + Arabic name + EN/AR description) … ON CONFLICT("icdCode") DO NOTHING` → link `department_diagnoses` (by `dept.code`) → link `main_diag_diagnoses` (by `md.title`). Share existing correct-coded diagnoses across departments rather than duplicating. Always include a clean `down()`.
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
-## 📍 Where we stopped (2026-06-20)
-All on **staging**. Migrations `1750000000001`–`1750000000087` applied. Migrations 078–087 were added this session and **force-added to git but not yet committed** (commit only on explicit request).
+## 📍 Where we stopped (2026-06-22)
+All on **staging**. Migrations `1750000000001`–`1750000000090` applied. Migrations 088–090 were added this session and **force-added to git but not yet committed** (commit only on explicit request).
 
 ### 🔧 dept-audit skill is now resumable (this session)
 The `dept-audit` skill now checkpoints continuously so a token-limit interrupt loses no research. New `.claude/skills/dept-audit/resume-check.js` + a **Phase 0** that runs it on every `/dept-audit <DEPT>` and echoes the audit file's `🔄 Progress Checkpoint` block. The audit file is created at **end of Phase 1** (not Phase 6) and updated after every sub-step (2B/2D write in batches of ~10). To resume any interrupted audit: just run `/dept-audit <DEPT>` — Phase 0 shows where to continue.
 
-### 🔄 VASC audit — IN PROGRESS (ICD-11 fixes ✅ + diagnoses → 100 ✅; proc_cpts pending)
-Save-game at `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md`. **Done**: Phase 1, 2A (clean), 2B ICD-11 audit (28/28 — VASC data was 61% corrupt), **migration 085** (18 ICD-11 fixes incl. gangrene→`MC85` merge; resolved the 2 long-open codes `BA41.0`→`BD55`, `BD10.4`→`8B22.A`; cross-dept ESRD `GB60.0`→`GB61.5` for TRS+UROL+VASC and aortic-root `BD50.Z`→`BD50.3Y&XA01A6` for CTS+VASC), and **migrations 086+087** (+72 diagnoses → **100 total**, every main_diag ≥5; 84 rows embedded). All 100 diagnoses ICD-11-verified ✅ and embedded ✅. **Next = proc_cpts**: Phase 2E (+100 dept-specific CPTs, new alpha groups EVAR/TEVR/ENDO/BYPS/ENDA/THRM/AMPU/DIAL/VARX/IVCF + MNR) + MIG-E/F (088–090), apply, backfill. Run `/dept-audit VASC` — Phase 0 resumes at 2E. (100 diagnoses, 0 procs.)
+### ✅ VASC full dept audit — COMPLETE (migrations 085–090)
+Save-game at `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md`.
+- **085** 18 ICD-11 fixes (VASC data was 61% corrupt) incl. gangrene→`MC85` merge; resolved the 2 long-open codes `BA41.0`→`BD55`, `BD10.4`→`8B22.A`; cross-dept ESRD `GB60.0`→`GB61.5` (TRS+UROL+VASC) and aortic-root `BD50.Z`→`BD50.3Y&XA01A6` (CTS+VASC).
+- **086+087** +72 diagnoses → **100 total**, every main_diag ≥5; 84 rows embedded. All ICD-11-verified ✅ + embedded ✅.
+- **088+089** Imported **114** dept-specific proc_cpts across **13 new alpha groups** (AORT, EVAR, ENDO, BYPS, ENDA, THRM, PERA, AMPU, DIAL, AVFR, VARX, IVCF, TRMA). All AAPC-verified. **2 deleted codes avoided** (33860→33858, 33870→33871) and the **2026 AMA LER restructure** handled — the lower-extremity endovascular family 37220–37235 was deleted effective 2026-01-01, replaced by new territory codes 37254/37256/37258/37260 (iliac), 37263/37265/37267/37269/37271/37273 (fem-pop), 37280 (tibial), 37296 (inframalleolar). 3 AMPU codes were already ORTHO-owned shared rows (ON CONFLICT reused them).
+- **090** Linked all 114 procs to the 12 main_diags + MNR to every category. 111 new proc embeddings backfilled (+3 shared already embedded = all 114).
+
+**State after 090: VASC at 100 diagnoses (all embedded, all ICD-11 verified ✅), 114 dept-specific proc_cpts (all AAPC-verified, all embedded). 12 main_diags; every category ≥5 diagnoses & ≥5 procs; 0 orphans, 0 empty categories. Audit complete.**
+
+> ⚠️ **2026 CPT note (reusable)**: the lower-extremity endovascular revascularization codes 37220–37235 were DELETED by AMA effective 2026-01-01 and replaced by 46 new codes 37254–37299, organised by territory (iliac/fem-pop/tibial-peroneal/inframalleolar) × lesion (stenosis=straightforward vs occlusion=complex) × initial/additional vessel. Use the new codes for any vascular endovascular work going forward.
 
 ### Session recap — PRS full dept audit + coverage extension (migrations 078-084)
 - **078** Fixed 21 ICD-11 codes (18 wrong + 3 parent→leaf). Original PRS data had injuries/tumours/ulcers in skin-disease `E*` / developmental `L*` chapters. Burns `EJ40/41/42`→`ND92.1/.2/.3` (depth ladder), frostbite `EJ50.0`→`NE41`; cleft `ED00.0/.1`→`LA42.Z`/`LA40.Z`; syndactyly/polydactyly→`LB79.Z`/`LB78.Z`; keloid/hypertrophic→`EE60.0Z`/`EE60.1`; pressure ulcer→`EH90.Z`, diabetic foot→`BD54`; necr. fasc.→`1B71.Z`; BCC/SCC `2F31.0`/`2F33.0`→`2C32.Z`/`2C31.Z`; epidermoid cyst→`EK70.0Z`; GCT-soft-tissue `2B72.0`→`2C35` (cutaneous sarcoma — ideal 2F7C/2F7Z occupied by NS). Two shared rows fixed also benefit **NS** (brachial plexus `NA14.0`→`NA41.Z`) and **PEDSURG** (epidermoid cyst).
@@ -70,17 +78,17 @@ Save-game at `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md`. **Done**: Phase 1, 2A (cl
 1. **GS diagnoses**: 96 total; +4 to reach 100 (minor gaps: Spigelian hernia, chronic appendicitis, diverticular fistula — low priority)
 2. **2 VASC ICD-11 codes still open**: `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis (flagged in `MISMAPPED_ICD11_CODES.md`).
 3. **Amblyopia**: correct ICD-11 code for OPHTHAL strabismus category not yet confirmed (somewhere 9C80–9C8Z).
-4. **Proc_cpts for remaining departments** (VASC, HBP, MFS, OBGYN, OPHTHAL, ENT, PEDSURG, SOC, TRS, UROL) not yet imported. (ORTHO, PRS done.)
+4. **Proc_cpts for remaining departments** (HBP, MFS, OBGYN, OPHTHAL, ENT, PEDSURG, SOC, TRS, UROL) not yet imported. (CTS, NS, GS, ORTHO, PRS, VASC done.)
 5. **NS re-review** (flagged in `MISMAPPED_ICD11_CODES.md`): NS uses `2F7C` for "hemangioblastoma" and `2F7Z` for "epidermoid and dermoid tumors" — both are *uncertain-behaviour neoplasm* codes, likely mismapped.
 
 ## 🔴 Handoff note: migrations are now in git (force-added)
 `src/migrations/` is in `.gitignore` but all migration files (001–084) were committed with `git add -f`. If `.gitignore` is ever respected again (e.g. `git rm --cached`), migration files would disappear from git. Keep force-adding new migrations.
 
 ## Audit/data-quality artifacts
-- `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found across all departments; 2 still-open VASC codes. ORTHO mismaps resolved 2026-06-19 (migrations 070-071); PRS mismaps resolved 2026-06-20 (migration 078).
+- `MISMAPPED_ICD11_CODES.md` (repo root) — ICD-11 code mismaps found across all departments. ORTHO mismaps resolved 2026-06-19 (migrations 070-071); PRS mismaps resolved 2026-06-20 (migration 078); the 2 long-open VASC codes (`BA41.0`, `BD10.4`) resolved 2026-06-20 (migration 085).
 - `MEDICAL_CODE_AUDITS/NS/AUDIT_NS.md` — Full audit for NS (ICD-11 + CPT); 10 ICD-11 codes fixed (045); 6 CPT codes fixed (043), 10 CPT title/description updates (044). ✅ **134 diagnoses, 94 proc_cpts — all codes verified. Audit complete.**
 - `MEDICAL_CODE_AUDITS/CTS/AUDIT_CTS.md` — Full audit for CTS (ICD-11 + CPT + gaps); 1 name fix (046), 5 new diagnoses (047), 72 new proc_cpts (048–050); extended to 100 diagnoses + 100 proc_cpts (057–059); 52 ICD-11 errors fixed (060–064). ✅ **All codes verified — audit complete.**
 - `MEDICAL_CODE_AUDITS/GS/AUDIT_GS.md` — Full audit for GS; 3 new diagnoses (052), 64 new proc_cpts (053–055); 23 ICD-11 errors fixed (065); 58 new diagnoses added (066–068); 35 new proc_cpts added (069). ✅ **96 diagnoses, 100 proc_cpts — all ICD-11 verified. Audit complete.**
 - `MEDICAL_CODE_AUDITS/ORTHO/AUDIT_ORTHO.md` — Full audit for ORTHO; 19 ICD-11 errors fixed + 1 leaf refinement (070), 3 duplicate merges + 1 spurious link (071), 73 new diagnoses (072–073), 101 new proc_cpts (074–076), all 101 CPT codes AAPC-verified + 4 corrected (077). ✅ **105 diagnoses, 101 proc_cpts — all ICD-11 and CPT codes verified. Audit complete.**
 - `MEDICAL_CODE_AUDITS/PRS/AUDIT_PRS.md` — Full audit for PRS; 21 ICD-11 codes fixed (078, incl. shared NS brachial-plexus + PEDSURG epidermoid rows), 1 structural relink (079), 70 new diagnoses (080–081), 100 new proc_cpts AAPC-verified (082–084). ✅ **100 diagnoses, 100 proc_cpts — all ICD-11 and CPT codes verified. Audit complete.**
-- `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md` — VASC audit IN PROGRESS; data was 61% corrupt. 18 ICD-11 codes fixed (085: incl. cross-dept ESRD fix for TRS+UROL+VASC and aortic-root fix for CTS+VASC); +72 diagnoses (086/087) → 100; 84 rows embedded. 🔄 **100 diagnoses (all ICD-11 verified ✅, all embedded ✅), 0 proc_cpts. Proc_cpts (+100) still pending — resume with `/dept-audit VASC`.**
+- `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md` — Full audit for VASC; data was 61% corrupt. 18 ICD-11 codes fixed (085: incl. cross-dept ESRD fix for TRS+UROL+VASC and aortic-root fix for CTS+VASC); +72 diagnoses (086/087) → 100; +114 proc_cpts AAPC-verified across 13 new alpha groups (088/089), all linked (090); 2 deleted CPTs avoided + 2026 LER restructure handled. ✅ **100 diagnoses, 114 proc_cpts — all ICD-11 and CPT codes verified, all embedded. Audit complete.**

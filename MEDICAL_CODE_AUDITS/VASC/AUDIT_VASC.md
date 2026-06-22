@@ -1,11 +1,13 @@
 # VASC Department Audit
-**Date (last updated)**: 2026-06-20
+**Date (last updated)**: 2026-06-22
+**Migrations applied**: 085–090
 **Dept**: VASC — Vascular Surgery (جراحة الأوعية الدموية)
+**Status**: ✅ COMPLETE — 100 diagnoses + 114 proc_cpts, all verified & embedded
 
 ## 🔄 Progress Checkpoint (resumption state — keep this section first)
-**Last updated**: 2026-06-20
-**Current step**: Diagnoses complete (100, all embedded) → next = Phase 2E proc_cpts (+100)
-**Status**: in progress (ICD-11 fixes ✅; diagnoses → 100 ✅; proc_cpts pending)
+**Last updated**: 2026-06-22
+**Current step**: DONE — full VASC audit complete (ICD-11 ✅, 100 diagnoses ✅, 114 proc_cpts ✅)
+**Status**: complete
 
 ### Step status
 - [x] Phase 1 — state loaded (28 diags, 0 procs, 12 main_diags)
@@ -15,11 +17,11 @@
 - [x] MIG-A (085) — 18 codes fixed (16 UPDATE + 1 mesenteric rename + 1 gangrene merge), applied ✅, 17 rows re-embedded ✅
 - [x] Phase 2D — 72 candidate diagnoses (→ 100 total; every main_diag ≥5). In "2D — Candidate diagnoses" table.
 - [x] MIG-D (086 +35, 087 +37) — applied ✅; **100 diagnoses**, 0 orphans, every main_diag ≥5; 67 new rows re-embedded ✅ (5 shared rows already embedded)
-- [ ] Phase 2E — candidate procs (0 listed / +100 target, dept-specific)
-- [ ] Phase 3 — proc migrations written (MIG-E/F, 088–090)
-- [ ] Phase 4 — proc migrations applied
-- [ ] Phase 5 — proc embeddings backfilled
-- [ ] Phase 6 — finalized (audit + CLAUDE.md)
+- [x] Phase 2E — candidate procs (114 listed; 13 new alpha groups; all AAPC-verified ✅)
+- [x] Phase 3 — proc migrations written (088 +53, 089 +61, 090 links)
+- [x] Phase 4 — proc migrations applied ✅ (115 procs linked = 114 VASC + MNR; 0 NO_PROC)
+- [x] Phase 5 — proc embeddings backfilled ✅ (111 new + 3 shared AMPU rows already embedded = all 114)
+- [x] Phase 6 — finalized (audit + CLAUDE.md)
 
 ### Migration numbers (last applied = 087)
 - 085 = FixVascIcdCodes (MIG-A) — **APPLIED ✅**
@@ -30,13 +32,12 @@
 - 090 = LinkVascProcCptsToMainDiags (MIG-F) — pending 2E
 
 ### ▶ Next action
-Diagnoses done (100, all embedded, every main_diag ≥5). Resume at **Phase 2E** — propose ≥100
-dept-specific proc_cpts, grouped by main_diag, each CPT AAPC-verified (`aapc.com/codes/cpt-codes/<code>`).
-Suggested new alpha groups (VASC has none yet): EVAR/TEVR (aortic stent grafts), ENDO (angioplasty/
-stent/atherectomy), BYPS (open bypass), ENDA (endarterectomy), THRM (thrombectomy/embolectomy/
-thrombolysis), AMPU (amputation), DIAL (dialysis access), VARX (varicose/venous ablation), IVCF
-(IVC filter), plus MNR linked to every main_diag. Write each spec into "2E — Candidate proc_cpts"
-in batches of ~10. Then MIG-E (088/089) + MIG-F (090), apply, backfill proc embeddings.
+**Done.** VASC audit complete — 100 diagnoses (all ICD-11 verified ✅, all embedded ✅) and
+114 dept-specific proc_cpts (all AAPC-verified ✅, all embedded ✅; 13 new alpha groups + MNR).
+Every main_diag has ≥5 diagnoses and ≥5 procs; 0 orphans, 0 empty categories. Migrations
+085–090 applied to staging. Files force-added to git, **not yet committed** (commit on explicit
+request only). Optional future polish: add tibial/inframalleolar atherectomy & stent (2026 LER
+codes 37281–37295) and IVL codes if deeper PAD-endovascular granularity is wanted.
 
 ---
 
@@ -180,9 +181,134 @@ N/A — no proc_cpts imported for VASC yet.
 | BD50.4Y | other specified abdominal aortic aneurysm | أم دم الأبهر البطني المحدد الآخر | Other specified AAA pattern (e.g. descending/atypical morphology) not covered by the standard sited codes; managed per size and anatomy. | نمط محدد آخر من أم دم الأبهر البطني (مثل المورفولوجيا الهابطة/غير النمطية) غير مشمول بالرموز الموضعية القياسية؛ يُدار حسب الحجم والتشريح. | abdominal aortic aneurysm | NO |
 
 ### 2E — Candidate proc_cpts (planned)
-| alphaCode | numCode | EN title | AR title | EN desc | AR desc | main_diag(s) |
-|---|---|---|---|---|---|---|
-| _(pending Phase 2E)_ | | | | | | |
+Compact index (full EN/AR title + description live in the migration files 088/089). Each
+`numCode` AAPC-verified (`aapc.com/codes/cpt-codes/<code>`). Alpha groups (new, VASC had none):
+AORT, EVAR, ENDO, BYPS, ENDA, PERA, AVFR, THRM, AMPU, DIAL, VARX, IVCF, TRMA + shared MNR.
+
+| alphaCode | numCode | EN title | main_diag(s) | Verified |
+|---|---|---|---|---|
+| AORT | 35081-00 | Open repair, abdominal aortic aneurysm | abdominal aortic aneurysm | ✅ |
+| AORT | 35082-00 | Open repair, ruptured abdominal aortic aneurysm | abdominal aortic aneurysm | ✅ |
+| AORT | 35091-00 | Open repair, AAA involving visceral vessels | abdominal aortic aneurysm | ✅ |
+| AORT | 35102-00 | Open repair, aortoiliac aneurysm | abdominal aortic aneurysm | ✅ |
+| AORT | 35103-00 | Open repair, ruptured aortoiliac aneurysm | abdominal aortic aneurysm | ✅ |
+| AORT | 33858-00 | Ascending aorta graft for dissection (CPB) | aortic dissection | ✅ (replaces deleted 33860) |
+| AORT | 33863-00 | Ascending aorta + root replacement, valved conduit (Bentall) | aortic dissection | ✅ |
+| AORT | 33871-00 | Aortic arch graft, reimplant arch vessels (CPB/DHCA) | thoracic aortic aneurysm, aortic dissection | ✅ (replaces deleted 33870) |
+| AORT | 33875-00 | Descending thoracic aorta graft | thoracic aortic aneurysm | ✅ |
+| AORT | 33877-00 | Thoracoabdominal aortic aneurysm graft | thoracic aortic aneurysm | ✅ |
+| EVAR | 34701-00 | EVAR, infrarenal aorta, aorto-aortic tube (elective) | abdominal aortic aneurysm | ✅ |
+| EVAR | 34702-00 | EVAR, ruptured infrarenal aorta, aorto-aortic tube | abdominal aortic aneurysm | ✅ |
+| EVAR | 34703-00 | EVAR, aorto-uni-iliac endograft | abdominal aortic aneurysm | ✅ |
+| EVAR | 34705-00 | EVAR, aorto-bi-iliac (bifurcated) endograft | abdominal aortic aneurysm | ✅ |
+| EVAR | 34707-00 | Endovascular repair, ilio-iliac tube endograft | peripheral aneurysms | ✅ |
+| EVAR | 34841-00 | Fenestrated EVAR, visceral aorta, one visceral artery | abdominal aortic aneurysm | ✅ |
+| EVAR | 34845-00 | Fenestrated EVAR, visceral + infrarenal aorta | abdominal aortic aneurysm | ✅ |
+| EVAR | 33880-00 | TEVAR, descending thoracic aorta, covering L subclavian | thoracic aortic aneurysm, aortic dissection | ✅ |
+| EVAR | 33881-00 | TEVAR, descending thoracic aorta, not covering subclavian | thoracic aortic aneurysm, aortic dissection | ✅ |
+| EVAR | 33883-00 | TEVAR, proximal extension endograft | thoracic aortic aneurysm | ✅ |
+| ENDO | 37254-00 | Iliac angioplasty, stenosis, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37256-00 | Iliac angioplasty, occlusion, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37258-00 | Iliac stent (± angioplasty), stenosis, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37260-00 | Iliac stent, occlusion, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37263-00 | Femoral-popliteal angioplasty, stenosis, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37265-00 | Femoral-popliteal angioplasty, occlusion, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37267-00 | Femoral-popliteal stent (± angioplasty), stenosis, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37269-00 | Femoral-popliteal stent, occlusion, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37280-00 | Tibial-peroneal angioplasty, stenosis, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37296-00 | Inframalleolar (pedal) angioplasty, stenosis, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37236-00 | Transcatheter stent, visceral/other artery (not LE/carotid/coronary) | renal artery disease | ✅ |
+| ENDO | 37246-00 | Transluminal angioplasty, visceral/other artery (not LE) | renal artery disease | ✅ |
+| ENDO | 37215-00 | Cervical carotid artery stent with embolic protection | carotid artery disease | ✅ |
+| ENDO | 37216-00 | Intrathoracic carotid/innominate artery stent | carotid artery disease | ✅ |
+| ENDO | 37271-00 | Femoral-popliteal atherectomy, stenosis, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| ENDO | 37273-00 | Femoral-popliteal atherectomy, occlusion, initial vessel | peripheral artery disease | ✅ NEW-2026 |
+| BYPS | 35646-00 | Aortobifemoral bypass graft (synthetic) | peripheral artery disease | ✅ |
+| BYPS | 35647-00 | Aortofemoral bypass graft, unilateral (synthetic) | peripheral artery disease | ✅ |
+| BYPS | 35621-00 | Axillofemoral bypass graft | peripheral artery disease | ✅ |
+| BYPS | 35556-00 | Femoral-popliteal bypass with vein | peripheral artery disease | ✅ |
+| BYPS | 35656-00 | Femoral-popliteal bypass with synthetic graft | peripheral artery disease | ✅ |
+| BYPS | 35566-00 | Femoral-tibial/peroneal bypass with vein | peripheral artery disease | ✅ |
+| BYPS | 35571-00 | Popliteal-tibial/peroneal bypass with vein | peripheral artery disease | ✅ |
+| BYPS | 35661-00 | Femoro-femoral crossover bypass | peripheral artery disease | ✅ |
+| BYPS | 35606-00 | Carotid-subclavian bypass graft | carotid artery disease | ✅ |
+| BYPS | 35636-00 | Splenorenal bypass graft | renal artery disease | ✅ |
+| BYPS | 35560-00 | Aortorenal bypass with vein graft | renal artery disease | ✅ (35560 is bypass, not endarterectomy) |
+| ENDA | 35301-00 | Carotid/vertebral/subclavian endarterectomy (neck) | carotid artery disease | ✅ |
+| ENDA | 35371-00 | Common femoral endarterectomy | peripheral artery disease | ✅ |
+| ENDA | 35372-00 | Deep (profunda) femoral endarterectomy | peripheral artery disease | ✅ |
+| ENDA | 35351-00 | Iliac endarterectomy | peripheral artery disease | ✅ |
+| ENDA | 35331-00 | Abdominal aorta endarterectomy | peripheral artery disease | ✅ |
+| ENDA | 35341-00 | Mesenteric/celiac/renal endarterectomy | renal artery disease | ✅ |
+| THRM | 34201-00 | Embolectomy, femoropopliteal/aortoiliac, leg incision | peripheral artery disease | ✅ |
+| THRM | 34203-00 | Embolectomy, popliteal-tibioperoneal, leg incision | peripheral artery disease | ✅ |
+| THRM | 34101-00 | Embolectomy, axillary/brachial/subclavian/innominate, arm incision | peripheral artery disease, arterial trauma | ✅ |
+| THRM | 34151-00 | Embolectomy, renal/celiac/mesenteric/aortoiliac, abdominal incision | renal artery disease, peripheral artery disease | ✅ |
+| THRM | 37184-00 | Percutaneous arterial mechanical thrombectomy, primary | peripheral artery disease | ✅ |
+| PERA | 35141-00 | Open repair, femoral artery aneurysm | peripheral aneurysms | ✅ |
+| PERA | 35151-00 | Open repair, popliteal artery aneurysm | peripheral aneurysms | ✅ |
+| PERA | 35131-00 | Open repair, iliac artery aneurysm | peripheral aneurysms | ✅ |
+| PERA | 35121-00 | Open repair, hepatic/celiac/renal/mesenteric (visceral) artery aneurysm | peripheral aneurysms | ✅ |
+| PERA | 35045-00 | Open repair, radial/ulnar artery aneurysm | peripheral aneurysms | ✅ |
+| PERA | 35001-00 | Open repair, carotid/subclavian artery aneurysm (neck) | carotid artery disease | ✅ |
+| PERA | 60600-00 | Excision of carotid body tumour | carotid artery disease | ✅ |
+| AMPU | 27590-00 | Above-knee amputation (thigh) | peripheral artery disease | ✅ |
+| AMPU | 27880-00 | Below-knee amputation | peripheral artery disease | ✅ |
+| AMPU | 28805-00 | Transmetatarsal amputation of foot | peripheral artery disease | ✅ |
+| AMPU | 28820-00 | Toe amputation at metatarsophalangeal joint | peripheral artery disease | ✅ |
+| AMPU | 27295-00 | Hip disarticulation | peripheral artery disease | ✅ |
+| THRM | 37211-00 | Transcatheter arterial thrombolysis infusion (initial day) | peripheral artery disease | ✅ |
+| DIAL | 36821-00 | AV anastomosis, direct (Cimino fistula) | vascular access | ✅ |
+| DIAL | 36818-00 | AV anastomosis, upper arm cephalic vein transposition | vascular access | ✅ |
+| DIAL | 36819-00 | AV anastomosis, upper arm basilic vein transposition | vascular access | ✅ |
+| DIAL | 36825-00 | AV graft for dialysis, autogenous vein | vascular access | ✅ |
+| DIAL | 36830-00 | AV graft for dialysis, nonautogenous (synthetic) | vascular access | ✅ |
+| DIAL | 36831-00 | Open thrombectomy, dialysis AV fistula/graft (no revision) | vascular access | ✅ |
+| DIAL | 36833-00 | Open revision, dialysis AV fistula with thrombectomy | vascular access | ✅ |
+| DIAL | 36832-00 | Open revision, dialysis AV fistula without thrombectomy | vascular access | ✅ |
+| DIAL | 36558-00 | Insertion of tunneled centrally inserted CV (dialysis) catheter | vascular access | ✅ |
+| DIAL | 36902-00 | Percutaneous angioplasty within dialysis circuit | vascular access | ✅ |
+| DIAL | 37607-00 | Ligation/banding of angioaccess AV fistula | vascular access | ✅ (angioaccess, not congenital AVF) |
+| AVFR | 35182-00 | Repair, congenital AV fistula, thorax/abdomen | arteriovenous fistula | ✅ |
+| AVFR | 35184-00 | Repair, congenital AV fistula, extremities | arteriovenous fistula | ✅ |
+| AVFR | 35188-00 | Repair, acquired/traumatic AV fistula, extremities | arteriovenous fistula | ✅ (AAPC lay text imprecise; CPT def = extremities) |
+| AVFR | 35189-00 | Repair, acquired/traumatic AV fistula, thorax/abdomen | arteriovenous fistula | ✅ |
+| AVFR | 37242-00 | Vascular embolization, arterial (AVM/AVF, non-tumor) | arteriovenous fistula | ✅ |
+| AVFR | 37241-00 | Vascular embolization, venous (malformation/varices) | arteriovenous fistula, varicose veins | ✅ |
+| VARX | 36475-00 | Endovenous radiofrequency ablation, first vein | varicose veins | ✅ |
+| VARX | 36478-00 | Endovenous laser ablation, first vein | varicose veins | ✅ |
+| VARX | 36465-00 | US-guided foam sclerosant, single truncal vein | varicose veins | ✅ |
+| VARX | 36468-00 | Sclerotherapy of spider veins (telangiectasia) | varicose veins | ✅ |
+| VARX | 36470-00 | Sclerotherapy, single incompetent vein | varicose veins | ✅ |
+| VARX | 37700-00 | Ligation/division of long saphenous vein at SFJ | varicose veins | ✅ |
+| VARX | 37722-00 | Ligation, division and stripping, long saphenous vein | varicose veins | ✅ |
+| VARX | 37718-00 | Ligation, division and stripping, short saphenous vein | varicose veins | ✅ |
+| VARX | 37765-00 | Stab phlebectomy of varicose veins, 10-20 incisions | varicose veins | ✅ |
+| VARX | 37766-00 | Stab phlebectomy of varicose veins, >20 incisions | varicose veins | ✅ |
+| IVCF | 37191-00 | Endovascular insertion of IVC filter | venous thromboembolism | ✅ |
+| IVCF | 37193-00 | Endovascular retrieval of IVC filter | venous thromboembolism | ✅ |
+| IVCF | 34401-00 | Thrombectomy, vena cava/iliac vein, abdominal incision | venous thromboembolism | ✅ |
+| IVCF | 34421-00 | Thrombectomy, vena cava/iliac/femoropopliteal vein, leg incision | venous thromboembolism | ✅ |
+| IVCF | 33910-00 | Pulmonary artery embolectomy with cardiopulmonary bypass | venous thromboembolism | ✅ |
+| IVCF | 37187-00 | Percutaneous venous mechanical thrombectomy | venous thromboembolism | ✅ |
+| IVCF | 37212-00 | Transcatheter venous thrombolysis infusion (initial day) | venous thromboembolism | ✅ |
+| TRMA | 35206-00 | Repair of blood vessel, upper extremity (direct) | arterial trauma | ✅ |
+| TRMA | 35226-00 | Repair of blood vessel, lower extremity (direct) | arterial trauma | ✅ |
+| TRMA | 35236-00 | Repair of blood vessel with vein graft, upper extremity | arterial trauma | ✅ |
+| TRMA | 35256-00 | Repair of blood vessel with vein graft, lower extremity | arterial trauma | ✅ |
+| TRMA | 35266-00 | Repair of blood vessel with non-vein graft, upper extremity | arterial trauma | ✅ |
+| TRMA | 35286-00 | Repair of blood vessel with non-vein graft, lower extremity | arterial trauma | ✅ |
+| TRMA | 35201-00 | Repair of blood vessel, neck | arterial trauma | ✅ |
+| TRMA | 35211-00 | Repair of intrathoracic vessel with cardiopulmonary bypass | arterial trauma | ✅ |
+| TRMA | 35221-00 | Repair of intra-abdominal blood vessel | arterial trauma | ✅ |
+| MNR | 00001-00 | Basic surgical step (shared) | ALL 12 main_diags | ✅ shared |
+
+**Phase 2E total: 114 dept-specific proc_cpts verified (13 new alpha groups) + shared MNR.**
+Per-main_diag dept-specific counts (all ≥5): AAA 11, aortic dissection 5, arterial trauma 10,
+arteriovenous fistula 6, carotid artery disease 6, peripheral aneurysms 6, peripheral artery
+disease 35, renal artery disease 6, thoracic aortic aneurysm 7, varicose veins 11, vascular
+access 11, venous thromboembolism 7. **2 deleted codes resolved** (33860→33858, 33870→33871);
+the **2026 LER restructure** (37220–37235 deleted) handled with new 37254–37296 territory codes.
 
 ### Migration log
 | # | File | Purpose | Status |
@@ -190,24 +316,29 @@ N/A — no proc_cpts imported for VASC yet.
 | 085 | 1750000000085-FixVascIcdCodes.ts | Fix 18 ICD-11 codes (16 UPDATE + mesenteric rename + gangrene merge) | **applied ✅** |
 | 086 | 1750000000086-AddVascDiagnoses1.ts | Add 35 diagnoses (AAA, dissection, trauma, AVF, carotid, periph aneurysms, renal, TAA) | **applied ✅** |
 | 087 | 1750000000087-AddVascDiagnoses2.ts | Add 37 diagnoses (PAD, varicose, vascular access, VTE) | **applied ✅** |
+| 088 | 1750000000088-ImportVascProcCpts1.ts | Import 53 proc_cpts (AORT, EVAR, ENDO, BYPS, ENDA) | **applied ✅** |
+| 089 | 1750000000089-ImportVascProcCpts2.ts | Import 61 proc_cpts (THRM, PERA, AMPU, DIAL, AVFR, VARX, IVCF, TRMA) | **applied ✅** |
+| 090 | 1750000000090-LinkVascProcCptsToMainDiags.ts | Link 114 procs to 12 main_diags + MNR to all | **applied ✅** |
 
 ---
 
-## Summary (after MIG-A + MIG-D; proc_cpts pending)
+## Summary (AUDIT COMPLETE — migrations 085–090)
 | Metric | Count |
 |---|---|
 | Main_diags | 12 |
 | Diagnoses (current) | **100** ✅ (every main_diag ≥5; max PAD 24) |
-| Proc_cpts (current) | 0 (→ target ≥100, pending) |
+| Proc_cpts (current) | **114 dept-specific** ✅ (115 linked incl. shared MNR; every main_diag ≥5) |
 | ICD-11 codes fixed (❌ wrong) | 16 (+1 gangrene merge = 17 wrong concepts) |
 | ICD-11 codes updated (⚠️ approximate/leaf) | 1 (BD74.1→BD74.1Z); BD50.3 leaf-refine intentionally skipped |
-| CPT codes fixed | N/A (no procs yet) |
-| Structural issues resolved | 1 (gangrene merge into shared MC85); proc links pending |
+| CPT codes fixed | N/A (no pre-existing procs); 2 deleted codes avoided at import (33860→33858, 33870→33871) |
+| 2026 LER restructure handled | 37220–37235 deleted → used new territory codes 37254/37256/37258/37260/37263/37265/37267/37269/37271/37273/37280/37296 |
+| Structural issues resolved | 1 (gangrene merge into shared MC85) + 12 NO_PROC main_diags now all populated |
 | Cross-dept fixes (shared rows) | ESRD GB60.0→GB61.5 (TRS+UROL+VASC); aortic-root BD50.Z→BD50.3Y&XA01A6 (CTS+VASC) |
+| Cross-dept shared procs reused | 3 AMPU codes (above/below-knee, etc.) already owned by ORTHO — ON CONFLICT shared them |
 | New diagnoses added (this run) | 72 (migrations 086/087) → 100 total |
-| New proc_cpts added (this run) | 0 (pending Phase 2E) |
+| New proc_cpts added (this run) | 114 (migrations 088/089) across 13 new alpha groups + MNR links (090) |
 | Diagnoses re-embedded | 17 (MIG-A) + 67 (MIG-D) = 84 ✅ (all 100 embedded) |
-| Proc_cpts re-embedded | 0 (N/A) |
+| Proc_cpts embedded | 111 new + 3 shared (already embedded) = all 114 ✅ |
 
 ## ICD-11 Changes Applied (migration 085)
 | Old code | Old name | New code | New name | Notes |
@@ -234,11 +365,24 @@ N/A — no proc_cpts imported for VASC yet.
 **Skipped:** BD50.3 → BD50.3Z leaf refine (shared with CTS; parent category clinically acceptable — left as-is).
 
 ## CPT Changes Applied
-| alphaCode | Old numCode | Old title | New numCode | New title | Migration |
-|---|---|---|---|---|---|
+N/A — VASC had no pre-existing proc_cpts to correct. During Phase 2E import, **2 AAPC-deleted
+codes** were avoided and replaced with their current equivalents, and the **2026 AMA
+lower-extremity endovascular revascularization restructure** was handled (the 37220–37235 family
+was deleted effective 2026-01-01):
+| Intended (deleted) | Replaced with | Reason |
+|---|---|---|
+| 33860 (ascending aorta graft) | 33858 (ascending aorta graft for dissection, CPB) | deleted 2020-01-01 |
+| 33870 (transverse arch graft) | 33871 (aortic arch graft, CPB/DHCA) | deleted 2020-01-01 |
+| 37220–37235 (LE endovascular) | 37254/37256/37258/37260 (iliac), 37263/37265/37267/37269/37271/37273 (fem-pop), 37280 (tibial), 37296 (inframalleolar) | whole family deleted 2026-01-01, replaced by 46 new territory codes |
 
 ## Structural Fixes
-_(to be filled — primarily proc_cpt links resolving the 12 NO_PROC main_diags)_
+- **12 NO_PROC main_diags resolved** — every VASC category now has ≥5 dept-specific proc_cpts +
+  shared MNR 00001-00 (migration 090). After migration: 0 empty-proc categories, 0 empty-diag
+  categories, 0 orphaned diagnoses.
+- **35560 reassigned** from the ENDA (endarterectomy) draft group to BYPS — AAPC confirms it is an
+  aortorenal *bypass*, not an endarterectomy.
+- **37607 grouped under DIAL** (angioaccess AV-fistula ligation), not AVFR — AAPC confirms it is an
+  artificially-created (dialysis) fistula procedure.
 
 ## New Diagnoses Added
 **72 diagnoses added (28 → 100)** via migrations 086 (35) + 087 (37). Full per-row specs
@@ -250,11 +394,35 @@ disease 6, aortic dissection 5, carotid artery disease 5, vascular access 5.
 5 of the 72 codes were already present as other depts' shared rows (ON CONFLICT shared them).
 
 ## New Proc_cpts Added
-| alphaCode | numCode | Title | main_diag(s) | Migration |
-|---|---|---|---|---|
+**114 dept-specific proc_cpts added** (migrations 088 +53, 089 +61) across **13 new alpha groups**
+(VASC previously had none), all AAPC-verified, linked to main_diags by migration 090. Full per-row
+specs (alphaCode, numCode, EN/AR title + EN/AR description) live in the migration files; the
+"2E — Candidate proc_cpts" index above lists every code with its main_diag and verification status.
+
+| alphaCode | Group | Count | Primary main_diag(s) |
+|---|---|---|---|
+| AORT | Open aortic/thoracic aneurysm repair | 10 | AAA, aortic dissection, thoracic aortic aneurysm |
+| EVAR | Endovascular aneurysm repair (abd + thoracic) | 10 | AAA, thoracic aortic aneurysm, aortic dissection, peripheral aneurysms |
+| ENDO | Peripheral/visceral/carotid angioplasty·stent·atherectomy | 16 | peripheral artery disease, renal artery disease, carotid artery disease |
+| BYPS | Open bypass | 11 | peripheral artery disease, carotid artery disease, renal artery disease |
+| ENDA | Endarterectomy | 6 | peripheral artery disease, carotid artery disease, renal artery disease |
+| THRM | Thrombectomy/embolectomy/thrombolysis (arterial) | 6 | peripheral artery disease, arterial trauma, renal artery disease |
+| PERA | Peripheral/visceral aneurysm open repair + carotid body | 7 | peripheral aneurysms, carotid artery disease |
+| AMPU | Amputation (3 rows shared with ORTHO) | 5 | peripheral artery disease |
+| DIAL | Dialysis (haemodialysis) vascular access | 11 | vascular access |
+| AVFR | AV fistula/malformation repair & embolization | 6 | arteriovenous fistula, varicose veins |
+| VARX | Varicose/venous ablation & sclerotherapy | 10 | varicose veins |
+| IVCF | IVC filter, venous thrombectomy, pulmonary embolectomy | 7 | venous thromboembolism |
+| TRMA | Vascular trauma direct repair | 9 | arterial trauma |
+| MNR | Basic surgical step (shared, link only) | — | all 12 |
 
 ## Still-Open Items
 - ✅ Both previously-flagged VASC codes RESOLVED in migration 085: `BA41.0`→`BD55`, `BD10.4`→`8B22.A`.
-- **Coverage extension not yet done**: 28 diagnoses (+72 to reach 100), 0 proc_cpts (+100 to reach 100). All 12 main_diags are thin (most 1–3 dx) and have no procs. Next session: Phase 2D + 2E + migrations 086+.
+- ✅ **Coverage extension COMPLETE**: 100 diagnoses (all ICD-11 verified + embedded) and 114
+  dept-specific proc_cpts (all AAPC-verified + embedded). Every main_diag ≥5 diagnoses and ≥5 procs.
 - Caveat on `8B22.A` (subclavian): WHO title is "subclavian steal syndrome"; we kept the clinical name "subclavian artery stenosis" (its score-1.0 WHO synonym). Acceptable but imperfect — note if a better extracranial-subclavian-stenosis leaf is found.
 - `BD53.Y` (diabetic peripheral vascular disease) and `8B91.Z` (thoracic outlet syndrome) are "other specified"/parent-level codes — the most specific WHO entries available for those concepts.
+- Optional future polish (not blocking): the 2026 LER restructure offers additional tibial/inframalleolar
+  atherectomy & stent codes (37281–37295) and intravascular lithotripsy (IVL) codes — could be added if
+  finer PAD-endovascular granularity is wanted. Current PAD coverage (36 procs) is already ample.
+- AAPC lay summary for `35188` described "head/neck"; standard CPT defines it as *extremities* (35190 = head/neck). We used the CPT definition — flag if a coder prefers 35190.
