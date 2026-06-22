@@ -26,8 +26,20 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Per-department migration pattern: `INSERT diagnoses (EN + Arabic name + EN/AR description) … ON CONFLICT("icdCode") DO NOTHING` → link `department_diagnoses` (by `dept.code`) → link `main_diag_diagnoses` (by `md.title`). Share existing correct-coded diagnoses across departments rather than duplicating. Always include a clean `down()`.
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
-## 📍 Where we stopped (2026-06-22)
-All on **staging**. Migrations `1750000000001`–`1750000000090` applied. Migrations 088–090 were added this session and **force-added to git but not yet committed** (commit only on explicit request).
+## 📍 Where we stopped (2026-06-23)
+All on **staging**. Migrations `1750000000001`–`1750000000097` applied. Migrations 091–097 (PEDSURG) were added this session and **force-added to git but not yet committed** (commit only on explicit request). VASC migrations 085–090 are committed.
+
+### ✅ PEDSURG full dept-audit — COMPLETE (migrations 091–097)
+Save-game at `MEDICAL_CODE_AUDITS/PEDSURG/AUDIT_PEDSURG.md`. PEDSURG data was **~75% corrupt** (18/24 ICD codes wrong — worst yet; surgical conditions scattered into developmental `LA9x`/`LB1x` chapters, tumours in disease chapters, a duodenal-atresia↔pyloric↔Meckel↔annular-pancreas code tangle).
+- **091** Added 2 new main_diags (soft tissue & skin lesions; thoracic & lung anomalies) → 15 categories.
+- **092** MIG-A: 11 free UPDATEs + **6 collision-aware MERGEs** into shared rows (fournier→PRS `1B71.1`; intussusception→GS `DA91.0`; inguinal→GS `DD51`; umbilical→GS `DD53`; Meckel→GS `LB15.0`; deleted PEDSURG's duplicate `LB13.0`). Resolved duodenal/pyloric cascade, relinked both orphans to soft tissue.
+- **093+094** +77 diagnoses → **100 total**; 78 embeddings backfilled. Every main_diag ≥5 except intussusception=3 (documented: only 3 distinct ICD-11 intussusception entities exist).
+- **095+096** Imported **101** dept-specific proc_cpts across **13 new alpha groups** (AWAL, APDX, DIAF, ESOP, GUSX, ANOR, HERN, BOWL, NEON, FORG, ONCO, SOFT, THOR). All AAPC-verified. **2023 hernia recode** handled (49570/49572/49580/49585→49591/49592/49593/49613) and **2025 retroperitoneal-tumour deletion** (49203/49204→60540 adrenalectomy + 49186); 46700 adult→46705 infant. 7 THOR codes shared with CTS's existing THOR group (ON CONFLICT reused them).
+- **097** Linked all 101 procs to the 15 main_diags + MNR to every category. 94 new proc embeddings backfilled (+7 shared already embedded = all 101).
+
+**State after 097: PEDSURG at 100 diagnoses (all ICD-11 verified ✅, all embedded ✅), 101 dept-specific proc_cpts (all AAPC-verified ✅, all embedded ✅), 15 main_diags; 0 orphans, 0 empty categories. Every main_diag ≥5 diagnoses & ≥5 procs except intussusception (3 dx, documented narrow). Audit complete.**
+
+> ⚠️ **CPT currency notes (reusable)**: (1) the umbilical/epigastric/ventral hernia codes 49560–49590 were DELETED 2023-01-01 → use the anterior-abdominal-hernia family 49591–49622 (by size + reducible/incarcerated + initial/recurrent). (2) intra-abdominal/retroperitoneal tumour excision codes 49203–49205 were DELETED 2025-01-01 → use 49186–49190 (by size) or organ-specific resections (eg adrenalectomy 60540).
 
 ### 🔧 dept-audit skill is now resumable (this session)
 The `dept-audit` skill now checkpoints continuously so a token-limit interrupt loses no research. New `.claude/skills/dept-audit/resume-check.js` + a **Phase 0** that runs it on every `/dept-audit <DEPT>` and echoes the audit file's `🔄 Progress Checkpoint` block. The audit file is created at **end of Phase 1** (not Phase 6) and updated after every sub-step (2B/2D write in batches of ~10). To resume any interrupted audit: just run `/dept-audit <DEPT>` — Phase 0 shows where to continue.
@@ -78,7 +90,7 @@ Save-game at `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md`.
 1. **GS diagnoses**: 96 total; +4 to reach 100 (minor gaps: Spigelian hernia, chronic appendicitis, diverticular fistula — low priority)
 2. **2 VASC ICD-11 codes still open**: `BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis (flagged in `MISMAPPED_ICD11_CODES.md`).
 3. **Amblyopia**: correct ICD-11 code for OPHTHAL strabismus category not yet confirmed (somewhere 9C80–9C8Z).
-4. **Proc_cpts for remaining departments** (HBP, MFS, OBGYN, OPHTHAL, ENT, PEDSURG, SOC, TRS, UROL) not yet imported. (CTS, NS, GS, ORTHO, PRS, VASC done.)
+4. **Proc_cpts for remaining departments** (HBP, MFS, OBGYN, OPHTHAL, ENT, SOC, TRS, UROL) not yet imported. (CTS, NS, GS, ORTHO, PRS, VASC, PEDSURG done.)
 5. **NS re-review** (flagged in `MISMAPPED_ICD11_CODES.md`): NS uses `2F7C` for "hemangioblastoma" and `2F7Z` for "epidermoid and dermoid tumors" — both are *uncertain-behaviour neoplasm* codes, likely mismapped.
 
 ## 🔴 Handoff note: migrations are now in git (force-added)
@@ -92,3 +104,4 @@ Save-game at `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md`.
 - `MEDICAL_CODE_AUDITS/ORTHO/AUDIT_ORTHO.md` — Full audit for ORTHO; 19 ICD-11 errors fixed + 1 leaf refinement (070), 3 duplicate merges + 1 spurious link (071), 73 new diagnoses (072–073), 101 new proc_cpts (074–076), all 101 CPT codes AAPC-verified + 4 corrected (077). ✅ **105 diagnoses, 101 proc_cpts — all ICD-11 and CPT codes verified. Audit complete.**
 - `MEDICAL_CODE_AUDITS/PRS/AUDIT_PRS.md` — Full audit for PRS; 21 ICD-11 codes fixed (078, incl. shared NS brachial-plexus + PEDSURG epidermoid rows), 1 structural relink (079), 70 new diagnoses (080–081), 100 new proc_cpts AAPC-verified (082–084). ✅ **100 diagnoses, 100 proc_cpts — all ICD-11 and CPT codes verified. Audit complete.**
 - `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md` — Full audit for VASC; data was 61% corrupt. 18 ICD-11 codes fixed (085: incl. cross-dept ESRD fix for TRS+UROL+VASC and aortic-root fix for CTS+VASC); +72 diagnoses (086/087) → 100; +114 proc_cpts AAPC-verified across 13 new alpha groups (088/089), all linked (090); 2 deleted CPTs avoided + 2026 LER restructure handled. ✅ **100 diagnoses, 114 proc_cpts — all ICD-11 and CPT codes verified, all embedded. Audit complete.**
+- `MEDICAL_CODE_AUDITS/PEDSURG/AUDIT_PEDSURG.md` — Full audit for PEDSURG; data was ~75% corrupt (worst yet, 18/24 ICD codes wrong). 2 new main_diags (091); 18 ICD fixes incl. 6 collision-aware MERGEs into GS/PRS shared rows + duodenal/pyloric/Meckel cascade (092); +77 diagnoses (093/094) → 100; +101 proc_cpts AAPC-verified across 13 new alpha groups (095/096), all linked (097); 2023 hernia recode + 2025 retro-tumour deletion handled; 7 THOR procs shared with CTS. ✅ **100 diagnoses, 101 proc_cpts — all verified, all embedded. Audit complete (intussusception=3 dx documented narrow).**

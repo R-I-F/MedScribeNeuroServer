@@ -94,6 +94,14 @@ Merged duplicates: DC94.0→DC31.Z, DC94.1→DC32 (deleted, links repointed).
 **Still left as-is (no distinct ICD-11 stenosis leaf — need site extension codes):**
 ~~`BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis.~~ → ✅ RESOLVED 2026-06-20 (migration 085): `BA41.0`→`BD55` (asymptomatic stenosis of intra/extracranial artery, WHO syn. "stenosis of carotid artery NOS"); `BD10.4`→`8B22.A` (subclavian steal syndrome, WHO syn. "subclavian artery stenosis").
 
+### RESOLVED 2026-06-23 — PEDSURG full ICD-11 audit (migration `1750000000092`)
+PEDSURG reference data was the most corrupted yet (18/24 codes wrong, ~75%): surgical conditions scattered into developmental `LA9x`/`LB1x` chapters, tumours in disease chapters, and a duodenal-atresia↔pyloric-stenosis↔Meckel↔annular-pancreas code tangle. 18 fixed in migration 092 (see `MEDICAL_CODE_AUDITS/PEDSURG/AUDIT_PEDSURG.md` for the full table). Highlights:
+- Chapter fixes: appendicitis `LA50.0`→`DB10.0`, CDH `KB20.0`→`LB00.0`, intussusception `LA95.0`→`DA91.0`, inguinal hernia `LA91.0`→`DD51`, umbilical hernia `LA92.0`→`DD53`, NEC `LB22.00`→`KB88.Z`, exomphalos `LB19.0`→`LB01`.
+- Tumours out of disease chapters: Wilms `GB82.0`→`2C90.Y`, neuroblastoma (raw morphology) `XH4MH9`→`2D11.2`.
+- Duodenal/pyloric tangle: pyloric `LB11.0`→`LB13.0`; Hirschsprung `LB14.0`→`LB16.1`; Meckel `LB21.0`→GS-owned `LB15.0`; deleted the duplicate "duodenal atresia"-as-`LB13.0` row and kept the concept on `LB14`.
+- Cross-dept MERGEs into existing shared rows: fournier→PRS `1B71.1`; intussusception/inguinal/umbilical/Meckel → GS `DA91.0`/`DD51`/`DD53`/`LB15.0`.
+**None still open for PEDSURG** — all 24 codes verified via `icd11_search`; all 100 final diagnoses verified.
+
 ### RESOLVED 2026-06-20 — VASC full ICD-11 audit (migration `1750000000085`)
 VASC reference data was heavily corrupted (17/28 codes wrong — fabricated sequential `BA80.x`/`BD53.x` blocks + cross-concept mis-assignments). 18 codes fixed in migration 085 (see `MEDICAL_CODE_AUDITS/VASC/AUDIT_VASC.md` for the full table). Highlights:
 - The 2 long-open codes: `BA41.0`→`BD55`, `BD10.4`→`8B22.A`.
