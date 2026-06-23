@@ -171,3 +171,17 @@ HBP deliberately avoided these by using `2C10.Z` (exocrine carcinoma) and postco
 
 **None still open for HBP** — all 100 final diagnoses verified via `icd11_search`; all 75 HBP-specific CPTs AAPC-verified (the deleted code 47802 was identified and excluded).
 
+### RESOLVED 2026-06-23 — SOC full ICD-11 audit (migration `1750000000104`)
+Full ICD-11 audit of all 26 original SOC (Surgical Oncology) diagnoses (see `MEDICAL_CODE_AUDITS/SOC/AUDIT_SOC.md`). SOC reference data was ~62% corrupt (13/26 wrong + 3 approximate) — the seed mapped concepts onto the **wrong chapter blocks**: `2B60`=lip, `2B91`=rectosigmoid, `2B5C`≠stomach, `2C90`=kidney, `2C73`=ovary, `2C77`=**cervix uteri**(!), `2C80`/`2C8x`=male genital, `2C6Y`=breast, `2D42`=ill-defined sites. 16 codes changed in migration 104 (10 in-place recodes + 6 collision-aware MERGEs into GS/PRS/HBP shared rows). Highlights:
+- Wrong block: colon `2B91.1`→`2B90.Z`, rectum `2B91.2`→`2B92.Z`, anal `2C20.2`→`2C00.Z`, small-intestine NET `2F73.0`→`2B80.21`, adrenocortical ca `2C73.1`→`2D11.Z`, retroperitoneal sarcoma `2C6Y.0`→`2B5F.1Z`, soft-tissue sarcoma `2C80.0`→`2B5F.2`, desmoid `2C80.1`→`2F9C`, classical HL `2B30.1`→`2B30.1Z`.
+- **Cross-dept fix:** urothelial bladder `2C90.0`(=renal cell carcinoma code)→`2C94.2` — the row is shared **SOC+UROL**, so this corrects UROL's bladder-cancer row too.
+- Cross-dept MERGEs into existing shared rows: stomach `2B5C.0`→GS `2B72.Z`; oesophagus `2B60.0`→GS `2B70.Z`; melanoma `2C77.0`→PRS `2C30.Z`; peritoneal carcinomatosis `2C90.3`→HBP `2D91`; BCC `2C32`→PRS `2C32.Z`; SCC of skin `2D42.0`→PRS `2C31.Z`.
+
+**Newly discovered cross-dept mismaps (NOT fixed — out of SOC scope, flag for the owning depts' audits):**
+- **MFS oral/H&N cancers on pancreatic/biliary codes** (extends the HBP-audit finding): `2C10.0`(=Adenocarcinoma of pancreas) labelled "squamous cell carcinoma of oral cavity" (shared **MFS+GS**); `2C10.1`(=Pancreatic NET) labelled "carcinoma of lip" (**MFS**); `2C13.0`(=Adenocarcinoma of gallbladder) labelled "carcinoma of salivary gland" (shared **HBP+MFS**). SOC avoided all three by using `2C10.Y`/`2C13.Z` and free codes.
+- **GS:** `2B90.Y`(=Adenocarcinoma of colon) labelled "Lynch syndrome". SOC used `2B91.Z` (rectosigmoid) instead.
+- **OBGYN:** `2C76.0`(=Endometrial endometrioid adenocarcinoma) labelled "carcinoma of uterine cervix". SOC used `2C76.3` (endometrial serous) and the correct cervix code `2C77.0`.
+- **NS `2F7C`** (still open from PRS audit): occupied by NS's mislabelled "hemangioblastoma", so SOC desmoid used `2F9C` rather than the ideal `2F7C`.
+
+**None still open for SOC** — all 100 final diagnoses verified via `icd11_search`; all 101 SOC oncology CPTs AAPC-verified current (none deleted).
+
