@@ -154,3 +154,20 @@ Full ICD-11 audit of all 30 original PRS diagnoses (see `MEDICAL_CODE_AUDITS/PRS
 
 **None still open for PRS** — all 100 ICD-11 codes verified via `icd11_search`.
 
+### RESOLVED 2026-06-23 — HBP full ICD-11 audit (migration `1750000000098`)
+Full ICD-11 audit of all 27 original HBP diagnoses (see `MEDICAL_CODE_AUDITS/HBP/AUDIT_HBP.md`). HBP reference data was ~52% corrupt (14/27 codes wrong) — the seed used **fabricated sequential codes in the DA9x/DB0x/DC0x/DC1x ranges** and put portal hypertension in the metabolic chapter. 14 codes fixed in migration 098 (8 in-place recodes + 6 collision-aware MERGEs into existing GS rows + 1 parent→leaf merge), 1 orphan removed. Highlights:
+- Fabricated/wrong liver codes: hepatic haemangioma `DA95.0`→`2E81.0Y`, FNH `DA96.0`→`DB99.Y`, HCC `DA92.0`→`2C12.02`, intrahepatic cholangiocarcinoma `DA9B.0`→`2C12.10`, liver metastases `DA93.Z`→`2D80.0`.
+- Wrong chapter: portal hypertension `5C81.0` (metabolic) → `DB98.7Z`; biliary stricture `DC15.0`→`DC10.02`; exocrine pancreatic carcinoma `DB00.0`→`2C10.Z`; IPMN `DB01.1`→`2E92.8`.
+- Cross-dept MERGEs into existing shared rows: hydatid `DA97.0`→GS `1F73.0`; pseudocyst `DB01.0`→GS `DC30.1`; liver abscess `DC00.0`→GS `DB90.0`; acute cholangitis `DC13.0`→GS `DC13`; choledocholithiasis `DC14.1`→GS `DC11.6`; oesophageal varices `DA26.0`→GS `DA26.0Z`.
+- **HCC `DA92.0`→`2C12.02` is a cross-dept merge** correcting the shared row for **HBP + SOC** (both link "hepatocellular carcinoma").
+- Orphan removed: `DA20.3` "rupture or perforation of oesophagus" — out of HBP scope (foregut/thoracic emergency, originally seeded as `DC31.0`).
+
+**Newly discovered MFS oral-cancer mismap (NOT fixed — out of HBP scope, flag for an MFS audit):**
+The seed used three pancreas/liver oncology codes as MFS "oral cancer" rows (migrations 002/004/005/007):
+- `2C10.0` is named/used for oral SCC but `2C10.0` = **Adenocarcinoma of pancreas** (GS later reused this same row for "pancreatic adenocarcinoma" → the row is now ambiguous MFS+GS).
+- `2C10.1` is used for oral cancer but `2C10.1` = **Neuroendocrine neoplasms of pancreas**.
+- `2C12.0` is used for oral cancer but `2C12.0x` = **Malignant neoplasms of liver** (HCC/cholangio family).
+HBP deliberately avoided these by using `2C10.Z` (exocrine carcinoma) and postcoordinated histology codes (`2C10.0&XH3PG9` acinar, `2C10.1&XH8DS0`/`&XH0U20` NET/NEC, `2C10.0&XH7CY5` mixed) for its pancreatic neoplasms.
+
+**None still open for HBP** — all 100 final diagnoses verified via `icd11_search`; all 75 HBP-specific CPTs AAPC-verified (the deleted code 47802 was identified and excluded).
+
