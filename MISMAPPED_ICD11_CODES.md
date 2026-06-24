@@ -185,3 +185,16 @@ Full ICD-11 audit of all 26 original SOC (Surgical Oncology) diagnoses (see `MED
 
 **None still open for SOC** — all 100 final diagnoses verified via `icd11_search`; all 101 SOC oncology CPTs AAPC-verified current (none deleted).
 
+### RESOLVED 2026-06-24 — MFS full ICD-11 audit (migration `1750000000111`)
+Full ICD-11 audit of all 21 original MFS (Maxillofacial Surgery) diagnoses (see `MEDICAL_CODE_AUDITS/MFS/AUDIT_MFS.md`). MFS was the **most corrupt department yet (~86%, 18/21 wrong)**: facial fractures were mis-chaptered into the `DA0x` dental-disease chapter (belong in `NA02.x` injury), `DA4x` cyst/tumour codes were fabricated, cleft was mis-coded, TMJ/Ludwig/condylar mis-coded, and the four oncology codes were the long-flagged **MFS oral-cancer mismap**. 18 codes fixed in migration 111. Highlights:
+- Fracture chapter fixes: nasal `DA0G.0`→`NA02.3`, zygomatic `DA0F.1`→`NA02.5`, orbital floor `DA0F.2`→`NA02.21`, maxilla(Le Fort) `DA0E.0`→`NA02.4Z`, mandible `DA0F.0`→`NA02.7Z`.
+- Cyst/tumour: ameloblastoma `DA4A.0`→`2E83.1`, periapical `DA4C.0`→`DA09.8`, pleomorphic adenoma `DA50.0`→`2E91.0`.
+- Concept fixes: Ludwig `DA12.0`→`DA01.30`, condylar hyperplasia `LA2A.0`→`DA0E.0Y&XA51B7`, TMJ `DA0K.0`→`DA0E.8`.
+- Cleft MERGEs into PRS shared rows: `DA03.0`→`LA40.Z`, `DA03.1`→`LA42.Z`; dentigerous `DA4B.0` merged into `DA05.0`.
+
+**The MFS oral-cancer mismap (open since the HBP audit, expanded by the SOC audit) is now RESOLVED:**
+- `2C10.1` "carcinoma of lip" → `2B60.Z` (MFS-only recode); `2C12.0` "carcinoma of tongue" → `2B62.Z` (MFS-only recode).
+- **`2C10.0` (shared GS) and `2C13.0` (shared HBP)** were *renamed in place* to their **correct meaning** — `2C10.0`→"adenocarcinoma of pancreas" (**fixes GS**), `2C13.0`→"adenocarcinoma of the gallbladder" (**fixes HBP**) — and MFS was unlinked and relinked to the proper oral/salivary cancer codes (SOC `2B66.0` SCC of mouth, `2B68.Z` salivary malignancy). This is a cross-dept MERGE benefiting GS + HBP, analogous to the VASC ESRD and HBP HCC fixes.
+
+**None still open for MFS** — all 100 final diagnoses verified via `icd11_search`; all 104 oral/maxillofacial CPTs AAPC-verified current (the deleted code 21310 was identified and excluded). With this, the MFS/GS/OBGYN mismaps flagged during the SOC audit: MFS oral-cancer ✅ resolved; **GS `2B90.Y`="Lynch syndrome" and OBGYN `2C76.0`="cervix" remain open** for those depts' audits.
+
