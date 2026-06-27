@@ -77,7 +77,10 @@ LB70.0→2E80.0, FA82.0→NC12.0.
 
 **Still open:**
 - ~~`BD10.4` subclavian artery stenosis, `BA41.0` carotid artery stenosis~~ — ✅ RESOLVED in migration `1750000000085` (VASC dept-audit, 2026-06-20). See section below.
-- Amblyopia: 9A70.0 was renamed (9A70.0 = Fuchs dystrophy). Amblyopia needs its own correct ICD-11 code added to the OPHTHAL strabismus category; code not confirmed in this session.
+- ~~Amblyopia: needs its own correct ICD-11 code added to the OPHTHAL strabismus category; code not confirmed.~~ — ✅ RESOLVED 2026-06-27 (OPHTHAL dept-audit, migration `1750000000141`): amblyopia = **`9D46`** (Impairment of binocular functions), added to the strabismus category.
+
+### RESOLVED 2026-06-27 — OPHTHAL full dept-audit (migrations `1750000000139`–`1750000000144`)
+OPHTHAL reference data was **~64% corrupt** (15/28 ICD codes wrong + 3 parent→leaf). The seed used a fabricated `9A00/9A20/9A30/9A40/9A50/9A81/9B11/9B20/9B40/9B41` scheme not matching WHO ICD-11. Migration 139 fixed all 18 (14 in-place recodes + 3 parent→leaf + 1 cross-dept MERGE: diabetic retinopathy `9A50.0`→existing TRS `9B71.0Z`). Key recodes: glaucoma→`9C61`, conjunctiva→`9A60/9A61`, corneal ulcer→`9A76`, retinal vascular→`9B74`, retinal detachment→`9B73`, vitreous→`9B83`, thyroid orbitopathy→`9C82.3`, retinoblastoma→`2D02.2`. No new cross-dept mismaps found. ✅ **100 diagnoses, 105 proc_cpts — all verified, all embedded. Audit complete.**
 
 ### RESOLVED 2026-06-15 — thin-strengthening pass (migrations `1750000000029`, `1750000000034`)
 Two mismaps found incidentally during thin-strengthening:
@@ -217,4 +220,12 @@ Full ICD-11 audit of all 23 original OBGYN (Obstetrics & Gynaecology) diagnoses 
 - Three freed codes were re-used to their correct WHO meaning as new diagnoses: `GA15.0`→polyp of cervix, `JB40.0`→puerperal sepsis, `JB00.0`→preterm labour.
 
 **None still open for OBGYN** — all 23 original codes verified via `icd11_search`; all 100 OBGYN CPTs AAPC-verified current (the deleted code 58823 pelvic-abscess-drainage was identified and replaced with 58820). With the OBGYN cervix mismap resolved, the **only remaining open cross-dept mismap is GS `2B90.Y`="Lynch syndrome"** (a colon-adenocarcinoma code), for a future GS pass.
+
+### RESOLVED 2026-06-27 — ENT full ICD-11 audit (migration `1750000000132`)
+Full ICD-11 audit of all 29 original ENT (Otolaryngology) diagnoses (see `MEDICAL_CODE_AUDITS/ENT/AUDIT_ENT.md`). ENT was the **least-corrupted department audited (~14%, 4/29 wrong + 4 approximate)** — most of its original seed mismaps had already been corrected by migrations 026/035, so only residual errors remained. 8 code fixes in migration 132. Highlights:
+- **2 cross-dept MERGEs** (removed redundant ENT-only rows): parotid gland calculus `DA50.2` → `DA04.4` (Sialolithiasis, MFS-owned); branchial cyst `DA50.3` → `DA05.Y` (Branchial cleft cyst, PEDSURG-owned). Both `DA50.x` were arbitrary salivary codes; the conditions already existed under correct codes.
+- Chapter/leaf fixes: deviated septum `CA01.0` (= acute sinusitis child) → `CA0D`; **obstructive sleep apnoea `CA62.0` → `7A41`** (OSA was relocated to chapter 7 sleep-wake disorders in ICD-11, out of the respiratory chapter); sudden SNHL `AB51.1` (= acquired SNHL) → `AB55` (sudden idiopathic); parent→leaf `CA0J`→`CA0J.Z`, `AB13`→`AB13.Z`, `CA03`→`CA03.Z`.
+- Name/encoding repairs (code already correct): `AB31.0` EN "MeniÃ¨re disease" mojibake → "Meniere disease"; `AB12` Arabic cholesteatoma term; `CA0H.1` Arabic (was "papilloma", fixed to "polyp").
+
+**None still open for ENT** — no new cross-dept mismaps were discovered (the earlier 026/035 ENT fixes held). All 102 ENT diagnoses verified via `icd11_search`; all 105 ENT CPTs AAPC-verified current (none deleted). The **only remaining open cross-dept mismap project-wide is GS `2B90.Y`="Lynch syndrome"** (plus the `CA22.Z`="lung abscess"/COPD mislabel flagged during the TRS audit, for a respiratory/CTS pass).
 
