@@ -27,7 +27,7 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
 ## 📍 Where we stopped (2026-06-27)
-All on **staging**. Migrations `1750000000001`–`1750000000151` applied. **MFS 111–116 committed** (`30829e6`); SOC 104–110 (`20f2f8a`); **TRS 117–123 + OBGYN 124–131 committed** (`3bcdcd5`); **ENT 132–138 committed** (`c4e0b37`); **OPHTHAL 139–144 committed**. **UROL migrations 145–151 were added this session and force-added to git but NOT yet committed** (commit only on explicit request). All migration files force-added to git.
+All on **staging**. Migrations `1750000000001`–`1750000000151` applied. **MFS 111–116 committed** (`30829e6`); SOC 104–110 (`20f2f8a`); **TRS 117–123 + OBGYN 124–131 committed** (`3bcdcd5`); **ENT 132–138 committed** (`c4e0b37`); **OPHTHAL 139–144 committed**; **UROL 145–151 committed** (`73674d0`, pushed to `migration/mysql-to-postgres`). All migration files force-added to git.
 
 ### ✅ UROL full dept-audit — COMPLETE (migrations 145–151)
 Save-game at `MEDICAL_CODE_AUDITS/UROL/AUDIT_UROL.md`. UROL (Urology) reference data was **~74% corrupt (16/23 ICD codes wrong + 1 invalid leaf)** and started with **0 proc_cpts** and only 23 diagnoses. The seed mis-chaptered urological conditions onto **female-genital GA** codes (GA00=vulvitis, GA20, GA40), **cystitis GC00.x** (used for renal/bladder/ureter stones), and **nephritis GB4x/GB5x** blocks (GB40=nephritic, GB42, GB50=acute TIN, GB51=acute pyelonephritis), plus oncology mis-codes (RCC on ovary code 2C73; seminoma on vulva-melanoma code 2C70.1).
