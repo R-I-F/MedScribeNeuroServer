@@ -237,3 +237,10 @@ Full ICD-11 audit of all 23 original UROL (Urology) diagnoses (see `MEDICAL_CODE
 
 **None still open for UROL** — no NEW cross-dept mismaps discovered (all 7 MERGE targets were correctly-labelled shared rows; prior UROL-touching items — bladder `2C90.0` via SOC, ESRD `GB61.5` and PKD `GB81` via TRS/VASC — were already resolved). All 100 UROL diagnoses verified via `icd11_search`; all 103 UROL CPTs AAPC-verified current. **CPT deletion caught**: `55700` (prostate needle biopsy) was deleted by AMA 2026-01-01 → excluded (used `55706`). The **only remaining open cross-dept mismap project-wide is GS `2B90.Y`="Lynch syndrome"** (plus `CA22.Z`="lung abscess"/COPD for a respiratory/CTS pass, and the NS `2F7C`/`2F7Z` re-review).
 
+### RESOLVED 2026-06-28 — last two cross-dept mislabels (migration `1750000000156`)
+The two long-open mismaps flagged across the SOC/TRS audits are now fixed (both targets verified against WHO ICD-11 MMS via findacode; both confirmed collision-free → clean in-place recodes; department/main_diag links preserved by row id; names unchanged so embeddings stayed valid):
+- **GS `2B90.Y`="Lynch syndrome"** → **`QC61.0`** "Family history of malignant neoplasm of digestive organs". `2B90.Y` actually = *Other specified malignant neoplasms of colon* (a colon-adenocarcinoma code; colon adeno already covered by `2B90` [GS] + `2B90.Z` [SOC]). ICD-11 has **no dedicated Lynch-syndrome leaf**; the family-history block is the closest verifiable home for this hereditary digestive-cancer predisposition (≈ ICD-10 Z15.0/Z80.0). Clinical name "Lynch syndrome" kept.
+- **CTS `CA22.Z`="lung abscess - unspecified"** → **`CA43.2`** "Abscess of lung without pneumonia" (the canonical lung-abscess leaf, ≈ ICD-10 J85.2). `CA22.Z` actually = *COPD, unspecified* (already covered by `CA22` [TRS]). Clinical name kept.
+
+**Still open project-wide:** only the **NS `2F7C`/`2F7Z` re-review** ("hemangioblastoma" / "epidermoid & dermoid tumors" on uncertain-behaviour-neoplasm codes) remains — needs an NS pass.
+

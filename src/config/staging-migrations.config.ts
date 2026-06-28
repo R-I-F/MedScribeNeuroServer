@@ -184,6 +184,7 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000153-TopUpAfterAmpersandCleanup.ts",
       __dirname + "/../migrations/1750000000154-TopUpDeptsTo100.ts",
       __dirname + "/../migrations/1750000000155-TopUpVascHbpFinal.ts",
+      __dirname + "/../migrations/1750000000156-FixLynchAndLungAbscessMislabels.ts",
     ],
     subscribers: [],
     extra: { max: 5 },
