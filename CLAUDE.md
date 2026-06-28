@@ -26,8 +26,17 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Per-department migration pattern: `INSERT diagnoses (EN + Arabic name + EN/AR description) … ON CONFLICT("icdCode") DO NOTHING` → link `department_diagnoses` (by `dept.code`) → link `main_diag_diagnoses` (by `md.title`). Share existing correct-coded diagnoses across departments rather than duplicating. Always include a clean `down()`.
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
-## 📍 Where we stopped (2026-06-27)
-All on **staging**. Migrations `1750000000001`–`1750000000151` applied. **MFS 111–116 committed** (`30829e6`); SOC 104–110 (`20f2f8a`); **TRS 117–123 + OBGYN 124–131 committed** (`3bcdcd5`); **ENT 132–138 committed** (`c4e0b37`); **OPHTHAL 139–144 committed**; **UROL 145–151 committed** (`73674d0`, pushed to `migration/mysql-to-postgres`). All migration files force-added to git.
+## 📍 Where we stopped (2026-06-28)
+All on **staging**. Migrations `1750000000001`–`1750000000155` applied. **MFS 111–116 committed** (`30829e6`); SOC 104–110 (`20f2f8a`); **TRS 117–123 + OBGYN 124–131 committed** (`3bcdcd5`); **ENT 132–138 committed** (`c4e0b37`); **OPHTHAL 139–144 committed**; **UROL 145–151 committed** (`73674d0`); **ampersand-cleanup 152–155 committed** (pushed to `migration/mysql-to-postgres`). All migration files force-added to git.
+
+### ✅ Ampersand ICD-code cleanup — COMPLETE (migrations 152–155)
+Cross-department data-quality pass (post-audit). Goal: every `diagnoses.icdCode` carries a single unique ICD-11 stem/leaf — remove all post-coordination ("&" cluster) codes. **CPT/`proc_cpts` never use "&" (0 affected — "&" is ICD-11-only syntax).** 53 diagnosis rows had "&" codes.
+- **152** RemoveAmpersandIcdCodes: 39 KEEP (rename to nearest free single leaf, embedding reset), 14 MERGE (delete &-row that duplicates an existing same-dept plain row), + TRS top-up (acute/chronic transplant rejection → `NE84`; immunologic-rejection category restored to ≥5 via acute & chronic GVHD `4B24.0`/`4B24.1`; sigmoid-volvulus merge relinks shared GS `DB30.1` → PEDSURG malrotation category). All resolutions WHO-verified via `icd11_search`.
+- **153** TopUpAfterAmpersandCleanup: the 14 merges dropped VASC/HBP→96, PEDSURG→99, TRS immunologic-rejection→3; restored all to the ≥100 floor & category ≥5 with distinct ICD-11-verified diagnoses.
+- **154** TopUpDeptsTo100: +distinct verified diagnoses to VASC/HBP/PEDSURG (posterior urethral valve shared UROL→PEDSURG).
+- **155** TopUpVascHbpFinal: +1 each VASC/HBP after two codes chosen in 154 turned out to already exist.
+
+**State after 155 (verified on staging 2026-06-28): 0 diagnoses with "&" in `icdCode`, 0 proc_cpts with "&" in `numCode`/`alphaCode`, 0 NULL embeddings on either table. All 15 dept audits remain complete; every dept ≥100 diagnoses.**
 
 ### ✅ UROL full dept-audit — COMPLETE (migrations 145–151)
 Save-game at `MEDICAL_CODE_AUDITS/UROL/AUDIT_UROL.md`. UROL (Urology) reference data was **~74% corrupt (16/23 ICD codes wrong + 1 invalid leaf)** and started with **0 proc_cpts** and only 23 diagnoses. The seed mis-chaptered urological conditions onto **female-genital GA** codes (GA00=vulvitis, GA20, GA40), **cystitis GC00.x** (used for renal/bladder/ureter stones), and **nephritis GB4x/GB5x** blocks (GB40=nephritic, GB42, GB50=acute TIN, GB51=acute pyelonephritis), plus oncology mis-codes (RCC on ovary code 2C73; seminoma on vulva-melanoma code 2C70.1).
