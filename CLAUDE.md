@@ -26,8 +26,8 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 - Per-department migration pattern: `INSERT diagnoses (EN + Arabic name + EN/AR description) … ON CONFLICT("icdCode") DO NOTHING` → link `department_diagnoses` (by `dept.code`) → link `main_diag_diagnoses` (by `md.title`). Share existing correct-coded diagnoses across departments rather than duplicating. Always include a clean `down()`.
 - Department codes: CTS, GS, HBP, MFS, NS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, **UROL** (not URO), VASC.
 
-## 📍 Where we stopped (2026-06-28)
-All on **staging**. Migrations `1750000000001`–`1750000000156` applied. **MFS 111–116 committed** (`30829e6`); SOC 104–110 (`20f2f8a`); **TRS 117–123 + OBGYN 124–131 committed** (`3bcdcd5`); **ENT 132–138 committed** (`c4e0b37`); **OPHTHAL 139–144 committed**; **UROL 145–151 committed** (`73674d0`); **ampersand-cleanup 152–155 committed** (pushed to `migration/mysql-to-postgres`). All migration files force-added to git.
+## 📍 Where we stopped (2026-07-08)
+All on **staging**. Migrations `1750000000001`–`1750000000158` applied. **MFS 111–116 committed** (`30829e6`); SOC 104–110 (`20f2f8a`); **TRS 117–123 + OBGYN 124–131 committed** (`3bcdcd5`); **ENT 132–138 committed** (`c4e0b37`); **OPHTHAL 139–144 committed**; **UROL 145–151 committed** (`73674d0`); **ampersand-cleanup 152–155 committed** (pushed to `migration/mysql-to-postgres`). All migration files force-added to git.
 
 ### ✅ Ampersand ICD-code cleanup — COMPLETE (migrations 152–155)
 Cross-department data-quality pass (post-audit). Goal: every `diagnoses.icdCode` carries a single unique ICD-11 stem/leaf — remove all post-coordination ("&" cluster) codes. **CPT/`proc_cpts` never use "&" (0 affected — "&" is ICD-11-only syntax).** 53 diagnosis rows had "&" codes.
@@ -37,6 +37,14 @@ Cross-department data-quality pass (post-audit). Goal: every `diagnoses.icdCode`
 - **155** TopUpVascHbpFinal: +1 each VASC/HBP after two codes chosen in 154 turned out to already exist.
 
 **State after 155 (verified on staging 2026-06-28): 0 diagnoses with "&" in `icdCode`, 0 proc_cpts with "&" in `numCode`/`alphaCode`, 0 NULL embeddings on either table. All 15 dept audits remain complete; every dept ≥100 diagnoses.**
+
+### ✅ Scaled additional-questions framework — SHIPPED (migrations 157–158, uncommitted)
+Full design: `docs/ADDITIONAL_QUESTIONS_SCALED_FRAMEWORK_PLAN.md` (gitignored). Replaces the legacy per-tenant six-flag model (`spOrCran/pos/approach/region/clinPres/intEvents` + tenant-global positions/approaches/regions) with a generic per-department per-mainDiag framework in **defaultdb**: **questions are rows, not columns.**
+- **157** CreateAdditionalQuestionsFramework: 4 tables — `additional_questions` (per-dept defs: `key` camelCase, bilingual label, `inputType` single_choice|multi_choice|free_text, UNIQUE(dept,key)), `question_options` (bilingual, UNIQUE(question,value)), `main_diag_questions` (replaces the six flags; optional isRequired/sortOrder overrides), `main_diag_question_options` (optional per-mainDiag option narrowing; **no rows = all options apply**). Integrity rule (app-level): question.departmentId must equal main_diag.departmentId.
+- **158** SeedNsCtsAdditionalQuestions: seeded from production truth captured 2026-07-08 (title-matched 1:1). Canonical keys: `surgicalDomain` (generalized spOrCran "Or" question), `position`, `approach`, `region`, `clinicalPresentation`, `intraopEvents`. NS = 6 questions / 26 options / 14 links; CTS = 4 questions (no surgicalDomain/clinPres — all-zero in prod) / 21 options / 63 links; CTS `region` labelled "Target structure". Question `arLabel` filled; option `arValue` NULL for now.
+- **New module `src/refAdditionalQuestions/`** (provider/service/controller/router + 2 validators): raw-SQL reads on `ReferenceDataSource` (no entities, no institutionResolver). Routes (JWT, all 4 roles): `GET /refAdditionalQuestions/department/:deptCode`, `GET /refAdditionalQuestions/main-diag/:mainDiagId`. Bound in `container.config.ts`, mounted in `routes.config.ts`. Legacy tenant module `src/additionalQuestions/` untouched (production uses it until cutover).
+- **Verified on staging**: counts exact, 0 integrity violations, revert→re-apply cycle clean, provider smoke test (`scripts/smoke-ref-additional-questions.ts`) green. Typecheck clean.
+- **Deferred**: `additionalAnswers` JSONB on tenant submissions (keyed by question `key`); question/option content for the other 13 depts (author dept-by-dept); admin write API.
 
 ### ✅ Last two cross-dept mislabels fixed (migration 156)
 Resolved the final two open cross-dept ICD-11 mislabels (verified via findacode ICD-11 MMS; both collision-free in-place recodes, links preserved by row id, names unchanged → embeddings stayed valid, no backfill):

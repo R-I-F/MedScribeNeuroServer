@@ -118,6 +118,11 @@ import { AdditionalQuestionsRouter } from "../additionalQuestions/additionalQues
 import { AdditionalQuestionsService } from "../additionalQuestions/additionalQuestions.service";
 import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQuestions.provider";
 
+import { RefAdditionalQuestionsController } from "../refAdditionalQuestions/refAdditionalQuestions.controller";
+import { RefAdditionalQuestionsRouter } from "../refAdditionalQuestions/refAdditionalQuestions.router";
+import { RefAdditionalQuestionsService } from "../refAdditionalQuestions/refAdditionalQuestions.service";
+import { RefAdditionalQuestionsProvider } from "../refAdditionalQuestions/refAdditionalQuestions.provider";
+
 import { ConsumablesController } from "../consumables/consumables.controller";
 import { ConsumablesRouter } from "../consumables/consumables.router";
 import { ConsumablesService } from "../consumables/consumables.service";
@@ -279,6 +284,11 @@ container.bind(AdditionalQuestionsController).toSelf().inTransientScope();
 container.bind(AdditionalQuestionsRouter).toSelf().inTransientScope();
 container.bind(AdditionalQuestionsService).toSelf().inTransientScope();
 container.bind(AdditionalQuestionsProvider).toSelf().inTransientScope();
+
+container.bind(RefAdditionalQuestionsController).toSelf().inTransientScope();
+container.bind(RefAdditionalQuestionsRouter).toSelf().inTransientScope();
+container.bind(RefAdditionalQuestionsService).toSelf().inTransientScope();
+container.bind(RefAdditionalQuestionsProvider).toSelf().inTransientScope();
 
 container.bind(ConsumablesController).toSelf().inTransientScope();
 container.bind(ConsumablesRouter).toSelf().inTransientScope();
