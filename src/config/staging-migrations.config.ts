@@ -190,6 +190,8 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000159-ReviseCtsQuestionSet.ts",
       __dirname + "/../migrations/1750000000160-AddCtsQuestionNarrowing.ts",
       __dirname + "/../migrations/1750000000161-BackfillQuestionOptionArValues.ts",
+      __dirname + "/../migrations/1750000000162-AuthorGsAdditionalQuestions.ts",
+      __dirname + "/../migrations/1750000000163-AddGsQuestionNarrowing.ts",
     ],
     subscribers: [],
     extra: { max: 5 },
