@@ -232,6 +232,7 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000201-AuthorOrthoLecturesHipSpineHandElbow.ts",
       __dirname + "/../migrations/1750000000202-AuthorOrthoLecturesShoulderTraumaPaediatric.ts",
       __dirname + "/../migrations/1750000000203-AuthorPrsLectures.ts",
+      __dirname + "/../migrations/1750000000204-AuthorVascLectures.ts",
     ],
     subscribers: [],
     extra: { max: 5 },
