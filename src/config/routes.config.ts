@@ -76,6 +76,9 @@ export function addRoutes(app: Application) {
   const { RefAdditionalQuestionsRouter } = require("../refAdditionalQuestions/refAdditionalQuestions.router");
   const refAdditionalQuestionsRouter = container.get(RefAdditionalQuestionsRouter) as any;
 
+  const { RefLecturesRouter } = require("../refLectures/refLectures.router");
+  const refLecturesRouter = container.get(RefLecturesRouter) as any;
+
   const { ConsumablesRouter } = require("../consumables/consumables.router");
   const consumablesRouter = container.get(ConsumablesRouter) as any;
 
@@ -132,6 +135,7 @@ export function addRoutes(app: Application) {
   app.use("/activityTimeline", activityTimelineRouter.router);
   app.use("/additionalQuestions", additionalQuestionsRouter.router);
   app.use("/refAdditionalQuestions", refAdditionalQuestionsRouter.router);
+  app.use("/refLectures", refLecturesRouter.router);
   app.use("/consumables", consumablesRouter.router);
   app.use("/equipment", equipmentRouter.router);
   app.use("/positions", positionsRouter.router);

@@ -34,6 +34,9 @@ tempor.md
 # Cursor IDE rules (project-specific configuration)
 .cursorrules
 
+# Claude Code project skills (local tooling, not for version control)
+.claude/
+
 # Local / deployment-agnostic scripts and docs (not for version control)
 scripts/
 scripts/drop-test-submissions.ts
@@ -47,6 +50,7 @@ docs/DISABLED_ROUTES.md
 docs/SENSITIVE_DATA_AUDIT.md
 docs/LOGIN_ROUTES.md
 docs/ADDITIONAL_QUESTIONS_SCALED_FRAMEWORK_PLAN.md
+docs/LECTURES_SCALED_MODULE_PLAN.md
 API_DOCUMENTATION.md
 MDb_DOCUMENTATION.md
 MODULE_SECURITY_AUDIT_TEMPLATE.md

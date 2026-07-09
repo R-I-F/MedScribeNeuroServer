@@ -123,6 +123,11 @@ import { RefAdditionalQuestionsRouter } from "../refAdditionalQuestions/refAddit
 import { RefAdditionalQuestionsService } from "../refAdditionalQuestions/refAdditionalQuestions.service";
 import { RefAdditionalQuestionsProvider } from "../refAdditionalQuestions/refAdditionalQuestions.provider";
 
+import { RefLecturesController } from "../refLectures/refLectures.controller";
+import { RefLecturesRouter } from "../refLectures/refLectures.router";
+import { RefLecturesService } from "../refLectures/refLectures.service";
+import { RefLecturesProvider } from "../refLectures/refLectures.provider";
+
 import { ConsumablesController } from "../consumables/consumables.controller";
 import { ConsumablesRouter } from "../consumables/consumables.router";
 import { ConsumablesService } from "../consumables/consumables.service";
@@ -289,6 +294,11 @@ container.bind(RefAdditionalQuestionsController).toSelf().inTransientScope();
 container.bind(RefAdditionalQuestionsRouter).toSelf().inTransientScope();
 container.bind(RefAdditionalQuestionsService).toSelf().inTransientScope();
 container.bind(RefAdditionalQuestionsProvider).toSelf().inTransientScope();
+
+container.bind(RefLecturesController).toSelf().inTransientScope();
+container.bind(RefLecturesRouter).toSelf().inTransientScope();
+container.bind(RefLecturesService).toSelf().inTransientScope();
+container.bind(RefLecturesProvider).toSelf().inTransientScope();
 
 container.bind(ConsumablesController).toSelf().inTransientScope();
 container.bind(ConsumablesRouter).toSelf().inTransientScope();
