@@ -242,6 +242,7 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000211-AuthorTrsLectures.ts",
       __dirname + "/../migrations/1750000000212-AuthorObgynLecturesSurgicalAntenatalMaternalLabour.ts",
       __dirname + "/../migrations/1750000000213-AuthorObgynLecturesDeliveryPostpartumGynae.ts",
+      __dirname + "/../migrations/1750000000214-AuthorEntLectures.ts",
     ],
     subscribers: [],
     extra: { max: 5 },
