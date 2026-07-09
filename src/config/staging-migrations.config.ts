@@ -208,6 +208,8 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000177-AddMfsQuestionNarrowing.ts",
       __dirname + "/../migrations/1750000000178-AuthorTrsAdditionalQuestions.ts",
       __dirname + "/../migrations/1750000000179-AddTrsQuestionNarrowing.ts",
+      __dirname + "/../migrations/1750000000180-AuthorObgynAdditionalQuestions.ts",
+      __dirname + "/../migrations/1750000000181-AddObgynQuestionNarrowing.ts",
     ],
     subscribers: [],
     extra: { max: 5 },
