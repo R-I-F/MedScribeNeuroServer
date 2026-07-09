@@ -240,6 +240,8 @@ function getStagingMigrationsConfig(): DataSourceOptions {
       __dirname + "/../migrations/1750000000209-AuthorMfsLecturesHeadneckSalivaryMucosaSkin.ts",
       __dirname + "/../migrations/1750000000210-AuthorMfsLecturesRestorationCleftCraniofacialDentoalveolar.ts",
       __dirname + "/../migrations/1750000000211-AuthorTrsLectures.ts",
+      __dirname + "/../migrations/1750000000212-AuthorObgynLecturesSurgicalAntenatalMaternalLabour.ts",
+      __dirname + "/../migrations/1750000000213-AuthorObgynLecturesDeliveryPostpartumGynae.ts",
     ],
     subscribers: [],
     extra: { max: 5 },
