@@ -7,8 +7,13 @@ export class MainDiagEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 200 })
+  @Column({ type: "text" })
   title!: string;
+
+  // Department this main-diag belongs to (mirror of hub main_diags.departmentId). Nullable
+  // during the multi-department rollout; the mirror stamps it from the per-dept sync.
+  @Column({ type: "uuid", nullable: true })
+  departmentId!: string | null;
 
   @ManyToMany(() => DiagnosisEntity)
   @JoinTable({

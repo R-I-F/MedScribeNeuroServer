@@ -1,4 +1,5 @@
 import {
+  IRefDepartment,
   IRefMainDiag,
   IRefDiagnosis,
   IRefProcCpt,
@@ -8,16 +9,28 @@ import {
 /**
  * Pure hub → local mirror-row mappers.
  *
- * The KA mirror tables (`main_diags`, `diagnoses`, `proc_cpts`, `lectures`) keep the hub's
- * UUIDs as their local PKs so submissions' FKs and all analytics SQL stay byte-identical.
- * These functions strip the hub's extra (mostly Arabic / description) fields down to the
- * columns the mirror tables actually carry. Arabic fields are intentionally dropped — the
- * mirror schema has no columns for them.
+ * The KA mirror tables keep the hub's UUIDs as their local PKs so submissions' FKs and all
+ * analytics SQL stay byte-identical. The department wiring mirrors the hub exactly:
+ *   - main_diags.departmentId  (direct FK)
+ *   - department_diagnoses      (M2M dept↔diagnosis; diagnoses stay shared/deduped)
+ *   - lecture_topics.departmentId + lectures.topicId (topic carries the department)
+ *   - proc_cpts have no direct department link (transitive via main_diag_procs)
+ * Arabic/description fields the mirror tables don't carry are dropped.
  */
+
+export interface MirrorDepartmentRow {
+  id: string;
+  code: string;
+  name: string;
+  arName: string | null;
+  isAcademic: boolean;
+  isPractical: boolean;
+}
 
 export interface MirrorMainDiagRow {
   id: string;
   title: string;
+  departmentId: string;
 }
 
 export interface MirrorDiagnosisRow {
@@ -35,16 +48,39 @@ export interface MirrorProcCptRow {
   description: string;
 }
 
+export interface MirrorLectureTopicRow {
+  id: string;
+  title: string;
+  arTitle: string | null;
+  sortOrder: number;
+  departmentId: string;
+}
+
 export interface MirrorLectureRow {
   id: string;
   lectureTitle: string;
   mainTopic: string;
+  arTitle: string | null;
+  lectureNumber: string | null;
+  sortOrder: number | null;
   level: "msc" | "md" | null;
+  topicId: string;
   google_uid: null;
 }
 
-export function toMirrorMainDiag(h: IRefMainDiag): MirrorMainDiagRow {
-  return { id: h.id, title: h.title };
+export function toMirrorDepartment(h: IRefDepartment): MirrorDepartmentRow {
+  return {
+    id: h.id,
+    code: h.code,
+    name: h.name,
+    arName: h.arName ?? null,
+    isAcademic: h.isAcademic,
+    isPractical: h.isPractical,
+  };
+}
+
+export function toMirrorMainDiag(h: IRefMainDiag, departmentId: string): MirrorMainDiagRow {
+  return { id: h.id, title: h.title, departmentId };
 }
 
 export function toMirrorDiagnosis(h: IRefDiagnosis): MirrorDiagnosisRow {
@@ -62,22 +98,37 @@ export function toMirrorProcCpt(h: IRefProcCpt): MirrorProcCptRow {
 }
 
 /**
- * Flatten the hub's nested topic→lectures tree into the flat `lectures` mirror rows.
- * `mainTopic` carries the curriculum topic title; `google_uid` is always null for
- * hub-mirrored lectures.
+ * Flatten one department's hub topic→lectures tree into mirror rows: the topics (each stamped
+ * with departmentId) and the lectures (each pointing at its topicId, with mainTopic kept =
+ * topic title so the legacy `/lecture` read shape is unchanged).
  */
-export function toMirrorLectures(topics: IRefLectureTopic[]): MirrorLectureRow[] {
-  const rows: MirrorLectureRow[] = [];
-  for (const topic of topics) {
-    for (const lecture of topic.lectures) {
-      rows.push({
-        id: lecture.id,
-        lectureTitle: lecture.title,
-        mainTopic: topic.title,
-        level: lecture.level,
+export function toMirrorLectureTree(
+  topics: IRefLectureTopic[],
+  departmentId: string
+): { topics: MirrorLectureTopicRow[]; lectures: MirrorLectureRow[] } {
+  const topicRows: MirrorLectureTopicRow[] = [];
+  const lectureRows: MirrorLectureRow[] = [];
+  for (const t of topics) {
+    topicRows.push({
+      id: t.id,
+      title: t.title,
+      arTitle: t.arTitle,
+      sortOrder: t.sortOrder,
+      departmentId,
+    });
+    for (const l of t.lectures) {
+      lectureRows.push({
+        id: l.id,
+        lectureTitle: l.title,
+        mainTopic: t.title,
+        arTitle: l.arTitle,
+        lectureNumber: l.lectureNumber,
+        sortOrder: l.sortOrder,
+        level: l.level,
+        topicId: t.id,
         google_uid: null,
       });
     }
   }
-  return rows;
+  return { topics: topicRows, lectures: lectureRows };
 }

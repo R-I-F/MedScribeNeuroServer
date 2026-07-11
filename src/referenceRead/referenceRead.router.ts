@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import express, { Request, Response, Router } from "express";
-import { validationResult } from "express-validator";
+import { query, validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import { ReferenceReadController } from "./referenceRead.controller";
 import extractJWT from "../middleware/extractJWT";
@@ -14,7 +14,8 @@ import { getLectureByIdValidator } from "../validators/getLectureById.validator"
 /**
  * Read-only reference routes, mounted at the app root so they answer the ORIGINAL paths
  * (`/mainDiag`, `/diagnosis`, `/procCpt`, `/lecture`) with the ORIGINAL middleware chains and
- * role gates. Writes on these paths no longer exist → 404.
+ * role gates. List reads accept `?deptCode=XXX` (default REF_DEPT_CODE) — the mirror carries
+ * all departments. Writes on these paths no longer exist → 404.
  */
 @injectable()
 export class ReferenceReadRouter {
@@ -33,6 +34,27 @@ export class ReferenceReadRouter {
       UserRole.SUPER_ADMIN
     );
 
+    const deptCodeQueryValidator = query("deptCode")
+      .optional()
+      .trim()
+      .matches(/^[A-Za-z]{2,10}$/)
+      .withMessage("deptCode must be 2-10 letters (e.g. NS, CTS, OBGYN)");
+
+    const listHandler =
+      (fn: (req: Request, res: Response) => Promise<unknown>) =>
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        try {
+          res.status(StatusCodes.OK).json(await fn(req, res));
+        } catch (err: any) {
+          const status = err?.status ?? StatusCodes.INTERNAL_SERVER_ERROR;
+          res.status(status).json({ error: err.message });
+        }
+      };
+
     // GET /mainDiag , /mainDiag/:id  — candidate and up
     this.router.get(
       "/mainDiag",
@@ -40,13 +62,8 @@ export class ReferenceReadRouter {
       institutionResolver,
       userBasedRateLimiter,
       requireCandidate,
-      async (req: Request, res: Response) => {
-        try {
-          res.status(StatusCodes.OK).json(await this.ctrl.getAllMainDiags(req, res));
-        } catch (err: any) {
-          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
-        }
-      }
+      deptCodeQueryValidator,
+      listHandler((req, res) => this.ctrl.getAllMainDiags(req, res))
     );
     this.router.get(
       "/mainDiag/:id",
@@ -77,13 +94,8 @@ export class ReferenceReadRouter {
       institutionResolver,
       userBasedRateLimiter,
       requireSuperAdmin,
-      async (req: Request, res: Response) => {
-        try {
-          res.status(StatusCodes.OK).json(await this.ctrl.getAllDiagnoses(req, res));
-        } catch (err: any) {
-          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
-        }
-      }
+      deptCodeQueryValidator,
+      listHandler((req, res) => this.ctrl.getAllDiagnoses(req, res))
     );
 
     // GET /procCpt — superAdmin only (unchanged from legacy)
@@ -93,13 +105,8 @@ export class ReferenceReadRouter {
       institutionResolver,
       userBasedRateLimiter,
       requireSuperAdmin,
-      async (req: Request, res: Response) => {
-        try {
-          res.status(StatusCodes.OK).json(await this.ctrl.getAllProcCpts(req, res));
-        } catch (err: any) {
-          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
-        }
-      }
+      deptCodeQueryValidator,
+      listHandler((req, res) => this.ctrl.getAllProcCpts(req, res))
     );
 
     // GET /lecture , /lecture/:id — supervisor/clerk/instituteAdmin/superAdmin
@@ -109,13 +116,8 @@ export class ReferenceReadRouter {
       institutionResolver,
       userBasedRateLimiter,
       requireSupervisorOrClerk,
-      async (req: Request, res: Response) => {
-        try {
-          res.status(StatusCodes.OK).json(await this.ctrl.getAllLectures(req, res));
-        } catch (err: any) {
-          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
-        }
-      }
+      deptCodeQueryValidator,
+      listHandler((req, res) => this.ctrl.getAllLectures(req, res))
     );
     this.router.get(
       "/lecture/:id",

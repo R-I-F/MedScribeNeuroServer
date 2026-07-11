@@ -29,6 +29,8 @@ import { ApproachEntity } from "../approaches/approaches.mDbSchema";
 import { RegionEntity } from "../regions/regions.mDbSchema";
 import { ClinicalSubEntity } from "../clinicalSub/clinicalSub.mDbSchema";
 import { WhatsappSessionEntity } from "../waBot/whatsappSession.mDbSchema";
+import { DepartmentEntity } from "../departments/department.mDbSchema";
+import { LectureTopicEntity } from "../lecture/lectureTopic.mDbSchema";
 
 dotenv.config();
 
@@ -84,6 +86,8 @@ function getDbConfig(): DataSourceOptions {
       RegionEntity,
       ClinicalSubEntity,
       WhatsappSessionEntity,
+      DepartmentEntity,
+      LectureTopicEntity,
     ],
     migrations: [
       __dirname + "/../migrations-ka/*.ts",

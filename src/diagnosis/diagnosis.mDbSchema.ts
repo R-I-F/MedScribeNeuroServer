@@ -9,7 +9,7 @@ export class DiagnosisEntity implements IDiagnosis {
   @Column({ type: "varchar", length: 255 })
   icdCode!: string;
 
-  @Column({ type: "varchar", length: 500 })
+  @Column({ type: "text" })
   icdName!: string;
 
   @Column({ type: "json", nullable: true })

@@ -6,16 +6,16 @@ export class ProcCptEntity implements IProcCpt {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 100 })
+  @Column({ type: "text" })
   title!: string;
 
-  @Column({ type: "varchar", length: 10 })
+  @Column({ type: "varchar", length: 20 })
   alphaCode!: string;
 
-  @Column({ type: "varchar", length: 10 })
+  @Column({ type: "varchar", length: 20 })
   numCode!: string;
 
-  @Column({ type: "varchar", length: 500 })
+  @Column({ type: "text" })
   description!: string;
 
   @CreateDateColumn()

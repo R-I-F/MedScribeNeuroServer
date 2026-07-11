@@ -142,6 +142,7 @@ import { WaBotService } from "../waBot/waBot.service";
 import { WaBotProvider } from "../waBot/waBot.provider";
 import { WaSessionService } from "../waBot/waSession.service";
 
+import { ReferenceReadProvider } from "../referenceRead/referenceRead.provider";
 import { ReferenceReadController } from "../referenceRead/referenceRead.controller";
 import { ReferenceReadRouter } from "../referenceRead/referenceRead.router";
 
@@ -295,6 +296,7 @@ container.bind(WaBotService).toSelf().inTransientScope();
 container.bind(WaSessionService).toSelf().inTransientScope();
 container.bind(WaBotProvider).toSelf().inTransientScope();
 
+container.bind(ReferenceReadProvider).toSelf().inTransientScope();
 container.bind(ReferenceReadController).toSelf().inTransientScope();
 container.bind(ReferenceReadRouter).toSelf().inTransientScope();
 

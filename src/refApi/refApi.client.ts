@@ -4,6 +4,7 @@ import axios, { AxiosInstance } from "axios";
 import * as dotenv from "dotenv";
 import {
   IRefVersion,
+  IRefDepartment,
   IRefMainDiag,
   IRefDiagnosis,
   IRefProcCpt,
@@ -57,10 +58,11 @@ export class RefApiClient {
     return this.deptCode;
   }
 
-  /** GET with envelope-unwrap + one retry on network error / 5xx. */
+  /** GET with envelope-unwrap + retries (network error / 5xx / 429 rate-limit) with backoff. */
   private async get<T>(path: string): Promise<T> {
+    const maxAttempts = 3;
     let lastErr: unknown;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const resp = await this.http.get(path);
         const body = resp.data;
@@ -71,18 +73,25 @@ export class RefApiClient {
       } catch (err: any) {
         lastErr = err;
         const status = err?.response?.status as number | undefined;
-        // Retry once on a network error or a 5xx; fail fast on 4xx.
-        if (attempt === 0 && (status === undefined || status >= 500)) {
+        const retryable = status === undefined || status >= 500 || status === 429;
+        if (retryable && attempt < maxAttempts - 1) {
+          // Back off harder on rate-limit; small pause otherwise.
+          const delayMs = status === 429 ? 600 * (attempt + 1) : 200;
+          await new Promise((r) => setTimeout(r, delayMs));
           continue;
         }
         throw new RefApiError(`GET ${path} failed: ${err?.message ?? "unknown error"}`, status, err);
       }
     }
-    throw new RefApiError(`GET ${path} failed after retry`, undefined, lastErr);
+    throw new RefApiError(`GET ${path} failed after retries`, undefined, lastErr);
   }
 
   public getVersion(): Promise<IRefVersion> {
     return this.get<IRefVersion>("/v1/version");
+  }
+
+  public getDepartments(): Promise<IRefDepartment[]> {
+    return this.get<IRefDepartment[]>("/v1/departments");
   }
 
   public getMainDiagsByDept(deptCode: string = this.deptCode): Promise<IRefMainDiag[]> {

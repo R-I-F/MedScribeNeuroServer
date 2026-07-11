@@ -3,67 +3,130 @@ import { inject, injectable } from "inversify";
 import { QueryRunner } from "typeorm";
 import { AppDataSource, initializeDatabase } from "../config/database.config";
 import { RefApiClient } from "./refApi.client";
-import { IRefDiagnosis, IRefProcCpt } from "./refApi.types";
-import { toMirrorLectures } from "./legacyShapes.mapper";
+import {
+  toMirrorDepartment,
+  toMirrorMainDiag,
+  toMirrorDiagnosis,
+  toMirrorProcCpt,
+  toMirrorLectureTree,
+  MirrorDiagnosisRow,
+  MirrorProcCptRow,
+  MirrorMainDiagRow,
+  MirrorLectureTopicRow,
+  MirrorLectureRow,
+} from "./legacyShapes.mapper";
+
+/** Keep the last row seen per id (hub is source of truth; dupes shouldn't occur but are made safe). */
+function dedupeById<T extends { id: string }>(rows: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const r of rows) byId.set(r.id, r);
+  return [...byId.values()];
+}
+
+/** Dedupe (left,right) id pairs so composite-PK join inserts can't collide. */
+function dedupePairs(pairs: [string, string][]): [string, string][] {
+  const seen = new Set<string>();
+  const out: [string, string][] = [];
+  for (const [a, b] of pairs) {
+    const key = `${a}|${b}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push([a, b]);
+    }
+  }
+  return out;
+}
 
 export interface RefSyncResult {
   dataVersion: string;
+  departments: number;
   mainDiags: number;
   diagnoses: number;
   procCpts: number;
+  lectureTopics: number;
   lectures: number;
+  departmentDiagnoses: number;
   mainDiagDiagnoses: number;
   mainDiagProcs: number;
   sixFlagRowsEnsured: number;
 }
 
 /**
- * Reference mirror sync (KA spoke).
+ * Reference mirror sync (KA spoke) — full institute, ALL departments.
  *
- * Pulls the department's shared reference data from the hub's PUBLIC API (never its DB)
- * and materializes it into the local KA mirror tables — `main_diags`, `diagnoses`,
- * `proc_cpts`, the `main_diag_*` join tables and `lectures` — preserving the hub's UUIDs
- * as local PKs so submissions' FKs and all analytics SQL stay byte-identical.
+ * Pulls the whole shared reference catalog from the hub's PUBLIC API (never its DB) and
+ * materializes it into the local KA mirror, preserving the hub's UUIDs as local PKs and the
+ * hub's department wiring:
+ *   - departments            (mirror of hub departments)
+ *   - main_diags.departmentId (direct FK)
+ *   - department_diagnoses    (M2M dept↔diagnosis; diagnoses shared/deduped)
+ *   - lecture_topics.departmentId + lectures.topicId
+ *   - proc_cpts               (shared; department relation is transitive via main_diag_procs)
  *
- * Contract (why this is a cache, not a boundary violation):
- *  - Flat tables are UPSERT-only, never deleted → RESTRICT FKs from submissions/events can
- *    never break mid-sync, and hub recodes propagate to all history on every re-sync.
- *  - Join tables (which only link reference rows) are rebuilt each sync.
- *  - Every mirrored main_diag is guaranteed a six-flag `additional_questions` row (default
- *    all-zero, inserted once, never overwritten — preserves KA-local edits/seeds).
- *  - `ref_sync_state` records the synced hub dataVersion.
+ * Flat tables are UPSERT-only (RESTRICT FKs from submissions can never break); the join /
+ * link tables (department_diagnoses, main_diag_diagnoses, main_diag_procs) are rebuilt each
+ * sync. Every main_diag is guaranteed an all-zero `additional_questions` row (never
+ * overwritten). `ref_sync_state` records the synced hub dataVersion.
  */
 @injectable()
 export class RefMirrorService {
   constructor(@inject(RefApiClient) private client: RefApiClient) {}
 
   public async sync(): Promise<RefSyncResult> {
-    const deptCode = this.client.getDeptCode();
-
-    // 1) Pull everything from the hub first (no DB writes until we have a full snapshot).
+    // 1) Pull a full hub snapshot (no DB writes until it's all in hand).
     const version = await this.client.getVersion();
-    const mainDiags = await this.client.getMainDiagsByDept(deptCode);
+    const departments = await this.client.getDepartments();
 
-    const diagById = new Map<string, IRefDiagnosis>();
-    const procById = new Map<string, IRefProcCpt>();
-    for (const d of await this.client.getDiagnosesByDept(deptCode)) diagById.set(d.id, d);
-    for (const p of await this.client.getProcCptsByDept(deptCode)) procById.set(p.id, p);
+    const deptRows = departments.map(toMirrorDepartment);
+    const mainDiagRows: MirrorMainDiagRow[] = [];
+    const diagById = new Map<string, MirrorDiagnosisRow>(); // shared, deduped across depts
+    const procById = new Map<string, MirrorProcCptRow>(); // shared, deduped across depts
+    const topicRows: MirrorLectureTopicRow[] = [];
+    const lectureRows: MirrorLectureRow[] = [];
+    const deptDiagnosisPairSet = new Set<string>(); // "deptId|dxId"
+    const deptDiagnosisPairs: [string, string][] = [];
+    const mdDiagnosisPairs: [string, string][] = [];
+    const mdProcPairs: [string, string][] = [];
+    const allMainDiagIds: string[] = [];
 
-    const mdDiagnosisIds: Record<string, string[]> = {};
-    const mdProcCptIds: Record<string, string[]> = {};
-    for (const md of mainDiags) {
-      const ds = await this.client.getDiagnosesByMainDiag(md.id);
-      const ps = await this.client.getProcCptsByMainDiag(md.id);
-      // Union into the flat maps so join inserts can never reference a missing row.
-      for (const d of ds) diagById.set(d.id, d);
-      for (const p of ps) procById.set(p.id, p);
-      mdDiagnosisIds[md.id] = ds.map((d) => d.id);
-      mdProcCptIds[md.id] = ps.map((p) => p.id);
+    for (const dept of departments) {
+      const mds = await this.client.getMainDiagsByDept(dept.code);
+      for (const md of mds) {
+        mainDiagRows.push(toMirrorMainDiag(md, dept.id));
+        allMainDiagIds.push(md.id);
+      }
+
+      for (const dx of await this.client.getDiagnosesByDept(dept.code)) {
+        diagById.set(dx.id, toMirrorDiagnosis(dx));
+        const key = `${dept.id}|${dx.id}`;
+        if (!deptDiagnosisPairSet.has(key)) {
+          deptDiagnosisPairSet.add(key);
+          deptDiagnosisPairs.push([dept.id, dx.id]);
+        }
+      }
+      for (const pc of await this.client.getProcCptsByDept(dept.code)) {
+        procById.set(pc.id, toMirrorProcCpt(pc));
+      }
+
+      const tree = toMirrorLectureTree(await this.client.getRefLecturesByDept(dept.code), dept.id);
+      topicRows.push(...tree.topics);
+      lectureRows.push(...tree.lectures);
+
+      for (const md of mds) {
+        const ds = await this.client.getDiagnosesByMainDiag(md.id);
+        const ps = await this.client.getProcCptsByMainDiag(md.id);
+        for (const dx of ds) {
+          diagById.set(dx.id, toMirrorDiagnosis(dx));
+          mdDiagnosisPairs.push([md.id, dx.id]);
+        }
+        for (const pc of ps) {
+          procById.set(pc.id, toMirrorProcCpt(pc));
+          mdProcPairs.push([md.id, pc.id]);
+        }
+      }
     }
 
-    const lectures = toMirrorLectures(await this.client.getRefLecturesByDept(deptCode));
-
-    // 2) Apply atomically to the KA mirror tables.
+    // 2) Apply atomically. Order respects FKs: parents before children.
     if (!AppDataSource.isInitialized) {
       await initializeDatabase();
     }
@@ -71,14 +134,23 @@ export class RefMirrorService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      // Flat mirror tables (upsert-only).
+      // Departments first (FK target for main_diags/lecture_topics/department_diagnoses/users).
       await this.upsert(
         qr,
-        "main_diags",
-        ["id", "title"],
-        ["title"],
-        mainDiags.map((m) => [m.id, m.title])
+        "departments",
+        ["id", "code", "name", "arName", "isAcademic", "isPractical"],
+        ["code", "name", "arName", "isAcademic", "isPractical"],
+        deptRows.map((d) => [d.id, d.code, d.name, d.arName, d.isAcademic, d.isPractical])
       );
+
+      // Dedupe by PK so a single ON CONFLICT batch can never touch a row twice.
+      const mainDiagRowsU = dedupeById(mainDiagRows);
+      const topicRowsU = dedupeById(topicRows);
+      const lectureRowsU = dedupeById(lectureRows);
+      const mdDiagnosisPairsU = dedupePairs(mdDiagnosisPairs);
+      const mdProcPairsU = dedupePairs(mdProcPairs);
+
+      // Shared flat tables.
       await this.upsert(
         qr,
         "diagnoses",
@@ -93,46 +165,54 @@ export class RefMirrorService {
         ["title", "alphaCode", "numCode", "description"],
         [...procById.values()].map((p) => [p.id, p.title, p.alphaCode, p.numCode, p.description])
       );
+
+      // Department-scoped tables.
+      await this.upsert(
+        qr,
+        "main_diags",
+        ["id", "title", "departmentId"],
+        ["title", "departmentId"],
+        mainDiagRowsU.map((m) => [m.id, m.title, m.departmentId])
+      );
+      await this.upsert(
+        qr,
+        "lecture_topics",
+        ["id", "title", "arTitle", "sortOrder", "departmentId"],
+        ["title", "arTitle", "sortOrder", "departmentId"],
+        topicRowsU.map((t) => [t.id, t.title, t.arTitle, t.sortOrder, t.departmentId])
+      );
       await this.upsert(
         qr,
         "lectures",
-        ["id", "lectureTitle", "mainTopic", "level", "google_uid"],
-        ["lectureTitle", "mainTopic", "level"],
-        lectures.map((l) => [l.id, l.lectureTitle, l.mainTopic, l.level, null])
+        ["id", "lectureTitle", "mainTopic", "arTitle", "lectureNumber", "sortOrder", "level", "topicId", "google_uid"],
+        ["lectureTitle", "mainTopic", "arTitle", "lectureNumber", "sortOrder", "level", "topicId"],
+        lectureRowsU.map((l) => [
+          l.id, l.lectureTitle, l.mainTopic, l.arTitle, l.lectureNumber, l.sortOrder, l.level, l.topicId, null,
+        ])
       );
 
-      // Join tables (reference-only) rebuilt each sync.
-      const mdDiagPairs: [string, string][] = [];
-      for (const [mdId, ids] of Object.entries(mdDiagnosisIds)) {
-        for (const dId of ids) mdDiagPairs.push([mdId, dId]);
-      }
-      const mdProcPairs: [string, string][] = [];
-      for (const [mdId, ids] of Object.entries(mdProcCptIds)) {
-        for (const pId of ids) mdProcPairs.push([mdId, pId]);
-      }
+      // Link/join tables rebuilt each sync.
+      await qr.query(`DELETE FROM "department_diagnoses"`);
+      await this.insertPairs(qr, "department_diagnoses", "departmentId", "diagnosisId", deptDiagnosisPairs);
       await qr.query(`DELETE FROM "main_diag_diagnoses"`);
-      await this.insertPairs(qr, "main_diag_diagnoses", "mainDiagId", "diagnosisId", mdDiagPairs);
+      await this.insertPairs(qr, "main_diag_diagnoses", "mainDiagId", "diagnosisId", mdDiagnosisPairsU);
       await qr.query(`DELETE FROM "main_diag_procs"`);
-      await this.insertPairs(qr, "main_diag_procs", "mainDiagId", "procCptId", mdProcPairs);
+      await this.insertPairs(qr, "main_diag_procs", "mainDiagId", "procCptId", mdProcPairsU);
 
-      // Six-flag continuity: ensure every main_diag has an additional_questions row
-      // (default all-zero). Never overwrite existing rows (preserves KA-local flag values).
-      const mainDiagIds = mainDiags.map((m) => m.id);
-      if (mainDiagIds.length > 0) {
-        const values = mainDiagIds.map((_, i) => `($${i + 1})`).join(", ");
+      // Six-flag continuity for every main_diag (default all-zero; never overwrite).
+      if (allMainDiagIds.length > 0) {
+        const values = allMainDiagIds.map((_, i) => `($${i + 1})`).join(", ");
         await qr.query(
           `INSERT INTO "additional_questions" ("mainDiagDocId") VALUES ${values}
            ON CONFLICT ("mainDiagDocId") DO NOTHING`,
-          mainDiagIds
+          allMainDiagIds
         );
       }
       const cnt: any[] = await qr.query(
         `SELECT COUNT(*)::int AS c FROM "additional_questions" WHERE "mainDiagDocId" = ANY($1)`,
-        [mainDiagIds]
+        [allMainDiagIds]
       );
-      const sixFlagRowsEnsured = cnt[0]?.c ?? 0;
 
-      // Record synced version (single-row table id=1).
       await qr.query(
         `INSERT INTO "ref_sync_state" ("id", "dataVersion", "syncedAt") VALUES (1, $1, now())
          ON CONFLICT ("id") DO UPDATE SET "dataVersion" = EXCLUDED."dataVersion", "syncedAt" = now()`,
@@ -143,13 +223,16 @@ export class RefMirrorService {
 
       return {
         dataVersion: version.dataVersion,
-        mainDiags: mainDiags.length,
+        departments: deptRows.length,
+        mainDiags: mainDiagRowsU.length,
         diagnoses: diagById.size,
         procCpts: procById.size,
-        lectures: lectures.length,
-        mainDiagDiagnoses: mdDiagPairs.length,
-        mainDiagProcs: mdProcPairs.length,
-        sixFlagRowsEnsured,
+        lectureTopics: topicRowsU.length,
+        lectures: lectureRowsU.length,
+        departmentDiagnoses: deptDiagnosisPairs.length,
+        mainDiagDiagnoses: mdDiagnosisPairsU.length,
+        mainDiagProcs: mdProcPairsU.length,
+        sixFlagRowsEnsured: cnt[0]?.c ?? 0,
       };
     } catch (err) {
       await qr.rollbackTransaction();
@@ -160,8 +243,8 @@ export class RefMirrorService {
   }
 
   /**
-   * Batched INSERT ... ON CONFLICT (id) DO UPDATE for a flat mirror table. Appends
-   * createdAt/updatedAt = now() and bumps updatedAt on conflict.
+   * Chunked INSERT ... ON CONFLICT (id) DO UPDATE for a flat mirror table (appends now()
+   * timestamps). Chunked so a big batch stays well under Postgres' 65535 bind-param limit.
    */
   private async upsert(
     qr: QueryRunner,
@@ -172,26 +255,32 @@ export class RefMirrorService {
   ): Promise<void> {
     if (rows.length === 0) return;
     const colList = cols.map((c) => `"${c}"`).join(", ");
-    const params: any[] = [];
-    const tuples: string[] = [];
-    let p = 1;
-    for (const row of rows) {
-      const placeholders = row.map(() => `$${p++}`);
-      tuples.push(`(${placeholders.join(", ")}, now(), now())`);
-      params.push(...row);
-    }
     const setClause = updateCols
       .map((c) => `"${c}" = EXCLUDED."${c}"`)
       .concat(`"updatedAt" = now()`)
       .join(", ");
-    await qr.query(
-      `INSERT INTO "${table}" (${colList}, "createdAt", "updatedAt") VALUES ${tuples.join(", ")}
-       ON CONFLICT ("id") DO UPDATE SET ${setClause}`,
-      params
-    );
+    // +2 for the appended createdAt/updatedAt placeholders are actually literals (now()),
+    // so only `cols.length` params per row; keep a safe margin anyway.
+    const maxRows = Math.max(1, Math.floor(50000 / cols.length));
+    for (let start = 0; start < rows.length; start += maxRows) {
+      const slice = rows.slice(start, start + maxRows);
+      const params: any[] = [];
+      const tuples: string[] = [];
+      let p = 1;
+      for (const row of slice) {
+        const placeholders = row.map(() => `$${p++}`);
+        tuples.push(`(${placeholders.join(", ")}, now(), now())`);
+        params.push(...row);
+      }
+      await qr.query(
+        `INSERT INTO "${table}" (${colList}, "createdAt", "updatedAt") VALUES ${tuples.join(", ")}
+         ON CONFLICT ("id") DO UPDATE SET ${setClause}`,
+        params
+      );
+    }
   }
 
-  /** Batched INSERT of (left, right) id pairs into a join table. */
+  /** Batched INSERT of (left, right) id pairs into a join table (chunked to stay under param limits). */
   private async insertPairs(
     qr: QueryRunner,
     table: string,
@@ -200,16 +289,20 @@ export class RefMirrorService {
     pairs: [string, string][]
   ): Promise<void> {
     if (pairs.length === 0) return;
-    const params: any[] = [];
-    const tuples: string[] = [];
-    let p = 1;
-    for (const [l, r] of pairs) {
-      tuples.push(`($${p++}, $${p++})`);
-      params.push(l, r);
+    const CHUNK = 5000;
+    for (let start = 0; start < pairs.length; start += CHUNK) {
+      const slice = pairs.slice(start, start + CHUNK);
+      const params: any[] = [];
+      const tuples: string[] = [];
+      let p = 1;
+      for (const [l, r] of slice) {
+        tuples.push(`($${p++}, $${p++})`);
+        params.push(l, r);
+      }
+      await qr.query(
+        `INSERT INTO "${table}" ("${leftCol}", "${rightCol}") VALUES ${tuples.join(", ")}`,
+        params
+      );
     }
-    await qr.query(
-      `INSERT INTO "${table}" ("${leftCol}", "${rightCol}") VALUES ${tuples.join(", ")}`,
-      params
-    );
   }
 }
