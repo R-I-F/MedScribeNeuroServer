@@ -29,6 +29,21 @@ export class ReferenceReadProvider {
     return rows[0]?.id ?? null;
   }
 
+  /** True when the given department id exists in the mirror. */
+  public async departmentExists(ds: DataSource, departmentId: string): Promise<boolean> {
+    const rows = await ds.query(`SELECT 1 FROM "departments" WHERE "id" = $1`, [departmentId]);
+    return rows.length > 0;
+  }
+
+  /** All mirrored departments (for pickers): id, code, bilingual name, flags. */
+  public async getDepartments(ds: DataSource) {
+    return ds.query(
+      `SELECT "id", "code", "name", "arName", "isAcademic", "isPractical"
+         FROM "departments"
+        ORDER BY "name"`
+    );
+  }
+
   /** Legacy /mainDiag list shape (relations + attached six-flag config), one department. */
   public async getMainDiagsByDepartment(ds: DataSource, departmentId: string) {
     const repo = ds.getRepository(MainDiagEntity);

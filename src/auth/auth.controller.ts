@@ -38,6 +38,27 @@ export class AuthController {
     };
   }
 
+  /**
+   * Validate an optionally supplied departmentId against the reference mirror's
+   * `departments` table. Returns the id when valid, null when not supplied; throws
+   * on an unknown id so a typo'd/stale department can never be persisted on a user.
+   */
+  private async resolveDepartmentId(
+    dataSource: DataSource,
+    departmentId: string | null | undefined
+  ): Promise<string | null> {
+    if (!departmentId || !String(departmentId).trim()) {
+      return null;
+    }
+    const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "id" = $1`, [
+      departmentId,
+    ]);
+    if (rows.length === 0) {
+      throw new Error(`Unknown departmentId: ${departmentId}`);
+    }
+    return rows[0].id;
+  }
+
   public async registerCand(payload: IRegisterCandPayload, dataSource: DataSource) {
     const {
       email,
@@ -48,12 +69,14 @@ export class AuthController {
       nationality,
       rank,
       regDeg,
+      departmentId,
     } = payload;
 
     try {
       // Single-institution (KA spoke) mode: institutionId is accepted and ignored; the candidate
       // is written to the single static institution database (the provided dataSource).
       const encPass = await bcryptjs.hash(password, 10);
+      const validDepartmentId = await this.resolveDepartmentId(dataSource, departmentId);
 
       // Use institution DataSource only (never fall back to default DB)
       const candRepository = dataSource.getRepository(CandidateEntity);
@@ -68,6 +91,7 @@ export class AuthController {
         nationality,
         rank,
         regDeg: regDeg != null && String(regDeg).trim() !== "" ? regDeg : null, // Optional for non-academic institutions
+        departmentId: validDepartmentId,
       });
       newCand.termsAcceptedAt = new Date(); // Terms accepted at signup via frontend
       const savedCand = await candRepository.save(newCand);
@@ -83,12 +107,13 @@ export class AuthController {
    * Supervisor is created with approved: false. Institution ID is required.
    */
   public async registerSupervisor(payload: IRegisterSupervisorPayload, dataSource: DataSource) {
-    const { email, password, fullName, phoneNum, position } = payload;
+    const { email, password, fullName, phoneNum, position, departmentId } = payload;
 
     try {
       // Single-institution (KA spoke) mode: institutionId is accepted and ignored; the supervisor
       // is written to the single static institution database (the provided dataSource).
       const encPass = await bcryptjs.hash(password, 10);
+      const validDepartmentId = await this.resolveDepartmentId(dataSource, departmentId);
 
       const supervisorRepository = dataSource.getRepository(SupervisorEntity);
       const newSupervisor = supervisorRepository.create({
@@ -99,6 +124,7 @@ export class AuthController {
         approved: false, // Default: unapproved until institution approves
         role: UserRole.SUPERVISOR, // Default role for registration
         canValidate: false, // Default: no validation rights until granted by admin
+        departmentId: validDepartmentId,
         ...(position != null && String(position).trim() !== "" && { position: position as any }),
       });
       newSupervisor.termsAcceptedAt = new Date(); // Terms accepted at signup via frontend
@@ -170,7 +196,9 @@ export class AuthController {
         role: userRole,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId  // Always included (required)
+        institutionId: institutionId,  // Always included (required)
+        // Department claim: lets reads default to the user's department without an extra lookup.
+        ...(user.departmentId && { departmentId: user.departmentId })
       };
 
       const accessToken = await this.authTokenService.sign(tokenPayload);
@@ -304,7 +332,8 @@ export class AuthController {
         role: UserRole.INSTITUTE_ADMIN,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId  // Always included (required)
+        institutionId: institutionId,  // Always included (required)
+        ...(user.departmentId && { departmentId: user.departmentId })
       };
 
       const accessToken = await this.authTokenService.sign(tokenPayload);
@@ -452,7 +481,8 @@ export class AuthController {
         role: UserRole.CLERK,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId  // Always included for clerk login (required)
+        institutionId: institutionId,  // Always included for clerk login (required)
+        ...(user.departmentId && { departmentId: user.departmentId })
       };
 
       const accessToken = await this.authTokenService.sign(tokenPayload);
@@ -502,7 +532,7 @@ export class AuthController {
   public async refreshToken(refreshTokenPayload: any) {
     try {
       // Extract user info from refresh token payload (support both 'id' and '_id')
-      const { email, role, id, _id, institutionId } = refreshTokenPayload;
+      const { email, role, id, _id, institutionId, departmentId } = refreshTokenPayload;
       const userId = id || _id;
 
       if (!email || !role || !userId) {
@@ -519,6 +549,11 @@ export class AuthController {
       // Preserve institutionId if present
       if (institutionId) {
         tokenPayload.institutionId = institutionId;
+      }
+
+      // Preserve departmentId if present
+      if (departmentId) {
+        tokenPayload.departmentId = departmentId;
       }
 
       // Generate new access token

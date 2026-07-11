@@ -6,7 +6,7 @@ import { ReferenceReadController } from "./referenceRead.controller";
 import extractJWT from "../middleware/extractJWT";
 import { requireCandidate, requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
 import { UserRole } from "../types/role.types";
-import { userBasedRateLimiter } from "../middleware/rateLimiter.middleware";
+import { userBasedRateLimiter, apiRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
 import { getMainDiagByIdValidator } from "../validators/getMainDiagById.validator";
 import { getLectureByIdValidator } from "../validators/getLectureById.validator";
@@ -54,6 +54,16 @@ export class ReferenceReadRouter {
           res.status(status).json({ error: err.message });
         }
       };
+
+    // GET /departments — public list of the mirrored departments (for signup/pickers),
+    // same trust level as the public GET /institutions.
+    this.router.get("/departments", apiRateLimiter, async (req: Request, res: Response) => {
+      try {
+        res.status(StatusCodes.OK).json(await this.ctrl.getDepartments(req, res));
+      } catch (err: any) {
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+      }
+    });
 
     // GET /mainDiag , /mainDiag/:id  — candidate and up
     this.router.get(

@@ -14,10 +14,12 @@ export interface IRegisterCandPayload extends IAuth {
   nationality: string;
   rank: Rank;
   regDeg?: RegDegree | null; // Optional for non-academic institutions
+  departmentId?: string | null; // Mirror `departments` UUID; optional until the frontend sends it
 }
 
 export interface IRegisterSupervisorPayload extends IAuth {
   fullName: string;
   phoneNum: string;
   position?: TSupervisorPosition | null; // Optional; when provided, must be one of the accepted position types
+  departmentId?: string | null; // Mirror `departments` UUID; optional until the frontend sends it
 }

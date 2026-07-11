@@ -28,6 +28,12 @@ export const registerSupervisorValidator = [
     .isUUID()
     .withMessage("institutionId must be a valid UUID"),
 
+  // Department (mirror `departments` UUID). Optional until the frontend sends it.
+  body("departmentId")
+    .optional({ values: "falsy" })
+    .isUUID()
+    .withMessage("departmentId must be a valid UUID"),
+
   body("position")
     .optional({ values: "falsy" })
     .isIn([
