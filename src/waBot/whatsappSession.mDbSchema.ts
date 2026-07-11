@@ -10,7 +10,7 @@ export type WaLinkedRole = "candidate" | "supervisor" | "unknown";
 
 @Entity("whatsapp_sessions")
 export class WhatsappSessionEntity {
-  @PrimaryGeneratedColumn({ type: "bigint", unsigned: true })
+  @PrimaryGeneratedColumn({ type: "bigint" })
   id!: string;
 
   @Column({ name: "wa_from", type: "varchar", length: 32, unique: true })
@@ -46,20 +46,20 @@ export class WhatsappSessionEntity {
   @Column({ name: "conversation_state", type: "varchar", length: 64 })
   conversationState!: string;
 
-  @Column({ name: "context_json", type: "longtext", nullable: true })
+  @Column({ name: "context_json", type: "text", nullable: true })
   contextJson!: string | null;
 
   @Column({
     name: "expires_at",
-    type: "datetime",
+    type: "timestamp",
     precision: 3,
     nullable: true,
   })
   expiresAt!: Date | null;
 
-  @CreateDateColumn({ name: "created_at", type: "datetime", precision: 3 })
+  @CreateDateColumn({ name: "created_at", type: "timestamp", precision: 3 })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: "updated_at", type: "datetime", precision: 3 })
+  @UpdateDateColumn({ name: "updated_at", type: "timestamp", precision: 3 })
   updatedAt!: Date;
 }

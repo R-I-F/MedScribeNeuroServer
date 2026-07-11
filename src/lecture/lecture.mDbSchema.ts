@@ -12,17 +12,19 @@ export class LectureEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   lectureTitle!: string;
 
-  @Column({ type: "varchar", length: 255, unique: true })
-  google_uid!: string;
+  // Nullable for hub-mirrored lectures: the reference lectures carry no google_uid,
+  // and level is only set where an authoritative MSc/MD source exists.
+  @Column({ type: "varchar", length: 255, unique: true, nullable: true })
+  google_uid!: string | null;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   mainTopic!: string;
 
-  @Column({ type: "enum", enum: ["msc", "md"] })
-  level!: TLectureLevel;
+  @Column({ type: "enum", enum: ["msc", "md"], nullable: true })
+  level!: TLectureLevel | null;
 
   @CreateDateColumn()
   createdAt!: Date;

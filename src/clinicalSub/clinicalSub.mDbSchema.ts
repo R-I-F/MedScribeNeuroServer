@@ -30,14 +30,14 @@ export class ClinicalSubEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "char", length: 36, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "uuid" })
   candDocId!: string;
 
   @ManyToOne(() => CandidateEntity, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "candDocId" })
   candidate!: CandidateEntity;
 
-  @Column({ type: "char", length: 36, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "uuid" })
   supervisorDocId!: string;
 
   @ManyToOne(() => SupervisorEntity, { onDelete: "RESTRICT" })
@@ -67,7 +67,7 @@ export class ClinicalSubEntity {
   @Column({ type: "text", nullable: true })
   review?: string | null;
 
-  @Column({ type: "datetime", nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   reviewedAt?: Date | null;
 
   @CreateDateColumn()

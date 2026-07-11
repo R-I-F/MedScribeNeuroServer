@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
 import { DataSourceManager } from "../config/datasource.manager";
-import { getInstitutionById } from "../institution/institution.service";
+import { getInstitutionById, getStaticInstitution } from "../institution/institution.service";
 
 const NAMESPACE = "InstitutionResolver";
 
@@ -54,15 +54,11 @@ export async function institutionResolver(
       institutionId = req.query.institutionId as string;
     }
 
-    // If no institutionId found, return error (except for public endpoints already handled above)
+    // Single-institution (KA spoke) mode: if no institutionId was supplied, default to the
+    // static pinned institution instead of rejecting the request. Any supplied id is accepted
+    // and ignored downstream (getInstitutionById / getDataSource resolve to the static row).
     if (!institutionId) {
-      res.status(StatusCodes.BAD_REQUEST).json({
-        status: "error",
-        statusCode: StatusCodes.BAD_REQUEST,
-        message: "Bad Request",
-        error: "Institution ID is required. Include X-Institution-Id header, select institution via GET /institutions, or login to get institutionId in JWT token."
-      });
-      return;
+      institutionId = getStaticInstitution().id;
     }
 
     // Validate institution exists

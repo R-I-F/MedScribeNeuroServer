@@ -12,7 +12,7 @@ import { JwtPayload } from "../middleware/authorize.middleware";
 import IAuth, { IRegisterCandPayload, IRegisterSupervisorPayload } from "./auth.interface";
 import { UserRole } from "../types/role.types";
 import { DataSourceManager } from "../config/datasource.manager";
-import { getInstitutionById } from "../institution/institution.service";
+import { getStaticInstitution } from "../institution/institution.service";
 import { CandidateEntity } from "../cand/cand.mDbSchema";
 import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
 import { ISupervisorDoc } from "../supervisor/supervisor.interface";
@@ -48,19 +48,11 @@ export class AuthController {
       nationality,
       rank,
       regDeg,
-      institutionId,
     } = payload;
 
     try {
-      // Institution ID is required; default DB is for other configurations only
-      if (!institutionId) {
-        throw new Error("institutionId is required for candidate registration");
-      }
-      const institution = await getInstitutionById(institutionId);
-      if (!institution || !institution.isActive) {
-        throw new Error(`Invalid or inactive institution: ${institutionId}`);
-      }
-
+      // Single-institution (KA spoke) mode: institutionId is accepted and ignored; the candidate
+      // is written to the single static institution database (the provided dataSource).
       const encPass = await bcryptjs.hash(password, 10);
 
       // Use institution DataSource only (never fall back to default DB)
@@ -91,17 +83,11 @@ export class AuthController {
    * Supervisor is created with approved: false. Institution ID is required.
    */
   public async registerSupervisor(payload: IRegisterSupervisorPayload, dataSource: DataSource) {
-    const { email, password, fullName, phoneNum, institutionId, position } = payload;
+    const { email, password, fullName, phoneNum, position } = payload;
 
     try {
-      if (!institutionId) {
-        throw new Error("institutionId is required for supervisor registration");
-      }
-      const institution = await getInstitutionById(institutionId);
-      if (!institution || !institution.isActive) {
-        throw new Error(`Invalid or inactive institution: ${institutionId}`);
-      }
-
+      // Single-institution (KA spoke) mode: institutionId is accepted and ignored; the supervisor
+      // is written to the single static institution database (the provided dataSource).
       const encPass = await bcryptjs.hash(password, 10);
 
       const supervisorRepository = dataSource.getRepository(SupervisorEntity);
@@ -129,23 +115,16 @@ export class AuthController {
    * REQUIRES institutionId since each institution has its own candidates and supervisors
    */
   public async candidateSupervisorLogin(payload: IAuth, dataSource: DataSource) {
-    const { email, password, institutionId } = payload;
+    const { email, password } = payload;
     try {
-      // institutionId is REQUIRED
-      if (!institutionId) {
-        throw new Error("institutionId is required for login");
-      }
-
       // DataSource is REQUIRED (must be provided from router)
       if (!dataSource) {
         throw new Error("Institution DataSource is required for login");
       }
 
-      // Validate institution
-      const institution = await getInstitutionById(institutionId);
-      if (!institution || !institution.isActive) {
-        throw new Error(`Invalid or inactive institution: ${institutionId}`);
-      }
+      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
+      // the token carries the static institution id.
+      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -214,23 +193,16 @@ export class AuthController {
    * REQUIRES institutionId since each institution has its own super admins
    */
   public async superAdminLogin(payload: IAuth, dataSource: DataSource) {
-    const { email, password, institutionId } = payload;
+    const { email, password } = payload;
     try {
-      // institutionId is REQUIRED
-      if (!institutionId) {
-        throw new Error("institutionId is required for super admin login");
-      }
-
       // DataSource is REQUIRED (must be provided from router)
       if (!dataSource) {
         throw new Error("Institution DataSource is required for super admin login");
       }
 
-      // Validate institution
-      const institution = await getInstitutionById(institutionId);
-      if (!institution || !institution.isActive) {
-        throw new Error(`Invalid or inactive institution: ${institutionId}`);
-      }
+      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
+      // the token carries the static institution id.
+      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -288,23 +260,16 @@ export class AuthController {
    * REQUIRES institutionId since each institution has its own institute admins
    */
   public async instituteAdminLogin(payload: IAuth, dataSource: DataSource) {
-    const { email, password, institutionId } = payload;
+    const { email, password } = payload;
     try {
-      // institutionId is REQUIRED
-      if (!institutionId) {
-        throw new Error("institutionId is required for institute admin login");
-      }
-
       // DataSource is REQUIRED (must be provided from router)
       if (!dataSource) {
         throw new Error("Institution DataSource is required for institute admin login");
       }
 
-      // Validate institution
-      const institution = await getInstitutionById(institutionId);
-      if (!institution || !institution.isActive) {
-        throw new Error(`Invalid or inactive institution: ${institutionId}`);
-      }
+      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
+      // the token carries the static institution id.
+      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -364,23 +329,16 @@ export class AuthController {
    * @deprecated Use superAdminLogin or instituteAdminLogin instead
    */
   public async adminLogin(payload: IAuth, dataSource: DataSource) {
-    const { email, password, institutionId } = payload;
+    const { email, password } = payload;
     try {
-      // institutionId is REQUIRED for admin login (each institution has its own admins)
-      if (!institutionId) {
-        throw new Error("institutionId is required for admin login");
-      }
-
       // DataSource is REQUIRED (must be provided from router)
       if (!dataSource) {
         throw new Error("Institution DataSource is required for admin login");
       }
 
-      // Validate institution
-      const institution = await getInstitutionById(institutionId);
-      if (!institution || !institution.isActive) {
-        throw new Error(`Invalid or inactive institution: ${institutionId}`);
-      }
+      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
+      // the token carries the static institution id.
+      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -450,23 +408,16 @@ export class AuthController {
    * REQUIRES institutionId since each institution has its own clerks
    */
   public async clerkLogin(payload: IAuth, dataSource: DataSource) {
-    const { email, password, institutionId } = payload;
+    const { email, password } = payload;
     try {
-      // institutionId is REQUIRED for clerk login (each institution has its own clerks)
-      if (!institutionId) {
-        throw new Error("institutionId is required for clerk login");
-      }
-
       // DataSource is REQUIRED (must be provided from router)
       if (!dataSource) {
         throw new Error("Institution DataSource is required for clerk login");
       }
 
-      // Validate institution
-      const institution = await getInstitutionById(institutionId);
-      if (!institution || !institution.isActive) {
-        throw new Error(`Invalid or inactive institution: ${institutionId}`);
-      }
+      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
+      // the token carries the static institution id.
+      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;

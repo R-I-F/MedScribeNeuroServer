@@ -7,25 +7,25 @@ export class CandidateEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "datetime", nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   timeStamp?: Date;
 
-  @Column({ type: "varchar", length: 255, unique: true, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255, unique: true })
   email!: string;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   password!: string;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   fullName!: string;
 
-  @Column({ type: "varchar", length: 50, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 50 })
   regNum!: string;
 
-  @Column({ type: "varchar", length: 50, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 50 })
   phoneNum!: string;
 
-  @Column({ type: "varchar", length: 100, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 100 })
   nationality!: string;
 
   @Column({ 
@@ -54,7 +54,7 @@ export class CandidateEntity {
   })
   role!: UserRole;
 
-  @Column({ type: "datetime", nullable: true, comment: "Timestamp when user accepted Terms of Service" })
+  @Column({ type: "timestamp", nullable: true, comment: "Timestamp when user accepted Terms of Service" })
   termsAcceptedAt?: Date;
 
   @CreateDateColumn()

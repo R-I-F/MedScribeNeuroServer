@@ -1,7 +1,6 @@
 import { injectable } from "inversify";
-import { DefaultDbDataSource } from "../config/defaultdb.config";
 import { DataSourceManager } from "../config/datasource.manager";
-import { WaSessionRoutingEntity } from "./waSessionRouting.mDbSchema";
+import { getStaticInstitution } from "../institution/institution.service";
 import { WhatsappSessionEntity } from "./whatsappSession.mDbSchema";
 import {
   WA_CONV_AWAITING_ID,
@@ -18,28 +17,19 @@ export interface IWaLinkUserInput {
   supervisorId?: string | null;
 }
 
-async function ensureDefaultDbInitialized(): Promise<void> {
-  if (!DefaultDbDataSource.isInitialized) {
-    await DefaultDbDataSource.initialize();
-  }
-}
-
 @injectable()
 export class WaSessionService {
-  public async getRoutedInstitutionId(waFrom: string): Promise<string | null> {
-    await ensureDefaultDbInitialized();
-    const row = await DefaultDbDataSource.getRepository(WaSessionRoutingEntity).findOne({
-      where: { waFrom },
-    });
-    return row?.institutionId ?? null;
+  /**
+   * Single-institution (KA spoke) mode: every WhatsApp sender routes to the one static
+   * institution. The former defaultdb `wa_session_routing` lookup table is gone.
+   */
+  public async getRoutedInstitutionId(_waFrom: string): Promise<string | null> {
+    return getStaticInstitution().id;
   }
 
-  public async setRoutedInstitution(waFrom: string, institutionId: string): Promise<void> {
-    await ensureDefaultDbInitialized();
-    await DefaultDbDataSource.getRepository(WaSessionRoutingEntity).save({
-      waFrom,
-      institutionId,
-    });
+  /** No-op in single-institution mode — there is only one tenant to route to. */
+  public async setRoutedInstitution(_waFrom: string, _institutionId: string): Promise<void> {
+    // intentionally no-op
   }
 
   public async getTenantSession(

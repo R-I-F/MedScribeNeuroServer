@@ -11,27 +11,27 @@ export class SubmissionEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "datetime" })
+  @Column({ type: "timestamp" })
   timeStamp!: Date;
 
   @Column({ type: "enum", enum: ["candidate", "supervisor"], default: "candidate" })
   submissionType!: "candidate" | "supervisor";
 
-  @Column({ type: "char", length: 36, nullable: true })
+  @Column({ type: "uuid", nullable: true })
   candDocId!: string | null;
 
   @ManyToOne(() => CandidateEntity, { onDelete: "RESTRICT", nullable: true })
   @JoinColumn({ name: "candDocId" })
   candidate!: CandidateEntity | null;
 
-  @Column({ type: "char", length: 36 })
+  @Column({ type: "uuid" })
   procDocId!: string;
 
   @ManyToOne(() => CalSurgEntity, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "procDocId" })
   calSurg!: CalSurgEntity;
 
-  @Column({ type: "char", length: 36 })
+  @Column({ type: "uuid" })
   supervisorDocId!: string;
 
   @ManyToOne(() => SupervisorEntity, { onDelete: "RESTRICT" })
@@ -65,7 +65,7 @@ export class SubmissionEntity {
   @Column({ type: "text", nullable: true })
   consDetails?: string;
 
-  @Column({ type: "char", length: 36 })
+  @Column({ type: "uuid" })
   mainDiagDocId!: string;
 
   @ManyToOne(() => MainDiagEntity, { onDelete: "RESTRICT" })
@@ -81,7 +81,7 @@ export class SubmissionEntity {
   @Column({ type: "text", nullable: true })
   review?: string | null;
 
-  @Column({ type: "datetime", nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   reviewedAt?: Date | null;
 
   @Column({ type: "char", length: 36, nullable: true })

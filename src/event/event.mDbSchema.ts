@@ -22,31 +22,31 @@ export class EventEntity {
   @Column({ type: "enum", enum: ["lecture", "journal", "conf"] })
   type!: TEventType;
 
-  @Column({ type: "char", length: 36, nullable: true })
+  @Column({ type: "uuid", nullable: true })
   lectureId?: string;
 
   @ManyToOne(() => LectureEntity, { onDelete: "RESTRICT", nullable: true })
   @JoinColumn({ name: "lectureId" })
   lecture?: LectureEntity;
 
-  @Column({ type: "char", length: 36, nullable: true })
+  @Column({ type: "uuid", nullable: true })
   journalId?: string;
 
   @ManyToOne(() => JournalEntity, { onDelete: "RESTRICT", nullable: true })
   @JoinColumn({ name: "journalId" })
   journal?: JournalEntity;
 
-  @Column({ type: "char", length: 36, nullable: true })
+  @Column({ type: "uuid", nullable: true })
   confId?: string;
 
   @ManyToOne(() => ConfEntity, { onDelete: "RESTRICT", nullable: true })
   @JoinColumn({ name: "confId" })
   conf?: ConfEntity;
 
-  @Column({ type: "datetime" })
+  @Column({ type: "timestamp" })
   dateTime!: Date;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   location!: string;
 
   // Presenter: Polymorphic relationship

@@ -32,11 +32,19 @@ import { WhatsappSessionEntity } from "../waBot/whatsappSession.mDbSchema";
 
 dotenv.config();
 
-// Single-institution (KA spoke) database: the dedicated `ka-institute` Postgres service
-// (env PSQL_*). This is the ONE and ONLY application datasource — the former multi-tenant
-// per-institution pool and the defaultdb registry are gone. Migrations live in
-// src/migrations-ka/ (git-tracked) and are run via `npm run db:ka:*`.
-function getDbConfig(): DataSourceOptions {
+/**
+ * Migration runner DataSource for the KA institute database (`ka-institute` on the
+ * dedicated staging Aiven service — env `PSQL_*`, NOT the legacy `PSQL_*_DEFAULT`).
+ *
+ * Entity list = the unified tenant schema (the union of database.config.ts and
+ * datasource.manager.ts lists; DepartmentEntity dropped as unused). Migrations live
+ * in src/migrations-ka/ (git-tracked): the generated InitKaSchema + hand-written
+ * seeds. The legacy MySQL-flavored 1735* migrations do NOT run on Postgres and are
+ * not referenced here.
+ *
+ * ⚠️ Staging only — run via `npm run db:ka:*` (wired through dotenv -e .env.staging).
+ */
+function getKaMigrationsConfig(): DataSourceOptions {
   const sslCaPath = process.env.SSL_CA_PATH;
   const sslOpts =
     sslCaPath && fs.existsSync(path.resolve(process.cwd(), sslCaPath))
@@ -55,8 +63,8 @@ function getDbConfig(): DataSourceOptions {
     username: process.env.PSQL_USERNAME!,
     password: process.env.PSQL_PASSWORD!,
     database: process.env.PSQL_DB_NAME || "ka-institute",
-    synchronize: false, // NEVER set to true in production - use migrations instead
-    logging: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    synchronize: false,
+    logging: ["error", "warn", "migration"],
     entities: [
       HospitalEntity,
       DiagnosisEntity,
@@ -85,64 +93,11 @@ function getDbConfig(): DataSourceOptions {
       ClinicalSubEntity,
       WhatsappSessionEntity,
     ],
-    migrations: [
-      __dirname + "/../migrations-ka/*.ts",
-    ],
+    migrations: [__dirname + "/../migrations-ka/*.ts"],
     subscribers: [],
-    extra: {
-      max: 20,
-    },
+    extra: { max: 5 },
     ...sslOpts,
   };
 }
 
-// Create and export the DataSource instance.
-// This is the single application datasource (the KA `ka-institute` database). In
-// single-institution mode, DataSourceManager.getDataSource() and every request resolve here.
-export const AppDataSource = new DataSource(getDbConfig());
-
-// Initialize database connection
-export async function initializeDatabase(): Promise<void> {
-  try {
-    if (!AppDataSource.isInitialized) {
-      await AppDataSource.initialize();
-      console.log("✅ PostgreSQL connection established successfully");
-    }
-  } catch (error: any) {
-    console.error("❌ Error connecting to PostgreSQL:", error.message);
-    throw new Error(`Database connection failed: ${error.message}`);
-  }
-}
-
-// Close database connection
-export async function closeDatabase(): Promise<void> {
-  try {
-    if (AppDataSource.isInitialized) {
-      await AppDataSource.destroy();
-      console.log("✅ PostgreSQL connection closed");
-    }
-  } catch (error: any) {
-    console.error("❌ Error closing PostgreSQL connection:", error.message);
-    throw new Error(`Database disconnection failed: ${error.message}`);
-  }
-}
-
-// Validate environment variables for the single-institution (KA spoke) connection.
-export function validateDatabaseConfig(): void {
-  const required = [
-    "PSQL_HOST",
-    "PSQL_PORT",
-    "PSQL_DB_NAME",
-    "PSQL_USERNAME",
-    "PSQL_PASSWORD",
-    "SSL_CA_PATH",
-    "INSTITUTION_ID",
-  ];
-  const missing = required.filter((k) => !process.env[k]);
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing required database environment variables: ${missing.join(", ")}`
-    );
-  }
-}
+export const KaMigrationsDataSource = new DataSource(getKaMigrationsConfig());

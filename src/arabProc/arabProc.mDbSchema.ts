@@ -6,16 +6,16 @@ export class ArabProcEntity implements IArabProc {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 100, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 100 })
   title!: string;
 
-  @Column({ type: "varchar", length: 10, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 10 })
   alphaCode!: string;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   numCode!: string;
 
-  @Column({ type: "text", charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "text" })
   description!: string;
 
   @CreateDateColumn()

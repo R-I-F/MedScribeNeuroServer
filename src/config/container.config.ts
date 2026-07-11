@@ -23,25 +23,16 @@ import { CandRouter } from "../cand/cand.router";
 import { CandService } from "../cand/cand.service";
 import { CandProvider } from "../cand/cand.provider";
 
-import { ProcCptController } from "../procCpt/procCpt.controller";
-import { ProcCptRouter } from "../procCpt/procCpt.router";
 import { ProcCptService } from "../procCpt/procCpt.service";
 
-import { DiagnosisController } from "../diagnosis/diagnosis.controller";
-import { DiagnosisRouter } from "../diagnosis/diagnosis.router";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
 import { DiagnosisProvider } from "../diagnosis/diagnosis.provider";
-import { DiagnosisSearchService } from "../diagnosis/diagnosisSearch.service";
-
-import { McpRouter } from "../mcp/mcp.router";
 
 import { SupervisorController } from "../supervisor/supervisor.controller";
 import { SupervisorRouter } from "../supervisor/supervisor.router";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { SupervisorProvider } from "../supervisor/supervisor.provider";
 
-import { MainDiagController } from "../mainDiag/mainDiag.controller";
-import { MainDiagRouter } from "../mainDiag/mainDiag.router";
 import { MainDiagService } from "../mainDiag/mainDiag.service";
 import { MainDiagProvider } from "../mainDiag/mainDiag.provider";
 
@@ -81,8 +72,6 @@ import { ReportsProvider } from "../reports/reports.provider";
 import { AiAgentService } from "../aiAgent/aiAgent.service";
 import { AiAgentProvider } from "../aiAgent/aiAgent.provider";
 
-import { LectureController } from "../lecture/lecture.controller";
-import { LectureRouter } from "../lecture/lecture.router";
 import { LectureService } from "../lecture/lecture.service";
 import { LectureProvider } from "../lecture/lecture.provider";
 
@@ -118,16 +107,6 @@ import { AdditionalQuestionsRouter } from "../additionalQuestions/additionalQues
 import { AdditionalQuestionsService } from "../additionalQuestions/additionalQuestions.service";
 import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQuestions.provider";
 
-import { RefAdditionalQuestionsController } from "../refAdditionalQuestions/refAdditionalQuestions.controller";
-import { RefAdditionalQuestionsRouter } from "../refAdditionalQuestions/refAdditionalQuestions.router";
-import { RefAdditionalQuestionsService } from "../refAdditionalQuestions/refAdditionalQuestions.service";
-import { RefAdditionalQuestionsProvider } from "../refAdditionalQuestions/refAdditionalQuestions.provider";
-
-import { RefLecturesController } from "../refLectures/refLectures.controller";
-import { RefLecturesRouter } from "../refLectures/refLectures.router";
-import { RefLecturesService } from "../refLectures/refLectures.service";
-import { RefLecturesProvider } from "../refLectures/refLectures.provider";
-
 import { ConsumablesController } from "../consumables/consumables.controller";
 import { ConsumablesRouter } from "../consumables/consumables.router";
 import { ConsumablesService } from "../consumables/consumables.service";
@@ -138,18 +117,12 @@ import { EquipmentRouter } from "../equipment/equipment.router";
 import { EquipmentService } from "../equipment/equipment.service";
 import { EquipmentProvider } from "../equipment/equipment.provider";
 
-import { PositionsController } from "../positions/positions.controller";
-import { PositionsRouter } from "../positions/positions.router";
 import { PositionsService } from "../positions/positions.service";
 import { PositionsProvider } from "../positions/positions.provider";
 
-import { ApproachesController } from "../approaches/approaches.controller";
-import { ApproachesRouter } from "../approaches/approaches.router";
 import { ApproachesService } from "../approaches/approaches.service";
 import { ApproachesProvider } from "../approaches/approaches.provider";
 
-import { RegionsController } from "../regions/regions.controller";
-import { RegionsRouter } from "../regions/regions.router";
 import { RegionsService } from "../regions/regions.service";
 import { RegionsProvider } from "../regions/regions.provider";
 
@@ -168,6 +141,14 @@ import { WaBotRouter } from "../waBot/waBot.router";
 import { WaBotService } from "../waBot/waBot.service";
 import { WaBotProvider } from "../waBot/waBot.provider";
 import { WaSessionService } from "../waBot/waSession.service";
+
+import { ReferenceReadController } from "../referenceRead/referenceRead.controller";
+import { ReferenceReadRouter } from "../referenceRead/referenceRead.router";
+
+import { RefApiClient } from "../refApi/refApi.client";
+import { RefMirrorService } from "../refApi/refMirror.service";
+import { RefDataService } from "../refApi/refData.service";
+import { RefResyncRouter } from "../refApi/refResync.router";
 
 export const container: Container = new Container();
 
@@ -195,25 +176,16 @@ container.bind(CandService).toSelf().inTransientScope();
 container.bind(CandRouter).toSelf().inTransientScope();
 container.bind(CandProvider).toSelf().inTransientScope();
 
-container.bind(ProcCptController).toSelf().inTransientScope();
-container.bind(ProcCptRouter).toSelf().inTransientScope();
 container.bind(ProcCptService).toSelf().inTransientScope();
 
-container.bind(DiagnosisController).toSelf().inTransientScope();
-container.bind(DiagnosisRouter).toSelf().inTransientScope();
 container.bind(DiagnosisService).toSelf().inTransientScope();
 container.bind(DiagnosisProvider).toSelf().inTransientScope();
-container.bind(DiagnosisSearchService).toSelf().inTransientScope();
-
-container.bind(McpRouter).toSelf().inTransientScope();
 
 container.bind(SupervisorController).toSelf().inTransientScope();
 container.bind(SupervisorRouter).toSelf().inTransientScope();
 container.bind(SupervisorService).toSelf().inTransientScope();
 container.bind(SupervisorProvider).toSelf().inTransientScope();
 
-container.bind(MainDiagController).toSelf().inTransientScope();
-container.bind(MainDiagRouter).toSelf().inTransientScope();
 container.bind(MainDiagService).toSelf().inTransientScope();
 container.bind(MainDiagProvider).toSelf().inTransientScope();
 
@@ -273,8 +245,6 @@ container.bind(ClerkRouter).toSelf().inTransientScope();
 container.bind(ClerkService).toSelf().inTransientScope();
 container.bind(ClerkProvider).toSelf().inTransientScope();
 
-container.bind(LectureController).toSelf().inTransientScope();
-container.bind(LectureRouter).toSelf().inTransientScope();
 container.bind(LectureService).toSelf().inTransientScope();
 container.bind(LectureProvider).toSelf().inTransientScope();
 
@@ -290,16 +260,6 @@ container.bind(AdditionalQuestionsRouter).toSelf().inTransientScope();
 container.bind(AdditionalQuestionsService).toSelf().inTransientScope();
 container.bind(AdditionalQuestionsProvider).toSelf().inTransientScope();
 
-container.bind(RefAdditionalQuestionsController).toSelf().inTransientScope();
-container.bind(RefAdditionalQuestionsRouter).toSelf().inTransientScope();
-container.bind(RefAdditionalQuestionsService).toSelf().inTransientScope();
-container.bind(RefAdditionalQuestionsProvider).toSelf().inTransientScope();
-
-container.bind(RefLecturesController).toSelf().inTransientScope();
-container.bind(RefLecturesRouter).toSelf().inTransientScope();
-container.bind(RefLecturesService).toSelf().inTransientScope();
-container.bind(RefLecturesProvider).toSelf().inTransientScope();
-
 container.bind(ConsumablesController).toSelf().inTransientScope();
 container.bind(ConsumablesRouter).toSelf().inTransientScope();
 container.bind(ConsumablesService).toSelf().inTransientScope();
@@ -310,18 +270,12 @@ container.bind(EquipmentRouter).toSelf().inTransientScope();
 container.bind(EquipmentService).toSelf().inTransientScope();
 container.bind(EquipmentProvider).toSelf().inTransientScope();
 
-container.bind(PositionsController).toSelf().inTransientScope();
-container.bind(PositionsRouter).toSelf().inTransientScope();
 container.bind(PositionsService).toSelf().inTransientScope();
 container.bind(PositionsProvider).toSelf().inTransientScope();
 
-container.bind(ApproachesController).toSelf().inTransientScope();
-container.bind(ApproachesRouter).toSelf().inTransientScope();
 container.bind(ApproachesService).toSelf().inTransientScope();
 container.bind(ApproachesProvider).toSelf().inTransientScope();
 
-container.bind(RegionsController).toSelf().inTransientScope();
-container.bind(RegionsRouter).toSelf().inTransientScope();
 container.bind(RegionsService).toSelf().inTransientScope();
 container.bind(RegionsProvider).toSelf().inTransientScope();
 
@@ -340,3 +294,13 @@ container.bind(WaBotRouter).toSelf().inTransientScope();
 container.bind(WaBotService).toSelf().inTransientScope();
 container.bind(WaSessionService).toSelf().inTransientScope();
 container.bind(WaBotProvider).toSelf().inTransientScope();
+
+container.bind(ReferenceReadController).toSelf().inTransientScope();
+container.bind(ReferenceReadRouter).toSelf().inTransientScope();
+
+// Reference hub client + mirror + poller + resync webhook. Singletons so the axios client,
+// the version-poll timer and the last-known dataVersion persist across the process.
+container.bind(RefApiClient).toSelf().inSingletonScope();
+container.bind(RefMirrorService).toSelf().inSingletonScope();
+container.bind(RefDataService).toSelf().inSingletonScope();
+container.bind(RefResyncRouter).toSelf().inTransientScope();

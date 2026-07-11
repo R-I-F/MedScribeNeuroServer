@@ -7,7 +7,7 @@ export class MainDiagEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 200, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 200 })
   title!: string;
 
   @ManyToMany(() => DiagnosisEntity)

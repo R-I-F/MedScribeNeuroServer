@@ -28,7 +28,7 @@ export class PasswordResetTokenEntity {
   @Column({ type: "varchar", length: 255, unique: true })
   token!: string;
 
-  @Column({ type: "datetime" })
+  @Column({ type: "timestamp" })
   expiresAt!: Date;
 
   @Column({ type: "boolean", default: false })

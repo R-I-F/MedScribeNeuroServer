@@ -11,16 +11,17 @@ import { requestLogger } from "./middleware/requestLogger.middleware";
 import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware";
 import { globalIpRateLimiter } from "./middleware/rateLimiter.middleware";
 import { initializeDatabase, validateDatabaseConfig, closeDatabase } from "./config/database.config";
-import { closeDefaultDatabase } from "./config/defaultdb.config";
-import { closeReferenceDatabase } from "./config/referenceDb.config";
 import { DataSourceManager } from "./config/datasource.manager";
 import { getAllActiveInstitutions } from "./institution/institution.service";
+import { container } from "./config/container.config";
+import { RefDataService } from "./refApi/refData.service";
 import { Server } from "http";
 
 dotenv.config();
 const port = process.env.PORT;
 let server: Server | null = null;
 let isShuttingDown = false;
+let refData: RefDataService | null = null;
 
 // Process-level safety net: log and exit so a process manager can restart
 process.on("unhandledRejection", (reason, promise) => {
@@ -94,10 +95,9 @@ async function gracefulShutdown(): Promise<void> {
       await onCloseServer();
       server = null;
     }
+    refData?.stopPolling();
     await DataSourceManager.getInstance().closeAll();
     await closeDatabase();
-    await closeDefaultDatabase();
-    await closeReferenceDatabase();
     console.log("[App] Shutdown complete");
     process.exit(0);
   } catch (err) {
@@ -121,6 +121,13 @@ async function bootstrap() {
     await initializeDatabase();
     await getAllActiveInstitutions();
     console.log("[App] Institution cache warmed");
+
+    // Reference mirror: sync from the hub if its dataVersion moved (tolerates hub-down when a
+    // mirror already exists), then start the background version poll.
+    refData = container.get(RefDataService);
+    await refData.bootstrapSync();
+    refData.startPolling();
+
     console.log("[App] Database connected, binding port...");
     server = app.listen(port, () => {
       console.log(`✅ Server running on port ${port}`);

@@ -7,10 +7,10 @@ export class CalSurgEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "datetime" })
+  @Column({ type: "timestamp" })
   timeStamp!: Date;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   patientName!: string;
 
   @Column({ type: "date" })
@@ -19,14 +19,14 @@ export class CalSurgEntity {
   @Column({ type: "enum", enum: ["male", "female"] })
   gender!: "male" | "female";
 
-  @Column({ type: "char", length: 36 })
+  @Column({ type: "uuid" })
   hospitalId!: string;
 
   @ManyToOne(() => HospitalEntity, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "hospitalId" })
   hospital!: HospitalEntity;
 
-  @Column({ type: "char", length: 36, nullable: true })
+  @Column({ type: "uuid", nullable: true })
   arabProcId?: string;
 
   @ManyToOne(() => ArabProcEntity, { onDelete: "RESTRICT", nullable: true })

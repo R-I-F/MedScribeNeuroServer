@@ -22,17 +22,8 @@ export function addRoutes(app: Application) {
   const { CandRouter } = require("../cand/cand.router");
   const candRouter = container.get(CandRouter) as any;
 
-  const { ProcCptRouter } = require("../procCpt/procCpt.router");
-  const procCptRouter = container.get(ProcCptRouter) as any;
-
-  const { DiagnosisRouter } = require("../diagnosis/diagnosis.router");
-  const diagnosisRouter = container.get(DiagnosisRouter) as any;
-
   const { SupervisorRouter } = require("../supervisor/supervisor.router");
   const supervisorRouter = container.get(SupervisorRouter) as any;
-
-  const { MainDiagRouter } = require("../mainDiag/mainDiag.router");
-  const mainDiagRouter = container.get(MainDiagRouter) as any;
 
   const { SubRouter } = require("../sub/sub.router");
   const subRouter = container.get(SubRouter) as any;
@@ -52,9 +43,6 @@ export function addRoutes(app: Application) {
   const { ReportsRouter } = require("../reports/reports.router");
   const reportsRouter = container.get(ReportsRouter) as any;
 
-  const { LectureRouter } = require("../lecture/lecture.router");
-  const lectureRouter = container.get(LectureRouter) as any;
-
   const { JournalRouter } = require("../journal/journal.router");
   const journalRouter = container.get(JournalRouter) as any;
 
@@ -73,26 +61,11 @@ export function addRoutes(app: Application) {
   const { AdditionalQuestionsRouter } = require("../additionalQuestions/additionalQuestions.router");
   const additionalQuestionsRouter = container.get(AdditionalQuestionsRouter) as any;
 
-  const { RefAdditionalQuestionsRouter } = require("../refAdditionalQuestions/refAdditionalQuestions.router");
-  const refAdditionalQuestionsRouter = container.get(RefAdditionalQuestionsRouter) as any;
-
-  const { RefLecturesRouter } = require("../refLectures/refLectures.router");
-  const refLecturesRouter = container.get(RefLecturesRouter) as any;
-
   const { ConsumablesRouter } = require("../consumables/consumables.router");
   const consumablesRouter = container.get(ConsumablesRouter) as any;
 
   const { EquipmentRouter } = require("../equipment/equipment.router");
   const equipmentRouter = container.get(EquipmentRouter) as any;
-
-  const { PositionsRouter } = require("../positions/positions.router");
-  const positionsRouter = container.get(PositionsRouter) as any;
-
-  const { ApproachesRouter } = require("../approaches/approaches.router");
-  const approachesRouter = container.get(ApproachesRouter) as any;
-
-  const { RegionsRouter } = require("../regions/regions.router");
-  const regionsRouter = container.get(RegionsRouter) as any;
 
   const { BundlerRouter } = require("../bundler/bundler.router");
   const bundlerRouter = container.get(BundlerRouter) as any;
@@ -103,8 +76,12 @@ export function addRoutes(app: Application) {
   const { WaBotRouter } = require("../waBot/waBot.router");
   const waBotRouter = container.get(WaBotRouter) as any;
 
-  const { McpRouter } = require("../mcp/mcp.router");
-  const mcpRouter = container.get(McpRouter) as any;
+  // Read-only reference reads (mirror-backed) at the legacy paths, + hub re-mirror webhook.
+  const { ReferenceReadRouter } = require("../referenceRead/referenceRead.router");
+  const referenceReadRouter = container.get(ReferenceReadRouter) as any;
+
+  const { RefResyncRouter } = require("../refApi/refResync.router");
+  const refResyncRouter = container.get(RefResyncRouter) as any;
 
   const { healthRateLimiter } = require("../middleware/rateLimiter.middleware");
   // Health check: use GET /health for load balancer / k8s probes. Rate-limited to throttle bot traffic.
@@ -116,36 +93,33 @@ export function addRoutes(app: Application) {
   app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
   app.use("/cand", candRouter.router);
-  app.use("/procCpt", procCptRouter.router);
   app.use("/external", externalRouter.router);
-  app.use("/diagnosis", diagnosisRouter.router);
   app.use("/supervisor", supervisorRouter.router);
-  app.use("/mainDiag", mainDiagRouter.router);
   app.use("/sub", subRouter.router);
   app.use("/mailer", mailerRouter.router);
   app.use("/auth", authRouter.router);
   app.use("/superAdmin", superAdminRouter.router);
   app.use("/instituteAdmin", instituteAdminRouter.router);
   app.use("/instituteAdmin/reports", reportsRouter.router);
-  app.use("/lecture", lectureRouter.router);
   app.use("/journal", journalRouter.router);
   app.use("/conf", confRouter.router);
   app.use("/event", eventRouter.router);
   app.use("/clerk", clerkRouter.router);
   app.use("/activityTimeline", activityTimelineRouter.router);
   app.use("/additionalQuestions", additionalQuestionsRouter.router);
-  app.use("/refAdditionalQuestions", refAdditionalQuestionsRouter.router);
-  app.use("/refLectures", refLecturesRouter.router);
   app.use("/consumables", consumablesRouter.router);
   app.use("/equipment", equipmentRouter.router);
-  app.use("/positions", positionsRouter.router);
-  app.use("/approaches", approachesRouter.router);
-  app.use("/regions", regionsRouter.router);
   app.use("/clinicalSub", clinicalSubRouter.router);
   app.use("/references", bundlerRouter.router);
   app.use("/candidate", bundlerRouter.router);
   app.use("/waBot", waBotRouter.router);
-  app.use("/mcp", mcpRouter.router);
+
+  // Reference reads (mirror-backed) mounted at the ORIGINAL paths: /mainDiag, /mainDiag/:id,
+  // /diagnosis, /procCpt, /lecture, /lecture/:id. Writes on these paths are gone (404).
+  app.use("/", referenceReadRouter.router);
+
+  // Hub superadmin re-mirror webhook (HMAC): POST /admin/ref-resync
+  app.use("/admin", refResyncRouter.router);
 
   return app;
 }

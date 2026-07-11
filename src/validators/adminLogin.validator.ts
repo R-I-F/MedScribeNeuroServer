@@ -10,9 +10,9 @@ export const adminLoginValidator = [
     .notEmpty()
     .withMessage("password is required"),
 
+  // Single-institution (KA spoke) mode: institutionId is accepted and ignored; optional.
   body("institutionId")
+    .optional({ values: "falsy" })
     .isUUID()
-    .withMessage("institutionId must be a valid UUID")
-    .notEmpty()
-    .withMessage("institutionId is required for admin login"),
+    .withMessage("institutionId must be a valid UUID"),
 ];

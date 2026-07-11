@@ -14,13 +14,13 @@ export class ConfEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar", length: 255, charset: "utf8mb4", collation: "utf8mb4_unicode_ci" })
+  @Column({ type: "varchar", length: 255 })
   confTitle!: string;
 
   @Column({ type: "varchar", length: 255, unique: true })
   google_uid!: string;
 
-  @Column({ type: "char", length: 36 })
+  @Column({ type: "uuid" })
   presenterId!: string;
 
   @ManyToOne(() => SupervisorEntity, { onDelete: "RESTRICT" })

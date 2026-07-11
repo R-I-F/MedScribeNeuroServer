@@ -17,14 +17,14 @@ export class EventAttendanceEntity {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "char", length: 36 })
+  @Column({ type: "uuid" })
   eventId!: string;
 
   @ManyToOne(() => EventEntity, { onDelete: "CASCADE" })
   @JoinColumn({ name: "eventId" })
   event!: EventEntity;
 
-  @Column({ type: "char", length: 36 })
+  @Column({ type: "uuid" })
   candidateId!: string;
 
   @ManyToOne(() => CandidateEntity, { onDelete: "CASCADE" })
@@ -48,7 +48,7 @@ export class EventAttendanceEntity {
   @Column({ type: "char", length: 36, nullable: true })
   flaggedBy?: string;
 
-  @Column({ type: "datetime", nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   flaggedAt?: Date;
 
   @Column({ type: "int", default: 1 })

@@ -22,7 +22,6 @@ import { UserRole } from "../types/role.types";
 import { PasswordResetController } from "../passwordReset/passwordReset.controller";
 import { userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
 import { DataSourceManager } from "../config/datasource.manager";
-import { getInstitutionById } from "../institution/institution.service";
 import institutionResolver from "../middleware/institutionResolver.middleware";
 
 @injectable()
@@ -41,26 +40,11 @@ export class AuthRouter {
    * Helper function to get DataSource for institution from request
    * Returns DataSource if institutionId is valid, undefined otherwise
    */
-  private async getDataSourceFromRequest(req: Request): Promise<DataSource | undefined> {
+  private async getDataSourceFromRequest(_req: Request): Promise<DataSource | undefined> {
     try {
-      // Try to get institutionId from body, query, or header
-      const institutionId = (req.body as any)?.institutionId || 
-                           req.query.institutionId as string || 
-                           req.get("X-Institution-Id");
-
-      if (!institutionId) {
-        return undefined;
-      }
-
-      // Validate institution
-      const institution = await getInstitutionById(institutionId as string);
-      if (!institution || !institution.isActive) {
-        return undefined;
-      }
-
-      // Get DataSource
-      const dataSourceManager = DataSourceManager.getInstance();
-      return await dataSourceManager.getDataSource(institutionId as string);
+      // Single-institution (KA spoke) mode: any institutionId in the request is accepted and
+      // ignored; always resolve to the single static KA datasource.
+      return await DataSourceManager.getInstance().getDataSource();
     } catch (error) {
       console.error("[AuthRouter] Error getting DataSource:", error);
       return undefined;
@@ -155,21 +139,14 @@ export class AuthRouter {
               locations: ["body"],
             }) as IAuth;
             
-            // Validate that institutionId is provided (required)
-            if (!payload.institutionId) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "institutionId is required for login"
-              });
-            }
-            
-            // Get DataSource for institution (required)
+            // Single-institution mode: institutionId is accepted and ignored (may be absent).
             const dataSource = await this.getDataSourceFromRequest(req);
             if (!dataSource) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                error: "Database connection unavailable. Please try again later."
               });
             }
-            
+
             // Log login attempt
             console.log(`[AuthRouter] 🔐 LOGIN ATTEMPT - Email: ${payload.email}, InstitutionId: ${payload.institutionId}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
@@ -228,21 +205,14 @@ export class AuthRouter {
               locations: ["body"],
             }) as IAuth;
             
-            // Validate that institutionId is provided (required)
-            if (!payload.institutionId) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "institutionId is required for super admin login"
-              });
-            }
-            
-            // Get DataSource for institution (required)
+            // Single-institution mode: institutionId is accepted and ignored (may be absent).
             const dataSource = await this.getDataSourceFromRequest(req);
             if (!dataSource) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                error: "Database connection unavailable. Please try again later."
               });
             }
-            
+
             const resp = await (this.authController as any).superAdminLogin(payload, dataSource);
             
             // Log successful login with comprehensive user details
@@ -282,21 +252,14 @@ export class AuthRouter {
               locations: ["body"],
             }) as IAuth;
             
-            // Validate that institutionId is provided (required)
-            if (!payload.institutionId) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "institutionId is required for institute admin login"
-              });
-            }
-            
-            // Get DataSource for institution (required)
+            // Single-institution mode: institutionId is accepted and ignored (may be absent).
             const dataSource = await this.getDataSourceFromRequest(req);
             if (!dataSource) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                error: "Database connection unavailable. Please try again later."
               });
             }
-            
+
             const resp = await (this.authController as any).instituteAdminLogin(payload, dataSource);
             
             // Log successful login with comprehensive user details
@@ -336,21 +299,14 @@ export class AuthRouter {
               locations: ["body"],
             }) as IAuth;
             
-            // Validate that institutionId is provided (required for clerk login)
-            if (!payload.institutionId) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "institutionId is required for clerk login"
-              });
-            }
-            
-            // Get DataSource for institution (required for clerk login)
+            // Single-institution mode: institutionId is accepted and ignored (may be absent).
             const dataSource = await this.getDataSourceFromRequest(req);
             if (!dataSource) {
-              return res.status(StatusCodes.BAD_REQUEST).json({
-                error: "Invalid or inactive institution. Please provide a valid institutionId."
+              return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                error: "Database connection unavailable. Please try again later."
               });
             }
-            
+
             const resp = await (this.authController as any).clerkLogin(payload, dataSource);
             
             // Log successful login with comprehensive user details

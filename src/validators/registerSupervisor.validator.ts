@@ -22,7 +22,9 @@ export const registerSupervisorValidator = [
     .notEmpty()
     .withMessage("phoneNum is required"),
 
+  // Single-institution (KA spoke) mode: institutionId is accepted and ignored; optional.
   body("institutionId")
+    .optional({ values: "falsy" })
     .isUUID()
     .withMessage("institutionId must be a valid UUID"),
 
