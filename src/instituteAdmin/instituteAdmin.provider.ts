@@ -193,8 +193,10 @@ export class InstituteAdminProvider {
       const canonical = InstituteAdminProvider.canonicalEmail(email);
       const instituteAdmin = await instituteAdminRepository
         .createQueryBuilder("i")
+        // Postgres: split_part(str,'@',1)=local, split_part(str,'@',2)=domain
+        // (was MySQL SUBSTRING_INDEX(...,'@',1)/(...,'@',-1), which Postgres has no equivalent of).
         .where(
-          "LOWER(TRIM(i.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(i.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(i.email)), '@', -1)) = :canonical)",
+          "LOWER(TRIM(i.email)) = :normalized OR (CONCAT(REPLACE(split_part(LOWER(TRIM(i.email)), '@', 1), '.', ''), '@', split_part(LOWER(TRIM(i.email)), '@', 2)) = :canonical)",
           { normalized, canonical }
         )
         .getOne();
