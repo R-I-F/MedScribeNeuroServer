@@ -70,4 +70,13 @@ export const createSupervisorValidator = checkSchema({
     },
     trim: true,
   },
+  departmentId: {
+    in: ["body"],
+    notEmpty: true,
+    errorMessage: "supervisor departmentId is required.",
+    isUUID: {
+      errorMessage: "supervisor departmentId must be a valid UUID",
+    },
+    trim: true,
+  },
 });

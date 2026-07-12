@@ -96,7 +96,8 @@ export class SupervisorProvider {
       const supervisorRepository = dataSource.getRepository(SupervisorEntity);
       const supervisor = await supervisorRepository
         .createQueryBuilder("s")
-        .where("REGEXP_REPLACE(s.phoneNum, '[^0-9]+', '') = :digits", { digits })
+        // Postgres needs the 'g' flag to strip ALL non-digit runs (without it, only the first is removed).
+        .where("REGEXP_REPLACE(s.phoneNum, '[^0-9]+', '', 'g') = :digits", { digits })
         .getOne();
       return supervisor as unknown as ISupervisorDoc | null;
     } catch (err: any) {
@@ -112,8 +113,10 @@ export class SupervisorProvider {
       const canonical = SupervisorProvider.canonicalEmail(email);
       const supervisor = await supervisorRepository
         .createQueryBuilder("s")
+        // Postgres: split_part(str,'@',1)=local, split_part(str,'@',2)=domain
+        // (was MySQL SUBSTRING_INDEX(...,'@',1)/(...,'@',-1), which Postgres has no equivalent of).
         .where(
-          "LOWER(TRIM(s.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(s.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(s.email)), '@', -1)) = :canonical)",
+          "LOWER(TRIM(s.email)) = :normalized OR (CONCAT(REPLACE(split_part(LOWER(TRIM(s.email)), '@', 1), '.', ''), '@', split_part(LOWER(TRIM(s.email)), '@', 2)) = :canonical)",
           { normalized, canonical }
         )
         .getOne();

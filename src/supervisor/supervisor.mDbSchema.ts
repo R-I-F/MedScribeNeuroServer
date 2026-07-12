@@ -16,7 +16,7 @@ export class SupervisorEntity {
   @Column({ type: "varchar", length: 255 })
   fullName!: string;
 
-  @Column({ type: "varchar", length: 50 })
+  @Column({ type: "varchar", length: 50, unique: true })
   phoneNum!: string;
 
   @Column({ type: "boolean", default: false })
@@ -46,10 +46,10 @@ export class SupervisorEntity {
   @Column({ type: "timestamp", nullable: true, comment: "Timestamp when user accepted Terms of Service" })
   termsAcceptedAt?: Date;
 
-  // Department this user belongs to (FK → departments). The institute serves all departments;
-  // nullable during rollout / for pre-existing accounts.
-  @Column({ type: "uuid", nullable: true })
-  departmentId!: string | null;
+  // Department this user belongs to (FK → departments). NOT NULL: every supervisor must belong
+  // to a department (enforced after the prod backfill stamped all rows → NS).
+  @Column({ type: "uuid" })
+  departmentId!: string;
 
   @CreateDateColumn()
   createdAt!: Date;
