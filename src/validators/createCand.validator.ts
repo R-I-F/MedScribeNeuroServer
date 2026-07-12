@@ -45,9 +45,11 @@ export const createCandValidator = [
     .isUUID()
     .withMessage("institutionId must be a valid UUID"),
 
-  // Department (mirror `departments` UUID). Optional until the frontend sends it.
+  // Department (mirror `departments` UUID). REQUIRED: candidates.departmentId is NOT NULL.
   body("departmentId")
-    .optional({ values: "falsy" })
+    .notEmpty()
+    .withMessage("departmentId is required")
+    .bail()
     .isUUID()
     .withMessage("departmentId must be a valid UUID"),
 ];

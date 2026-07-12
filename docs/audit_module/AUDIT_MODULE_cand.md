@@ -13,10 +13,14 @@ All approved items applied to the `migration/mysql-to-postgres` branch + `ka-ins
 | C | Restore `phoneNum` UNIQUE — entity `unique:true` + migration | `cand.mDbSchema.ts:25`, `src/migrations-ka/1783782609940-AddCandidatesPhoneUnique.ts` | ✅ migrated; `UQ_candidates_phoneNum` live & UNIQUE |
 | D | Purge 4 stray `@example.com` test rows | `ka-institute.candidates` | ✅ 4 purged (in ETL) |
 | E | ETL 110 prod candidates → NS (`departmentId` stamped) | `scripts/etl-candidates-prod-to-ka.cjs` | ✅ 110 loaded |
+| F | `departmentId` NOT NULL (parity with supervisors; user decision 2026-07-12) | `cand.mDbSchema.ts` (entity flip) + `src/migrations-ka/1783782609970-CandidateDepartmentNotNull.ts` | ✅ migrated; `is_nullable = NO` |
+| G | Enforce departmentId at candidate **creation** (consequence of NOT NULL) | `auth.controller.ts` registerCand throws if none + `validators/createCand.validator.ts` (departmentId required, isUUID) | ✅ done, tsc clean |
 
-**ETL verification (counts-only, no PII):** total **110** ✅ · `departmentId=NS` **110** · `departmentId NULL` **0** ✅ · dup phoneNum **0** ✅ · dup email **0** ✅ · emails matching prod **110/110** ✅. NS dept id = `65bda505-b6e4-4a48-9a1e-6cc0a80b49f6`. Unique index created *after* the dup-free load, so it took cleanly.
+**ETL verification (counts-only, no PII):** total **110** ✅ · `departmentId=NS` **110** · `departmentId NULL` **0** ✅ · dup phoneNum **0** ✅ · dup email **0** ✅ · emails matching prod **110/110** ✅. NS dept id = `65bda505-b6e4-4a48-9a1e-6cc0a80b49f6`. Unique index created *after* the dup-free load, so it took cleanly. `departmentId` NOT NULL added later the same day (parity with `supervisors`); 110/110 rows already NS so it took cleanly.
 
-**Not done (out of scope / deferred):** the canonical-email normalization redesign (open Q4 — left as fixed in-SQL); no commit/push (awaiting user).
+**⚠️ API behavior change (from the NOT NULL decision):** registering a candidate now **requires** a valid `departmentId` — `/auth/registerCand` validator rejects a missing/invalid one (400) and the controller throws if none resolves. **The frontend must send `departmentId` on candidate registration.** (The bulk `/createCandsFromExternal` path is already disabled — 410 — so no impact there.)
+
+**Not done (out of scope / deferred):** the canonical-email normalization redesign (open Q4 — left as fixed in-SQL); the forgot-password/WA-bot first-match-wins cross-role quirk (faithful to prod — separate product task).
 
 ## 0. Decisions locked (user, 2026-07-12)
 1. **`phoneNum` UNIQUE — KEEP.** Restore the unique constraint in the consolidated DB (matches prod; protects the WA-bot single-match `.getOne()` lookup).

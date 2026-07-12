@@ -77,6 +77,10 @@ export class AuthController {
       // is written to the single static institution database (the provided dataSource).
       const encPass = await bcryptjs.hash(password, 10);
       const validDepartmentId = await this.resolveDepartmentId(dataSource, departmentId);
+      // candidates.departmentId is NOT NULL: every candidate must belong to a department.
+      if (!validDepartmentId) {
+        throw new Error("departmentId is required to register a candidate");
+      }
 
       // Use institution DataSource only (never fall back to default DB)
       const candRepository = dataSource.getRepository(CandidateEntity);
