@@ -22,7 +22,7 @@ export class CandidateEntity {
   @Column({ type: "varchar", length: 50 })
   regNum!: string;
 
-  @Column({ type: "varchar", length: 50 })
+  @Column({ type: "varchar", length: 50, unique: true })
   phoneNum!: string;
 
   @Column({ type: "varchar", length: 100 })

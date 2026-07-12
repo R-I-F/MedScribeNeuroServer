@@ -92,7 +92,8 @@ export class CandService {
       const candRepository = dataSource.getRepository(CandidateEntity);
       const cand = await candRepository
         .createQueryBuilder("c")
-        .where("REGEXP_REPLACE(c.phoneNum, '[^0-9]+', '') = :digits", { digits })
+        // Postgres needs the 'g' flag to strip ALL non-digit runs (without it, only the first is removed).
+        .where("REGEXP_REPLACE(c.phoneNum, '[^0-9]+', '', 'g') = :digits", { digits })
         .getOne();
       return cand as unknown as ICandDoc | null;
     } catch (err: any) {
@@ -108,8 +109,10 @@ export class CandService {
       const canonical = CandService.canonicalEmail(email);
       const cand = await candRepository
         .createQueryBuilder("c")
+        // Postgres: split_part(str,'@',1)=local, split_part(str,'@',2)=domain
+        // (was MySQL SUBSTRING_INDEX(...,'@',1)/(...,'@',-1), which Postgres has no equivalent of).
         .where(
-          "LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', -1)) = :canonical)",
+          "LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(split_part(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', split_part(LOWER(TRIM(c.email)), '@', 2)) = :canonical)",
           { normalized, canonical }
         )
         .getOne();
