@@ -39,35 +39,37 @@ export class BundlerProvider {
     @inject(ClinicalSubController) private clinicalSubController: ClinicalSubController
   ) {}
 
-  public async getAll(dataSource: DataSource, institutionId: string): Promise<IBundlerDoc> {
-    const cached = this.cache.get(institutionId);
+  public async getAll(dataSource: DataSource, institutionId: string, departmentId: string): Promise<IBundlerDoc> {
+    // Equipment/consumables are department-scoped mirror reads → cache per (institution, department).
+    const cacheKey = `${institutionId}|${departmentId}`;
+    const cached = this.cache.get(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const inProgress = this.loadPromises.get(institutionId);
+    const inProgress = this.loadPromises.get(cacheKey);
     if (inProgress) {
       return inProgress;
     }
 
-    const loadPromise = this.loadAndCache(dataSource, institutionId);
-    this.loadPromises.set(institutionId, loadPromise);
+    const loadPromise = this.loadAndCache(dataSource, departmentId);
+    this.loadPromises.set(cacheKey, loadPromise);
 
     try {
       const result = await loadPromise;
-      this.cache.set(institutionId, result);
-      this.loadPromises.delete(institutionId);
+      this.cache.set(cacheKey, result);
+      this.loadPromises.delete(cacheKey);
       return result;
     } catch (error) {
-      this.loadPromises.delete(institutionId);
+      this.loadPromises.delete(cacheKey);
       throw error;
     }
   }
 
-  private async loadAndCache(dataSource: DataSource, institutionId: string): Promise<IBundlerDoc> {
+  private async loadAndCache(dataSource: DataSource, departmentId: string): Promise<IBundlerDoc> {
     const [consumables, equipment, approaches, regions, positions] = await Promise.all([
-      this.consumablesProvider.getAll(dataSource),
-      this.equipmentProvider.getAll(dataSource),
+      this.consumablesProvider.getAllByDepartment(departmentId, dataSource),
+      this.equipmentProvider.getAllByDepartment(departmentId, dataSource),
       this.approachesProvider.getAll(dataSource),
       this.regionsProvider.getAll(dataSource),
       this.positionsProvider.getAll(dataSource),

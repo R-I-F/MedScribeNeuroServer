@@ -1,15 +1,15 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
-import { IEquipmentDoc, IEquipmentInput } from "./equipment.interface";
+import { IEquipmentDoc } from "./equipment.interface";
 import { EquipmentProvider } from "./equipment.provider";
 
 @injectable()
 export class EquipmentService {
   constructor(@inject(EquipmentProvider) private equipmentProvider: EquipmentProvider) {}
 
-  public async getAll(dataSource: DataSource): Promise<IEquipmentDoc[]> | never {
+  public async getAllByDepartment(departmentId: string, dataSource: DataSource): Promise<IEquipmentDoc[]> | never {
     try {
-      return await this.equipmentProvider.getAll(dataSource);
+      return await this.equipmentProvider.getAllByDepartment(departmentId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -18,30 +18,6 @@ export class EquipmentService {
   public async getById(id: string, dataSource: DataSource): Promise<IEquipmentDoc | null> | never {
     try {
       return await this.equipmentProvider.getById(id, dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
-  }
-
-  public async create(data: IEquipmentInput, dataSource: DataSource): Promise<IEquipmentDoc> | never {
-    try {
-      return await this.equipmentProvider.create(data, dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
-  }
-
-  public async update(id: string, data: Partial<IEquipmentInput>, dataSource: DataSource): Promise<IEquipmentDoc | null> | never {
-    try {
-      return await this.equipmentProvider.update(id, data, dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
-  }
-
-  public async delete(id: string, dataSource: DataSource): Promise<boolean> | never {
-    try {
-      return await this.equipmentProvider.delete(id, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

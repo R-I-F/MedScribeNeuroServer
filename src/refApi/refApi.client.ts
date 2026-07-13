@@ -9,6 +9,8 @@ import {
   IRefDiagnosis,
   IRefProcCpt,
   IRefLectureTopic,
+  IRefEquipment,
+  IRefConsumable,
 } from "./refApi.types";
 
 dotenv.config();
@@ -116,5 +118,13 @@ export class RefApiClient {
 
   public getRefLecturesByDept(deptCode: string = this.deptCode): Promise<IRefLectureTopic[]> {
     return this.get<IRefLectureTopic[]>(`/v1/refLectures/department/${encodeURIComponent(deptCode)}`);
+  }
+
+  public getEquipmentByDept(deptCode: string = this.deptCode): Promise<IRefEquipment[]> {
+    return this.get<IRefEquipment[]>(`/v1/departments/${encodeURIComponent(deptCode)}/equipment`);
+  }
+
+  public getConsumablesByDept(deptCode: string = this.deptCode): Promise<IRefConsumable[]> {
+    return this.get<IRefConsumable[]>(`/v1/departments/${encodeURIComponent(deptCode)}/consumables`);
   }
 }

@@ -61,3 +61,15 @@ export interface IRefLectureTopic {
   sortOrder: number;
   lectures: IRefLecture[];
 }
+
+export interface IRefEquipment {
+  id: string;
+  name: string;
+  arName: string;
+}
+
+export interface IRefConsumable {
+  id: string;
+  name: string;
+  arName: string;
+}

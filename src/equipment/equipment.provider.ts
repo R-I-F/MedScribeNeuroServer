@@ -1,45 +1,27 @@
-import { randomUUID } from "crypto";
-import { inject, injectable } from "inversify";
+import { injectable } from "inversify";
 import { DataSource } from "typeorm";
-import { IEquipmentDoc, IEquipmentInput } from "./equipment.interface";
-import { EquipmentEntity } from "./equipment.mDbSchema";
-import { UtilService } from "../utils/utils.service";
+import { IEquipmentDoc } from "./equipment.interface";
 
+/**
+ * Read-only equipment lookups over the LOCAL MIRROR (synced from the hub by
+ * RefMirrorService). The legacy `{ id, equipment }` read shape is preserved by
+ * selecting exactly those columns; the mirror carries all departments, so list
+ * reads are scoped via department_equipment. Writes moved to the hub pipeline.
+ */
 @injectable()
 export class EquipmentProvider {
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  constructor(@inject(UtilService) private utilService: UtilService) {}
-
-  public async create(data: IEquipmentInput, dataSource: DataSource): Promise<IEquipmentDoc> | never {
-    const repo = dataSource.getRepository(EquipmentEntity);
-    const entity = repo.create({ id: randomUUID(), equipment: this.utilService.sanitizeLabel(data.equipment) });
-    const saved = await repo.save(entity);
-    return saved as unknown as IEquipmentDoc;
-  }
-
-  public async update(id: string, data: Partial<IEquipmentInput>, dataSource: DataSource): Promise<IEquipmentDoc | null> | never {
-    if (!this.uuidRegex.test(id)) throw new Error("Invalid equipment ID format");
-    const repo = dataSource.getRepository(EquipmentEntity);
-    const existing = await repo.findOne({ where: { id } });
-    if (!existing) return null;
-    if (data.equipment !== undefined) existing.equipment = this.utilService.sanitizeLabel(data.equipment);
-    const saved = await repo.save(existing);
-    return saved as unknown as IEquipmentDoc;
-  }
-
-  public async delete(id: string, dataSource: DataSource): Promise<boolean> | never {
-    if (!this.uuidRegex.test(id)) throw new Error("Invalid equipment ID format");
-    const repo = dataSource.getRepository(EquipmentEntity);
-    const result = await repo.delete(id);
-    return (result.affected ?? 0) > 0;
-  }
-
-  public async getAll(dataSource: DataSource): Promise<IEquipmentDoc[]> | never {
+  public async getAllByDepartment(departmentId: string, dataSource: DataSource): Promise<IEquipmentDoc[]> | never {
     try {
-      const repo = dataSource.getRepository(EquipmentEntity);
-      const rows = await repo.find();
-      return rows as unknown as IEquipmentDoc[];
+      return await dataSource.query(
+        `SELECT e."id", e."equipment"
+           FROM "equipment" e
+           JOIN "department_equipment" de ON de."equipmentId" = e."id"
+          WHERE de."departmentId" = $1
+          ORDER BY e."equipment"`,
+        [departmentId]
+      );
     } catch (err: any) {
       throw new Error(err);
     }
@@ -50,9 +32,11 @@ export class EquipmentProvider {
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid equipment ID format");
       }
-      const repo = dataSource.getRepository(EquipmentEntity);
-      const row = await repo.findOne({ where: { id } });
-      return row as unknown as IEquipmentDoc | null;
+      const rows = await dataSource.query(
+        `SELECT "id", "equipment" FROM "equipment" WHERE "id" = $1`,
+        [id]
+      );
+      return rows[0] ?? null;
     } catch (err: any) {
       throw new Error(err);
     }

@@ -1,59 +1,63 @@
 import { Request, Response } from "express";
 import { matchedData } from "express-validator";
 import { inject, injectable } from "inversify";
+import { AppDataSource } from "../config/database.config";
 import { ConsumablesService } from "./consumables.service";
-import { IConsumableDoc, IConsumableInput } from "./consumables.interface";
+import { ReferenceReadProvider } from "../referenceRead/referenceRead.provider";
+import { IConsumableDoc } from "./consumables.interface";
 
+/**
+ * Read-only consumable endpoints over the local mirror. List reads are
+ * department-scoped: `?deptCode=` (404 if unknown) → JWT departmentId claim →
+ * REF_DEPT_CODE, mirroring the referenceRead resolution chain.
+ */
 @injectable()
 export class ConsumablesController {
-  constructor(@inject(ConsumablesService) private consumablesService: ConsumablesService) {}
+  constructor(
+    @inject(ConsumablesService) private consumablesService: ConsumablesService,
+    @inject(ReferenceReadProvider) private refReadProvider: ReferenceReadProvider
+  ) {}
+
+  private ds(req: Request) {
+    return (req as any).institutionDataSource || AppDataSource;
+  }
+
+  private async departmentId(req: Request, res: Response): Promise<string> {
+    const ds = this.ds(req);
+    const validated = matchedData(req, { locations: ["query"] }) as { deptCode?: string };
+
+    if (validated.deptCode) {
+      const id = await this.refReadProvider.resolveDepartmentId(ds, validated.deptCode);
+      if (!id) {
+        throw Object.assign(new Error(`Unknown department code: ${validated.deptCode}`), {
+          status: 404,
+        });
+      }
+      return id;
+    }
+
+    const jwtDepartmentId = (res.locals as any)?.jwt?.departmentId as string | undefined;
+    if (jwtDepartmentId && (await this.refReadProvider.departmentExists(ds, jwtDepartmentId))) {
+      return jwtDepartmentId;
+    }
+
+    const code = process.env.REF_DEPT_CODE || "NS";
+    const id = await this.refReadProvider.resolveDepartmentId(ds, code);
+    if (!id) {
+      throw Object.assign(new Error(`Default department code not in mirror: ${code}`), {
+        status: 500,
+      });
+    }
+    return id;
+  }
 
   public async handleGetAll(req: Request, res: Response): Promise<IConsumableDoc[]> | never {
-    try {
-      const dataSource = (req as any).institutionDataSource;
-      if (!dataSource) {
-        throw new Error("Institution DataSource not resolved");
-      }
-      return await this.consumablesService.getAll(dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
+    const departmentId = await this.departmentId(req, res);
+    return await this.consumablesService.getAllByDepartment(departmentId, this.ds(req));
   }
 
   public async handleGetById(req: Request, res: Response): Promise<IConsumableDoc | null> | never {
     const validatedReq = matchedData(req) as { id: string };
-    try {
-      const dataSource = (req as any).institutionDataSource;
-      if (!dataSource) {
-        throw new Error("Institution DataSource not resolved");
-      }
-      return await this.consumablesService.getById(validatedReq.id, dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
-  }
-
-  public async handlePost(req: Request, res: Response): Promise<IConsumableDoc> | never {
-    const dataSource = (req as any).institutionDataSource;
-    if (!dataSource) throw new Error("Institution DataSource not resolved");
-    const validatedReq = matchedData(req) as IConsumableInput;
-    return await this.consumablesService.create(validatedReq, dataSource);
-  }
-
-  public async handlePut(req: Request, res: Response): Promise<IConsumableDoc | null> | never {
-    const dataSource = (req as any).institutionDataSource;
-    if (!dataSource) throw new Error("Institution DataSource not resolved");
-    const id = req.params.id;
-    const validatedReq = matchedData(req) as Partial<IConsumableInput>;
-    return await this.consumablesService.update(id, validatedReq, dataSource);
-  }
-
-  public async handleDelete(req: Request, res: Response): Promise<{ message: string }> | never {
-    const dataSource = (req as any).institutionDataSource;
-    if (!dataSource) throw new Error("Institution DataSource not resolved");
-    const { id } = matchedData(req) as { id: string };
-    const deleted = await this.consumablesService.delete(id, dataSource);
-    if (!deleted) throw new Error("Consumable not found");
-    return { message: "Consumable deleted successfully" };
+    return await this.consumablesService.getById(validatedReq.id, this.ds(req));
   }
 }

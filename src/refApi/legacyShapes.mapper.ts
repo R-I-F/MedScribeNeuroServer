@@ -4,6 +4,8 @@ import {
   IRefDiagnosis,
   IRefProcCpt,
   IRefLectureTopic,
+  IRefEquipment,
+  IRefConsumable,
 } from "./refApi.types";
 
 /**
@@ -68,6 +70,18 @@ export interface MirrorLectureRow {
   google_uid: null;
 }
 
+export interface MirrorEquipmentRow {
+  id: string;
+  equipment: string; // legacy column name — the hub's `name`
+  arName: string | null;
+}
+
+export interface MirrorConsumableRow {
+  id: string;
+  consumables: string; // legacy column name — the hub's `name`
+  arName: string | null;
+}
+
 export function toMirrorDepartment(h: IRefDepartment): MirrorDepartmentRow {
   return {
     id: h.id,
@@ -95,6 +109,14 @@ export function toMirrorProcCpt(h: IRefProcCpt): MirrorProcCptRow {
     numCode: h.numCode,
     description: h.description,
   };
+}
+
+export function toMirrorEquipment(h: IRefEquipment): MirrorEquipmentRow {
+  return { id: h.id, equipment: h.name, arName: h.arName ?? null };
+}
+
+export function toMirrorConsumable(h: IRefConsumable): MirrorConsumableRow {
+  return { id: h.id, consumables: h.name, arName: h.arName ?? null };
 }
 
 /**

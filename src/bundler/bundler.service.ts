@@ -9,8 +9,8 @@ import { BundlerProvider } from "./bundler.provider";
 export class BundlerService {
   constructor(@inject(BundlerProvider) private bundlerProvider: BundlerProvider) {}
 
-  public async getAll(dataSource: DataSource, institutionId: string): Promise<IBundlerDoc> {
-    return await this.bundlerProvider.getAll(dataSource, institutionId);
+  public async getAll(dataSource: DataSource, institutionId: string, departmentId: string): Promise<IBundlerDoc> {
+    return await this.bundlerProvider.getAll(dataSource, institutionId, departmentId);
   }
 
   public async getCandidateDashboard(

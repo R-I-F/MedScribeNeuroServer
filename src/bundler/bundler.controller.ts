@@ -3,11 +3,15 @@ import { inject, injectable } from "inversify";
 import { StatusCodes } from "http-status-codes";
 import { getInstitutionById } from "../institution/institution.service";
 import { BundlerService } from "./bundler.service";
+import { ReferenceReadProvider } from "../referenceRead/referenceRead.provider";
 import { IBundlerDoc, ICandidateDashboardDoc, IPracticalCandidateDashboardDoc } from "./bundler.interface";
 
 @injectable()
 export class BundlerController {
-  constructor(@inject(BundlerService) private bundlerService: BundlerService) {}
+  constructor(
+    @inject(BundlerService) private bundlerService: BundlerService,
+    @inject(ReferenceReadProvider) private refReadProvider: ReferenceReadProvider
+  ) {}
 
   public async handleGetAll(req: Request, res: Response): Promise<IBundlerDoc> | never {
     const dataSource = (req as any).institutionDataSource;
@@ -18,7 +22,20 @@ export class BundlerController {
     if (!institutionId) {
       throw new Error("Institution ID not resolved");
     }
-    return await this.bundlerService.getAll(dataSource, institutionId);
+
+    // Equipment/consumables in the bundle are department-scoped mirror reads:
+    // JWT departmentId claim → REF_DEPT_CODE (the institute's default department).
+    let departmentId = (res.locals as any)?.jwt?.departmentId as string | undefined;
+    if (!departmentId || !(await this.refReadProvider.departmentExists(dataSource, departmentId))) {
+      const code = process.env.REF_DEPT_CODE || "NS";
+      const resolved = await this.refReadProvider.resolveDepartmentId(dataSource, code);
+      if (!resolved) {
+        throw new Error(`Default department code not in mirror: ${code}`);
+      }
+      departmentId = resolved;
+    }
+
+    return await this.bundlerService.getAll(dataSource, institutionId, departmentId);
   }
 
   public async handleGetCandidateDashboard(

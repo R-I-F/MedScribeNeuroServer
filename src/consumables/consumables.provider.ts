@@ -1,45 +1,27 @@
-import { randomUUID } from "crypto";
-import { inject, injectable } from "inversify";
+import { injectable } from "inversify";
 import { DataSource } from "typeorm";
-import { IConsumableDoc, IConsumableInput, IConsumableUpdateInput } from "./consumables.interface";
-import { ConsumableEntity } from "./consumables.mDbSchema";
-import { UtilService } from "../utils/utils.service";
+import { IConsumableDoc } from "./consumables.interface";
 
+/**
+ * Read-only consumable lookups over the LOCAL MIRROR (synced from the hub by
+ * RefMirrorService). The legacy `{ id, consumables }` read shape is preserved by
+ * selecting exactly those columns; the mirror carries all departments, so list
+ * reads are scoped via department_consumables. Writes moved to the hub pipeline.
+ */
 @injectable()
 export class ConsumablesProvider {
   private readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  constructor(@inject(UtilService) private utilService: UtilService) {}
-
-  public async create(data: IConsumableInput, dataSource: DataSource): Promise<IConsumableDoc> | never {
-    const repo = dataSource.getRepository(ConsumableEntity);
-    const entity = repo.create({ id: randomUUID(), consumables: this.utilService.sanitizeLabel(data.consumables) });
-    const saved = await repo.save(entity);
-    return saved as unknown as IConsumableDoc;
-  }
-
-  public async update(id: string, data: Partial<IConsumableInput>, dataSource: DataSource): Promise<IConsumableDoc | null> | never {
-    if (!this.uuidRegex.test(id)) throw new Error("Invalid consumable ID format");
-    const repo = dataSource.getRepository(ConsumableEntity);
-    const existing = await repo.findOne({ where: { id } });
-    if (!existing) return null;
-    if (data.consumables !== undefined) existing.consumables = this.utilService.sanitizeLabel(data.consumables);
-    const saved = await repo.save(existing);
-    return saved as unknown as IConsumableDoc;
-  }
-
-  public async delete(id: string, dataSource: DataSource): Promise<boolean> | never {
-    if (!this.uuidRegex.test(id)) throw new Error("Invalid consumable ID format");
-    const repo = dataSource.getRepository(ConsumableEntity);
-    const result = await repo.delete(id);
-    return (result.affected ?? 0) > 0;
-  }
-
-  public async getAll(dataSource: DataSource): Promise<IConsumableDoc[]> | never {
+  public async getAllByDepartment(departmentId: string, dataSource: DataSource): Promise<IConsumableDoc[]> | never {
     try {
-      const repo = dataSource.getRepository(ConsumableEntity);
-      const rows = await repo.find();
-      return rows as unknown as IConsumableDoc[];
+      return await dataSource.query(
+        `SELECT c."id", c."consumables"
+           FROM "consumables" c
+           JOIN "department_consumables" dc ON dc."consumableId" = c."id"
+          WHERE dc."departmentId" = $1
+          ORDER BY c."consumables"`,
+        [departmentId]
+      );
     } catch (err: any) {
       throw new Error(err);
     }
@@ -50,9 +32,11 @@ export class ConsumablesProvider {
       if (!this.uuidRegex.test(id)) {
         throw new Error("Invalid consumable ID format");
       }
-      const repo = dataSource.getRepository(ConsumableEntity);
-      const row = await repo.findOne({ where: { id } });
-      return row as unknown as IConsumableDoc | null;
+      const rows = await dataSource.query(
+        `SELECT "id", "consumables" FROM "consumables" WHERE "id" = $1`,
+        [id]
+      );
+      return rows[0] ?? null;
     } catch (err: any) {
       throw new Error(err);
     }

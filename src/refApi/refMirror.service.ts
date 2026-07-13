@@ -9,11 +9,15 @@ import {
   toMirrorDiagnosis,
   toMirrorProcCpt,
   toMirrorLectureTree,
+  toMirrorEquipment,
+  toMirrorConsumable,
   MirrorDiagnosisRow,
   MirrorProcCptRow,
   MirrorMainDiagRow,
   MirrorLectureTopicRow,
   MirrorLectureRow,
+  MirrorEquipmentRow,
+  MirrorConsumableRow,
 } from "./legacyShapes.mapper";
 
 /** Keep the last row seen per id (hub is source of truth; dupes shouldn't occur but are made safe). */
@@ -45,7 +49,11 @@ export interface RefSyncResult {
   procCpts: number;
   lectureTopics: number;
   lectures: number;
+  equipment: number;
+  consumables: number;
   departmentDiagnoses: number;
+  departmentEquipment: number;
+  departmentConsumables: number;
   mainDiagDiagnoses: number;
   mainDiagProcs: number;
   sixFlagRowsEnsured: number;
@@ -81,10 +89,14 @@ export class RefMirrorService {
     const mainDiagRows: MirrorMainDiagRow[] = [];
     const diagById = new Map<string, MirrorDiagnosisRow>(); // shared, deduped across depts
     const procById = new Map<string, MirrorProcCptRow>(); // shared, deduped across depts
+    const equipById = new Map<string, MirrorEquipmentRow>(); // shared, deduped across depts
+    const consumById = new Map<string, MirrorConsumableRow>(); // shared, deduped across depts
     const topicRows: MirrorLectureTopicRow[] = [];
     const lectureRows: MirrorLectureRow[] = [];
     const deptDiagnosisPairSet = new Set<string>(); // "deptId|dxId"
     const deptDiagnosisPairs: [string, string][] = [];
+    const deptEquipmentPairs: [string, string][] = [];
+    const deptConsumablePairs: [string, string][] = [];
     const mdDiagnosisPairs: [string, string][] = [];
     const mdProcPairs: [string, string][] = [];
     const allMainDiagIds: string[] = [];
@@ -106,6 +118,15 @@ export class RefMirrorService {
       }
       for (const pc of await this.client.getProcCptsByDept(dept.code)) {
         procById.set(pc.id, toMirrorProcCpt(pc));
+      }
+
+      for (const eq of await this.client.getEquipmentByDept(dept.code)) {
+        equipById.set(eq.id, toMirrorEquipment(eq));
+        deptEquipmentPairs.push([dept.id, eq.id]);
+      }
+      for (const co of await this.client.getConsumablesByDept(dept.code)) {
+        consumById.set(co.id, toMirrorConsumable(co));
+        deptConsumablePairs.push([dept.id, co.id]);
       }
 
       const tree = toMirrorLectureTree(await this.client.getRefLecturesByDept(dept.code), dept.id);
@@ -165,6 +186,20 @@ export class RefMirrorService {
         ["title", "alphaCode", "numCode", "description"],
         [...procById.values()].map((p) => [p.id, p.title, p.alphaCode, p.numCode, p.description])
       );
+      await this.upsert(
+        qr,
+        "equipment",
+        ["id", "equipment", "arName"],
+        ["equipment", "arName"],
+        [...equipById.values()].map((e) => [e.id, e.equipment, e.arName])
+      );
+      await this.upsert(
+        qr,
+        "consumables",
+        ["id", "consumables", "arName"],
+        ["consumables", "arName"],
+        [...consumById.values()].map((c) => [c.id, c.consumables, c.arName])
+      );
 
       // Department-scoped tables.
       await this.upsert(
@@ -198,6 +233,12 @@ export class RefMirrorService {
       await this.insertPairs(qr, "main_diag_diagnoses", "mainDiagId", "diagnosisId", mdDiagnosisPairsU);
       await qr.query(`DELETE FROM "main_diag_procs"`);
       await this.insertPairs(qr, "main_diag_procs", "mainDiagId", "procCptId", mdProcPairsU);
+      const deptEquipmentPairsU = dedupePairs(deptEquipmentPairs);
+      const deptConsumablePairsU = dedupePairs(deptConsumablePairs);
+      await qr.query(`DELETE FROM "department_equipment"`);
+      await this.insertPairs(qr, "department_equipment", "departmentId", "equipmentId", deptEquipmentPairsU);
+      await qr.query(`DELETE FROM "department_consumables"`);
+      await this.insertPairs(qr, "department_consumables", "departmentId", "consumableId", deptConsumablePairsU);
 
       // Six-flag continuity for every main_diag (default all-zero; never overwrite).
       if (allMainDiagIds.length > 0) {
@@ -229,7 +270,11 @@ export class RefMirrorService {
         procCpts: procById.size,
         lectureTopics: topicRowsU.length,
         lectures: lectureRowsU.length,
+        equipment: equipById.size,
+        consumables: consumById.size,
         departmentDiagnoses: deptDiagnosisPairs.length,
+        departmentEquipment: deptEquipmentPairsU.length,
+        departmentConsumables: deptConsumablePairsU.length,
         mainDiagDiagnoses: mdDiagnosisPairsU.length,
         mainDiagProcs: mdProcPairsU.length,
         sixFlagRowsEnsured: cnt[0]?.c ?? 0,

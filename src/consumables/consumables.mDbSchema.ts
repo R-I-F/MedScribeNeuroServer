@@ -7,4 +7,13 @@ export class ConsumableEntity {
 
   @Column({ type: "varchar", length: 100 })
   consumables!: string;
+
+  @Column({ type: "varchar", length: 100, nullable: true })
+  arName!: string | null;
+
+  @Column({ type: "timestamp", default: () => "now()" })
+  createdAt!: Date;
+
+  @Column({ type: "timestamp", default: () => "now()" })
+  updatedAt!: Date;
 }
