@@ -33,6 +33,17 @@ export class CalSurgEntity {
   @JoinColumn({ name: "arabProcId" })
   arabProc?: ArabProcEntity;
 
+  // Department this surgery belongs to (FK → departments). Dept-scoped; nullable during rollout
+  // (an active bulk external-import path would break under NOT NULL). Existing rows backfilled NS.
+  @Column({ type: "uuid", nullable: true })
+  departmentId?: string;
+
+  // Modern procedure link (FK → proc_cpts). Nullable: many surgeries have no procedure, and
+  // existing rows are backfilled from arab_procs via the reviewed semantic mapping. Transitional
+  // alongside the legacy `arabProcId` until arab_procs is retired.
+  @Column({ type: "uuid", nullable: true })
+  procCptId?: string;
+
   @Column({ type: "date" })
   procDate!: Date;
 

@@ -12,7 +12,8 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 
 **Migration status summary**
 - **Implemented (user tables):** `cand`, `supervisor`, `instituteAdmin`, `superAdmin` ✅
-- **ETL still pending (8 tables):** `sub` (3,599), `calSurg` (5,578, PII), `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `additionalQuestions` (reconcile) [`clerk`, `hospital`, `arabProc` now done]
+- **ETL still pending (7 tables):** `sub` (3,599), `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `additionalQuestions` (reconcile) [`clerk`, `hospital`, `arabProc`, `calSurg` now done]
+- **Follow-on (not ETL):** `arab_procs → proc_cpts` semantic remap for `cal_surgs.procCptId` (hub procedure-search + user review + backfill), then retire arab_procs.
 - **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`, **`consumables` (204+301) & `equipment` (102+234)** — the latter two now hub-mirrored + dept-scoped as of commit `696c87f` (hub endpoint added + spoke sync wired + synced; superseded my earlier "sync gap" note).
 - **No table / stateless (no ETL):** `auth`, `institution`, `bundler`, `reports`, `activityTimeline`, `externalService`, `mailer`, `aiAgent`, `pdf`
 - **Ephemeral (skip ETL):** `waBot`, `passwordReset`
@@ -26,7 +27,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `institution` | `/institutions` | ✅ Done (retired → static-pinned) | Institutions (public list; spoke is pinned to the static KA institution) |
 | `hospital` | `/hospital` | ✅ **Done** — dept-scoped (`departmentId` FK NOT NULL) + 7 → NS + location→json (reads-filtering deferred) | Hospitals/units per department (surgery venues) |
 | `arabProc` | `/arabProc` | ✅ **Done** — dept-scoped (`departmentId` FK, nullable) + 81 → NS | Arabic procedure names (per department) |
-| `calSurg` | `/calSurg` | 🔁 ETL pending (5,578; **PII**) | Surgical case calendar (scheduled surgeries) |
+| `calSurg` | `/calSurg` | ✅ **Done** — 5,578 → NS (dept-scoped, nullable) + `procCptId` FK staged; legacy `arabProcId` kept (proc_cpts remap = follow-on) | Surgical case calendar (dept-scoped) |
 | `cand` | `/cand` | ✅ **Implemented** (110 → NS; PG fixes; phone-unique; dept NOT NULL) | Candidates (trainees): registration, profile, management |
 | `supervisor` | `/supervisor` | ✅ **Implemented** (56 → NS; PG fixes; phone-unique; dept NOT NULL) | Supervisors: registration, profile, management |
 | `clerk` | `/clerk` | 🔁 Pending (audit draft; impl + ETL) | Clerk users |

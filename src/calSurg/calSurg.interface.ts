@@ -8,6 +8,8 @@ export interface ICalSurg {
   procDate: Date;
   google_uid?: string;
   formLink?: string;
+  departmentId?: string; // FK → departments; surgeries are dept-scoped (nullable during rollout)
+  procCptId?: string; // FK → proc_cpts (modern procedure link; backfilled via semantic mapping)
 }
 
 export interface ICalSurgDoc extends ICalSurg {

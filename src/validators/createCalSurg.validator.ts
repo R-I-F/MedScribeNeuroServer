@@ -54,4 +54,14 @@ export const createCalSurgValidator = checkSchema({
     },
     toDate: true,
   },
+  // Department (mirror `departments` UUID). OPTIONAL: surgeries are dept-scoped, column nullable
+  // during rollout (bulk external-import path).
+  departmentId: {
+    in: ["body"],
+    optional: { options: { values: "falsy" } },
+    isUUID: {
+      errorMessage: "calSurg departmentId must be a valid UUID",
+    },
+    trim: true,
+  },
 });

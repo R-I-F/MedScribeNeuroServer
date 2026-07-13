@@ -37,6 +37,7 @@ export class CalSurgController {
         procedure: string;
         surgeryDate: Date;
         patientDob?: Date;
+        departmentId?: string;
       };
       const payload: ICalSurg = {
         timeStamp: new Date(),
@@ -48,6 +49,7 @@ export class CalSurgController {
         procDate: body.surgeryDate,
         google_uid: undefined,
         formLink: undefined,
+        departmentId: body.departmentId,
       };
       const newCalSurg = await this.calSurgProvider.createCalSurg(payload, dataSource);
       return newCalSurg;
