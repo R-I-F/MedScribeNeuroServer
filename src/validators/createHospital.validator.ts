@@ -43,4 +43,15 @@ export const createHospitalValidator = checkSchema({
     },
     toFloat: true,
   },
+  // Department (mirror `departments` UUID). REQUIRED: hospitals.departmentId is NOT NULL —
+  // every hospital/unit is scoped to one department.
+  departmentId: {
+    in: ["body"],
+    notEmpty: true,
+    errorMessage: "hospital departmentId is required",
+    isUUID: {
+      errorMessage: "hospital departmentId must be a valid UUID",
+    },
+    trim: true,
+  },
 });

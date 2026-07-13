@@ -5,6 +5,7 @@ export interface IHospital {
     long: number;
     lat: number;
   };
+  departmentId: string; // FK → departments; every hospital/unit is scoped to one department
 }
 
 export interface IHospitalDoc extends IHospital {

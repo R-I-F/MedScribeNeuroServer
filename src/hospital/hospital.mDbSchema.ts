@@ -18,6 +18,11 @@ export class HospitalEntity implements IHospital {
     lat: number;
   };
 
+  // Department this hospital/unit belongs to (FK → departments). NOT NULL: every hospital is
+  // scoped to exactly one department; the same name may repeat across departments.
+  @Column({ type: "uuid" })
+  departmentId!: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

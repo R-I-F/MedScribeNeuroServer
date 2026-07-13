@@ -12,8 +12,8 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 
 **Migration status summary**
 - **Implemented (user tables):** `cand`, `supervisor`, `instituteAdmin`, `superAdmin` ✅
-- **ETL still pending (12 tables):** `sub` (3,599), `calSurg` (5,578, PII), `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `hospital` (7), `arabProc` (81), `consumables` (14), `equipment` (11), `additionalQuestions` (reconcile), `clerk` (user-table impl + ETL)
-- **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`
+- **ETL still pending (9 tables):** `sub` (3,599), `calSurg` (5,578, PII), `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `arabProc` (81), `additionalQuestions` (reconcile) [`clerk` + `hospital` now done]
+- **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`, **`consumables` (204+301) & `equipment` (102+234)** — the latter two now hub-mirrored + dept-scoped as of commit `696c87f` (hub endpoint added + spoke sync wired + synced; superseded my earlier "sync gap" note).
 - **No table / stateless (no ETL):** `auth`, `institution`, `bundler`, `reports`, `activityTimeline`, `externalService`, `mailer`, `aiAgent`, `pdf`
 - **Ephemeral (skip ETL):** `waBot`, `passwordReset`
 - **FK load order for the pending ETLs:** `hospitals`+`arab_procs` → `cal_surgs` → `submissions`; `confs`/`journals`/`lectures` → `events` → `event_attendance`.
@@ -24,7 +24,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 |---|---|---|---|
 | `auth` | `/auth` | ✅ Done (no table; converted) | Authentication: login/refresh for all roles, JWT issuing (`authToken.service.ts`, incl. `departmentId` claim) |
 | `institution` | `/institutions` | ✅ Done (retired → static-pinned) | Institutions (public list; spoke is pinned to the static KA institution) |
-| `hospital` | `/hospital` | 🔁 ETL pending (7; longtext→json) | Hospitals within the institution |
+| `hospital` | `/hospital` | ✅ **Done** — dept-scoped (`departmentId` FK NOT NULL) + 7 → NS + location→json (reads-filtering deferred) | Hospitals/units per department (surgery venues) |
 | `arabProc` | `/arabProc` | 🔁 ETL pending (81) | Arabic procedure names |
 | `calSurg` | `/calSurg` | 🔁 ETL pending (5,578; **PII**) | Surgical case calendar (scheduled surgeries) |
 | `cand` | `/cand` | ✅ **Implemented** (110 → NS; PG fixes; phone-unique; dept NOT NULL) | Candidates (trainees): registration, profile, management |
@@ -39,8 +39,8 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `conf` | `/conf` | 🔁 ETL pending (2; before events) | Conferences |
 | `event` | `/event` | 🔁 ETL pending (102 events / 1,264 attendance) | Events + attendance (`eventAttendance.mDbSchema.ts`) |
 | `activityTimeline` | `/activityTimeline` | ✅ Done (no table; derived reads) | Candidate activity timeline |
-| `consumables` | `/consumables` | 🔁 ETL pending (14) | Consumables lookup used in submissions |
-| `equipment` | `/equipment` | 🔁 ETL pending (11) | Equipment lookup used in submissions |
+| `consumables` | `/consumables` | ✅ **Mirror-synced** (hub, dept-scoped) — 204 items + 301 dept-links; `arName` + `department_consumables` (commit `696c87f`) | Consumables reference (hub-mirrored, dept-scoped read) |
+| `equipment` | `/equipment` | ✅ **Mirror-synced** (hub, dept-scoped) — 102 items + 234 dept-links; `arName` + `department_equipment` (commit `696c87f`) | Equipment reference (hub-mirrored, dept-scoped read) |
 | `reports` | `/instituteAdmin/reports` | ✅ Done (no table; service layer) | Institute-admin reporting/analytics |
 | `mailer` | `/mailer` | ✅ Done (no table; verify mail env) | Outbound email endpoints |
 | `externalService` | `/external` | ✅ Done (no table; verify `GETTER_API_ENDPOINT`) | External-integration endpoints (bulk imports from external systems) |
