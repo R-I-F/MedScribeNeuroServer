@@ -54,4 +54,14 @@ export const createClerkValidator = checkSchema({
       errorMessage: "clerk approval status must be a boolean value",
     },
   },
+  // Department (mirror `departments` UUID). OPTIONAL: clerks are department-scoped by default,
+  // but a special institute-scoped clerk omits it (departmentId stays NULL).
+  departmentId: {
+    in: ["body"],
+    optional: { options: { values: "falsy" } },
+    isUUID: {
+      errorMessage: "clerk departmentId must be a valid UUID",
+    },
+    trim: true,
+  },
 });

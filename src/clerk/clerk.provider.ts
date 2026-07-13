@@ -61,8 +61,10 @@ export class ClerkProvider {
       const canonical = ClerkProvider.canonicalEmail(email);
       const clerk = await clerkRepository
         .createQueryBuilder("c")
+        // Postgres: split_part(str,'@',1)=local, split_part(str,'@',2)=domain
+        // (was MySQL SUBSTRING_INDEX(...,'@',1)/(...,'@',-1), which Postgres has no equivalent of).
         .where(
-          "LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', SUBSTRING_INDEX(LOWER(TRIM(c.email)), '@', -1)) = :canonical)",
+          "LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(split_part(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', split_part(LOWER(TRIM(c.email)), '@', 2)) = :canonical)",
           { normalized, canonical }
         )
         .getOne();
