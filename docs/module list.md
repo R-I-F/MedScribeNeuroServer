@@ -12,7 +12,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 
 **Migration status summary**
 - **Implemented (user tables):** `cand`, `supervisor`, `instituteAdmin`, `superAdmin` ✅
-- **ETL still pending (9 tables):** `sub` (3,599), `calSurg` (5,578, PII), `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `arabProc` (81), `additionalQuestions` (reconcile) [`clerk` + `hospital` now done]
+- **ETL still pending (8 tables):** `sub` (3,599), `calSurg` (5,578, PII), `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `additionalQuestions` (reconcile) [`clerk`, `hospital`, `arabProc` now done]
 - **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`, **`consumables` (204+301) & `equipment` (102+234)** — the latter two now hub-mirrored + dept-scoped as of commit `696c87f` (hub endpoint added + spoke sync wired + synced; superseded my earlier "sync gap" note).
 - **No table / stateless (no ETL):** `auth`, `institution`, `bundler`, `reports`, `activityTimeline`, `externalService`, `mailer`, `aiAgent`, `pdf`
 - **Ephemeral (skip ETL):** `waBot`, `passwordReset`
@@ -25,7 +25,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `auth` | `/auth` | ✅ Done (no table; converted) | Authentication: login/refresh for all roles, JWT issuing (`authToken.service.ts`, incl. `departmentId` claim) |
 | `institution` | `/institutions` | ✅ Done (retired → static-pinned) | Institutions (public list; spoke is pinned to the static KA institution) |
 | `hospital` | `/hospital` | ✅ **Done** — dept-scoped (`departmentId` FK NOT NULL) + 7 → NS + location→json (reads-filtering deferred) | Hospitals/units per department (surgery venues) |
-| `arabProc` | `/arabProc` | 🔁 ETL pending (81) | Arabic procedure names |
+| `arabProc` | `/arabProc` | ✅ **Done** — dept-scoped (`departmentId` FK, nullable) + 81 → NS | Arabic procedure names (per department) |
 | `calSurg` | `/calSurg` | 🔁 ETL pending (5,578; **PII**) | Surgical case calendar (scheduled surgeries) |
 | `cand` | `/cand` | ✅ **Implemented** (110 → NS; PG fixes; phone-unique; dept NOT NULL) | Candidates (trainees): registration, profile, management |
 | `supervisor` | `/supervisor` | ✅ **Implemented** (56 → NS; PG fixes; phone-unique; dept NOT NULL) | Supervisors: registration, profile, management |

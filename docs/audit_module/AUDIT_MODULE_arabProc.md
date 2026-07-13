@@ -1,12 +1,25 @@
 # Module Upgrade Audit: arabProc
-**Date**: 2026-07-13 · **Status**: 📋 DRAFT — awaiting user approval
+**Date**: 2026-07-14 · **Status**: ✅ IMPLEMENTED (staging) — dept-scoped (nullable) + 81 → NS
 **Old side**: main @ `affa22e` + MySQL `kasr-el-ainy` (READ-ONLY)
-**New side**: migration/mysql-to-postgres @ `6f010d2` + PG `ka-institute`
+**New side**: migration/mysql-to-postgres @ `4e7ab52` + PG `ka-institute`
+
+## ✅ Implementation record (2026-07-14)
+Applied to `migration/mysql-to-postgres` + `ka-institute` staging. Prod read-only; `main` untouched.
+
+| # | Item | Where | Status |
+|---|---|---|---|
+| A | Add `departmentId` FK → departments (dept-scoped, **NULLABLE**) | entity `arabProc.mDbSchema.ts` + `IArabProc` + migration `1783782610010-AddArabProcDepartment` | ✅ column + `FK_arab_procs_department` live |
+| B | `POST /createArabProc` accepts optional `departmentId` (isUUID) | `validators/createArabProc.validators.ts` | ✅ tsc clean |
+| C | ETL 81 prod procedures → NS | `scripts/etl-arabprocs-prod-to-ka.cjs` | ✅ 81 loaded |
+
+**ETL verification:** total **81** ✅ · `departmentId=NS` **81** · Arabic titles preserved **81/81**. NS dept id = `65bda505-…`.
+
+**⚠️ Judgment call (2026-07-14):** by the established pattern (hospitals/equipment/consumables are all dept-scoped), I treated `arab_procs` as **department-scoped** and stamped the 81 → NS. **NULLABLE, not NOT NULL** — because arab_procs has an active **bulk external-import** path (`/createArabProcFromExternal`) that a hard NOT NULL would break, and to hedge the assumption. If you want it strict NOT NULL (like hospitals), it's a one-migration follow-up once the import supplies a department. If arab_procs should be **institute-wide** (not dept-scoped), drop the column (reversible).
 
 ## 0. TL;DR
-Local lookup `arab_procs` (Arabic procedure names) — **81 prod rows**. Root parent of `cal_surgs.arabProcId`. Only entity changed main→branch (charset drops). No idioms, no tenancy. All titles Arabic (utf8mb4). `alphaCode` has **6 duplicate values** → not a unique key (KA must not add a unique constraint on it). prod-cts has **49** rows (differs from prod's 81).
+Local lookup `arab_procs` (Arabic procedure names) — **81 prod rows**, now **dept-scoped (NS)**. Root parent of `cal_surgs.arabProcId`. No idioms, no tenancy. All titles Arabic (utf8mb4). `alphaCode` has **6 duplicate values** → not a unique key. prod-cts (49) excluded (test clone).
 
-**Verdict counts:** **7 ✅ · 1 🔁 · 1 ❓**.
+**Verdict counts:** **✅ implemented (dept-scoped nullable) · 1 ❓ (NOT NULL vs nullable — deferred)**.
 
 ## 1. Scope & component map
 `src/arabProc/` (both sides), route `/arabProc`. Only `arabProc.mDbSchema.ts` changed (charset drops). Parent of `cal_surgs.arabProcId`; read by `instituteAdmin` (`/arabicProcedures`) + used in submission flows. **Table owned:** `arab_procs`.

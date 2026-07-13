@@ -3,6 +3,7 @@ export interface IArabProc {
   alphaCode: string;
   numCode: string;
   description: string;
+  departmentId?: string | null; // FK → departments; dept-scoped (nullable during rollout)
 }
 
 export interface IArabProcDoc extends IArabProc {
