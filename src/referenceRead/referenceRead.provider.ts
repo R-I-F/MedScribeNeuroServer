@@ -74,16 +74,35 @@ export class ReferenceReadProvider {
     );
   }
 
-  /** Legacy /lecture list shape (id/lectureTitle/mainTopic/level), scoped via lecture_topics. */
+  /**
+   * Legacy /lecture list shape (id/lectureTitle/mainTopic/level), scoped via lecture_topics.
+   * The mirror now carries the hub's column names (migration 1783782610090: `title`, no
+   * `mainTopic`) — the legacy field names are restored here by aliasing: `lectureTitle` =
+   * lecture title, `mainTopic` = the parent topic's title.
+   */
   public async getLecturesByDepartment(ds: DataSource, departmentId: string) {
     return ds.query(
-      `SELECT l."id", l."lectureTitle", l."mainTopic", l."level"
+      `SELECT l."id", l."title" AS "lectureTitle", t."title" AS "mainTopic", l."level"
          FROM "lectures" l
          JOIN "lecture_topics" t ON t."id" = l."topicId"
         WHERE t."departmentId" = $1
-        ORDER BY t."sortOrder", l."sortOrder", l."lectureTitle"`,
+        ORDER BY t."sortOrder", l."sortOrder", l."title"`,
       [departmentId]
     );
+  }
+
+  /** Legacy /lecture/:id shape — the pre-conform mirror row (lectureTitle/mainTopic/google_uid kept). */
+  public async getLectureById(ds: DataSource, id: string) {
+    const rows = await ds.query(
+      `SELECT l."id", l."title" AS "lectureTitle", t."title" AS "mainTopic", l."arTitle",
+              l."lectureNumber", l."sortOrder", l."level", l."topicId",
+              NULL AS "google_uid", l."createdAt", l."updatedAt"
+         FROM "lectures" l
+         LEFT JOIN "lecture_topics" t ON t."id" = l."topicId"
+        WHERE l."id" = $1`,
+      [id]
+    );
+    return rows[0] ?? null;
   }
 
   /**

@@ -1,5 +1,19 @@
 # Module Upgrade Audit: lecture
-**Date**: 2026-07-13 · **Status**: ✅ CONFORMED to hub scaled schema + old system removed (2026-07-14)
+**Date**: 2026-07-13 · **Status**: ✅ CONFORMED to hub scaled schema + old system removed (2026-07-14) · **🔧 POST-CONFORM FIXES applied 2026-07-14 (review session, uncommitted)**
+
+## 🔧 Post-conform fix record (2026-07-14 review — the conform commit `088e8b2` shipped broken reads)
+Independent review after `088e8b2` found the mirror DATA correct (hub-pure: NS msc=84/md=66/NULL=2, 0 missing arTitle/lectureNumber — old-prod fingerprint would be md=62 + no Arabic) but **the serving layer broken** — the commit updated every consumer EXCEPT `src/referenceRead/`, the module that actually answers `/lecture`:
+
+| # | Defect | Fix | Verified |
+|---|---|---|---|
+| 1 | **`GET /lecture` 500** — `referenceRead.provider.getLecturesByDepartment` still selected dropped `l."lectureTitle"`/`l."mainTopic"` (raw SQL, invisible to tsc) | alias the hub columns back to the legacy shape: `l."title" AS "lectureTitle"`, `t."title" AS "mainTopic"` (topic-derived — the sanctioned fallback) | ✅ live: NS default = 152 rows, CTS = 625, shape `{id,lectureTitle,mainTopic,level}` byte-identical |
+| 2 | **`GET /lecture/:id` wrong shape** — controller returned the raw new entity (`title`, no `mainTopic`) | new `referenceRead.provider.getLectureById` raw-SQL join returning the pre-conform row shape (`lectureTitle`/`mainTopic`/`arTitle`/`lectureNumber`/`sortOrder`/`level`/`topicId`/`google_uid:null`/timestamps); controller rewired, dead `LectureProvider` injection removed | ✅ live: by-id returns legacy shape incl. Arabic title |
+| 3 | **events dashboard nameless lectures** — `event.service.ts:288` still mapped `rest.lecture.lectureTitle` (renamed to `.title`); line 230's twin was fixed, 288 missed | `.lectureTitle` → `.title` | ✅ live: `/event/dashboard` shows lecture titles |
+| 4 | **81/102 events lost their lecture link** — prod has 81 events→lecture; ka had 0 ("no crosswalk"). But hub NS lectures ARE the prod lectures (hub migration 189 split "2.3.1 title" into lectureNumber+title) → crosswalk trivially feasible | `scripts/relink-event-lectures.cjs`: parse prod `lectureTitle` → (number, title); match ka NS lecture by lectureNumber (78) or normalized title (3, covers NS duplicate numbers marked AMBIG); idempotent `UPDATE … WHERE "lectureId" IS NULL` | ✅ 81/81 relinked, 0 unmatched; full 81-row title-consistency check vs prod passed (not just spot checks) |
+
+**Also found during verification: zombie dev server** (PID 21456, ts-node started 14:02 — *before* migration 610090 renamed the columns at ~18:48) was still holding port 3001 with stale entity metadata, throwing `column LectureEntity.lectureTitle does not exist` on every lecture read. Killed; fresh server verified clean. ⚠️ Always check `netstat` for :3001 before verifying (known multi-agent gotcha).
+
+Smoke tests used a short-lived crafted supervisor JWT (HS256, staging `SERVER_TOKEN_SECRET`/issuer). tsc clean. **Committed + pushed 2026-07-14 (user go-ahead).**
 **✅ 2026-07-14 — full cut to the hub schema** (LibelusRefApi migration 188): dropped legacy `google_uid` + `mainTopic`, renamed `lectureTitle`→`title`, hub-UUID PK (migration `1783782610090`). Removed the local lecture **CRUD subsystem** (create/update/delete/bulk-import provider+service methods + 4 write validators) — lectures are hub-owned, read-only via `referenceRead`. Mirror sync + mapper updated to the new columns; **re-synced clean (3,237 lectures / 141 topics)**. Attendance bulk-import re-keyed off `google_uid` → **`lectureNumber` OR `title`** (both conventions). Display consumers (event/reports/activityTimeline/instituteAdmin) read `.title`. `events.lectureId` FK → hub lectures (81 historical stay null — prod legacy lectures 0/80 disjoint, no crosswalk). `tsc` green.
 **Old side**: main @ `affa22e` + MySQL `kasr-el-ainy` (READ-ONLY) · **New side**: migration/mysql-to-postgres @ `6f010d2` + PG `ka-institute`
 

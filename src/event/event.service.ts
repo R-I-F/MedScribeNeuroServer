@@ -285,7 +285,7 @@ export class EventService {
         const item: any = {
           ...rest,
           _id: rest.id ?? rest._id,
-          lecture: rest.lecture ? { _id: rest.lecture.id, lectureTitle: rest.lecture.lectureTitle } : undefined,
+          lecture: rest.lecture ? { _id: rest.lecture.id, lectureTitle: rest.lecture.title } : undefined,
           journal: rest.journal ? { _id: rest.journal.id, journalTitle: rest.journal.journalTitle } : undefined,
           conf: rest.conf ? { _id: rest.conf.id, confTitle: rest.conf.confTitle } : undefined,
           presenter: rest.presenter ? { _id: rest.presenter.id ?? rest.presenterId, fullName: rest.presenter.fullName ?? rest.presenter.name } : undefined,

@@ -3,7 +3,6 @@ import { inject, injectable } from "inversify";
 import { matchedData } from "express-validator";
 import { AppDataSource } from "../config/database.config";
 import { MainDiagService } from "../mainDiag/mainDiag.service";
-import { LectureProvider } from "../lecture/lecture.provider";
 import { ReferenceReadProvider } from "./referenceRead.provider";
 
 /**
@@ -22,7 +21,6 @@ import { ReferenceReadProvider } from "./referenceRead.provider";
 export class ReferenceReadController {
   constructor(
     @inject(MainDiagService) private mainDiagService: MainDiagService,
-    @inject(LectureProvider) private lectureProvider: LectureProvider,
     @inject(ReferenceReadProvider) private refReadProvider: ReferenceReadProvider
   ) {}
 
@@ -96,7 +94,7 @@ export class ReferenceReadController {
 
   public async getLectureById(req: Request, _res: Response) {
     const id = req.params.id;
-    return this.lectureProvider.getLectureById(id, this.ds(req));
+    return this.refReadProvider.getLectureById(this.ds(req), id);
   }
 
   /** Dynamic additional questions (+ options) for a main-diagnosis, from the mirror. */
