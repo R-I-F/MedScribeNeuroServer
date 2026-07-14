@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import express, { Request, Response, Router } from "express";
-import { query, validationResult } from "express-validator";
+import { query, param, validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import { ReferenceReadController } from "./referenceRead.controller";
 import extractJWT from "../middleware/extractJWT";
@@ -74,6 +74,17 @@ export class ReferenceReadRouter {
       requireCandidate,
       deptCodeQueryValidator,
       listHandler((req, res) => this.ctrl.getAllMainDiags(req, res))
+    );
+
+    // GET /mainDiag/:mainDiagId/questions — dynamic additional questions (+ options) from the mirror
+    this.router.get(
+      "/mainDiag/:mainDiagId/questions",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireCandidate,
+      param("mainDiagId").isUUID().withMessage("mainDiagId must be a UUID"),
+      listHandler((req, res) => this.ctrl.getQuestionsByMainDiag(req, res))
     );
     this.router.get(
       "/mainDiag/:id",

@@ -129,4 +129,19 @@ export const createSupervisorSubmissionValidator = checkSchema({
   approach: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
   clinPres: { in: ["body"], optional: true, isString: true, trim: true },
   region: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
+  answers: {
+    in: ["body"],
+    optional: true,
+    isArray: { errorMessage: "answers must be an array." },
+    custom: {
+      options: (val: unknown) => {
+        if (!Array.isArray(val)) return true;
+        for (const a of val as any[]) {
+          if (!a || typeof a !== "object") throw new Error("each answer must be an object");
+          if (typeof a.questionId !== "string" || a.questionId.trim() === "") throw new Error("answer.questionId is required");
+        }
+        return true;
+      },
+    },
+  },
 });

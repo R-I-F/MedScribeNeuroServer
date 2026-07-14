@@ -96,4 +96,47 @@ export class ReferenceReadProvider {
       [departmentId]
     );
   }
+
+  /**
+   * Dynamic additional questions for a main-diagnosis, from the hub-synced mirror
+   * (ref_questions / main_diag_questions / ref_question_options / main_diag_question_options).
+   * Reproduces the hub's /v1/refAdditionalQuestions/main-diag/:id shape: each attached
+   * question with per-diag isRequired/sortOrder and its narrowed option set. free_text
+   * questions carry an empty options array. Replaces the legacy six-flag config.
+   */
+  public async getQuestionsByMainDiag(ds: DataSource, mainDiagId: string) {
+    const rows = await ds.query(
+      `
+      SELECT
+        q."id", q."key", q."label", q."arLabel", q."inputType",
+        mdq."isRequired", mdq."sortOrder",
+        COALESCE(
+          json_agg(
+            json_build_object('id', o."id", 'value', o."value", 'arValue', o."arValue", 'sortOrder', o."sortOrder")
+            ORDER BY o."sortOrder", o."value"
+          ) FILTER (WHERE o."id" IS NOT NULL),
+          '[]'
+        ) AS "options"
+      FROM "main_diag_questions" mdq
+      JOIN "ref_questions" q ON q."id" = mdq."questionId"
+      LEFT JOIN "main_diag_question_options" mdqo
+        ON mdqo."mainDiagId" = mdq."mainDiagId" AND mdqo."questionId" = mdq."questionId"
+      LEFT JOIN "ref_question_options" o ON o."id" = mdqo."optionId"
+      WHERE mdq."mainDiagId" = $1
+      GROUP BY q."id", q."key", q."label", q."arLabel", q."inputType", mdq."isRequired", mdq."sortOrder"
+      ORDER BY mdq."sortOrder", q."key"
+      `,
+      [mainDiagId]
+    );
+    return (rows as any[]).map((r) => ({
+      id: r.id,
+      key: r.key,
+      label: r.label,
+      arLabel: r.arLabel ?? null,
+      inputType: r.inputType,
+      isRequired: Boolean(r.isRequired),
+      sortOrder: Number(r.sortOrder),
+      options: r.options ?? [],
+    }));
+  }
 }

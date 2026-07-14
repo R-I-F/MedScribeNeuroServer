@@ -98,4 +98,10 @@ export class ReferenceReadController {
     const id = req.params.id;
     return this.lectureProvider.getLectureById(id, this.ds(req));
   }
+
+  /** Dynamic additional questions (+ options) for a main-diagnosis, from the mirror. */
+  public async getQuestionsByMainDiag(req: Request, _res: Response) {
+    const id = (req.params.mainDiagId ?? req.params.id) as string;
+    return this.refReadProvider.getQuestionsByMainDiag(this.ds(req), id);
+  }
 }

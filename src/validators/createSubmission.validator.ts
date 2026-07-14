@@ -191,4 +191,21 @@ export const createSubmissionValidator = checkSchema({
     isLength: { options: { max: 255 }, errorMessage: "region must not exceed 255 characters." },
     trim: true,
   },
+  // Dynamic additional-question answers (hub framework). Optional during the dual-write
+  // transition; each item: { questionId (uuid), questionKey?, optionId?, value? }.
+  answers: {
+    in: ["body"],
+    optional: true,
+    isArray: { errorMessage: "answers must be an array." },
+    custom: {
+      options: (val: unknown) => {
+        if (!Array.isArray(val)) return true;
+        for (const a of val as any[]) {
+          if (!a || typeof a !== "object") throw new Error("each answer must be an object");
+          if (typeof a.questionId !== "string" || a.questionId.trim() === "") throw new Error("answer.questionId is required");
+        }
+        return true;
+      },
+    },
+  },
 });
