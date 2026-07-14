@@ -500,7 +500,7 @@ export class EventProvider {
         let eventTitle: string;
         if (event.type === "lecture" && ev.lecture) {
           eventId = ev.lecture.id;
-          eventTitle = ev.lecture.lectureTitle ?? "—";
+          eventTitle = ev.lecture.title ?? "—";
         } else if (event.type === "journal" && ev.journal) {
           eventId = ev.journal.id;
           eventTitle = ev.journal.journalTitle ?? "—";
@@ -924,7 +924,7 @@ export class EventProvider {
       // Step 2: Batch fetch all candidates, lectures, journals, and confs
       const [candidates, lectures, journals, confs] = await Promise.all([
         this.candService.findCandidatesByEmails(Array.from(uniqueEmails), dataSource),
-        this.lectureService.findLecturesByGoogleUids(Array.from(uniqueUids), dataSource),
+        this.lectureService.findLecturesByNumbersOrTitles(Array.from(uniqueUids), dataSource),
         this.journalService.findJournalsByGoogleUids(Array.from(uniqueUids), dataSource),
         this.confService.findConfsByGoogleUids(Array.from(uniqueUids), dataSource),
       ]);
@@ -937,7 +937,9 @@ export class EventProvider {
 
       const lectureMap = new Map<string, any>();
       for (const lecture of lectures) {
-        lectureMap.set(lecture.google_uid, lecture);
+        // hub lectures carry no google_uid — key by lectureNumber and title (both conventions, lowercased)
+        if ((lecture as any).lectureNumber) lectureMap.set(String((lecture as any).lectureNumber).toLowerCase(), lecture);
+        if ((lecture as any).title) lectureMap.set(String((lecture as any).title).toLowerCase(), lecture);
       }
 
       const journalMap = new Map<string, any>();
@@ -959,8 +961,8 @@ export class EventProvider {
 
       for (const parsedRow of parsedRows) {
         const uid = parsedRow.uid;
-        if (lectureMap.has(uid)) {
-          const lecture = lectureMap.get(uid);
+        if (lectureMap.has(uid.toLowerCase())) {
+          const lecture = lectureMap.get(uid.toLowerCase());
           // Handle both id (MariaDB) and _id (MongoDB) formats
           const lectureId = (lecture as any).id || (lecture as any)._id?.toString() || (lecture as any)._id;
           lectureIds.push(lectureId);
@@ -1023,7 +1025,7 @@ export class EventProvider {
           // Get resource ID
           let resourceId: string | null = null;
           if (resourceType === "lecture") {
-            const lecture = lectureMap.get(uid);
+            const lecture = lectureMap.get(uid.toLowerCase());
             // Handle both id (MariaDB) and _id (MongoDB) formats
             resourceId = lecture ? ((lecture as any).id || (lecture as any)._id?.toString() || (lecture as any)._id) : null;
           } else if (resourceType === "journal") {

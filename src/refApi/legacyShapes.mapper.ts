@@ -60,14 +60,12 @@ export interface MirrorLectureTopicRow {
 
 export interface MirrorLectureRow {
   id: string;
-  lectureTitle: string;
-  mainTopic: string;
+  title: string;
   arTitle: string | null;
   lectureNumber: string | null;
   sortOrder: number | null;
   level: "msc" | "md" | null;
   topicId: string;
-  google_uid: null;
 }
 
 export interface MirrorEquipmentRow {
@@ -121,8 +119,8 @@ export function toMirrorConsumable(h: IRefConsumable): MirrorConsumableRow {
 
 /**
  * Flatten one department's hub topic→lectures tree into mirror rows: the topics (each stamped
- * with departmentId) and the lectures (each pointing at its topicId, with mainTopic kept =
- * topic title so the legacy `/lecture` read shape is unchanged).
+ * with departmentId) and the lectures (each pointing at its topicId). Conforms to the hub's
+ * scaled schema — `title`/`arTitle`/`lectureNumber`/`level`, no legacy `mainTopic`/`google_uid`.
  */
 export function toMirrorLectureTree(
   topics: IRefLectureTopic[],
@@ -141,14 +139,12 @@ export function toMirrorLectureTree(
     for (const l of t.lectures) {
       lectureRows.push({
         id: l.id,
-        lectureTitle: l.title,
-        mainTopic: t.title,
+        title: l.title,
         arTitle: l.arTitle,
         lectureNumber: l.lectureNumber,
         sortOrder: l.sortOrder,
         level: l.level,
         topicId: t.id,
-        google_uid: null,
       });
     }
   }

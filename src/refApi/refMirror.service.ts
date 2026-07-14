@@ -269,10 +269,10 @@ export class RefMirrorService {
       await this.upsert(
         qr,
         "lectures",
-        ["id", "lectureTitle", "mainTopic", "arTitle", "lectureNumber", "sortOrder", "level", "topicId", "google_uid"],
-        ["lectureTitle", "mainTopic", "arTitle", "lectureNumber", "sortOrder", "level", "topicId"],
+        ["id", "title", "arTitle", "lectureNumber", "sortOrder", "level", "topicId"],
+        ["title", "arTitle", "lectureNumber", "sortOrder", "level", "topicId"],
         lectureRowsU.map((l) => [
-          l.id, l.lectureTitle, l.mainTopic, l.arTitle, l.lectureNumber, l.sortOrder, l.level, l.topicId, null,
+          l.id, l.title, l.arTitle, l.lectureNumber, l.sortOrder, l.level, l.topicId,
         ])
       );
 

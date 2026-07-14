@@ -1925,8 +1925,7 @@ export class InstituteAdminProvider {
 
     return events.map((ev) => {
       const rawTitle =
-        (ev.type === "lecture" &&
-          (((ev.lecture as any)?.lectureTitle as string) || (ev.lecture as any)?.mainTopic)) ||
+        (ev.type === "lecture" && ((ev.lecture as any)?.title as string)) ||
         (ev.type === "journal" && (ev.journal as any)?.journalTitle) ||
         (ev.type === "conf" && (ev.conf as any)?.confTitle) ||
         "";

@@ -59,7 +59,7 @@ export class ActivityTimelineProvider {
 
     for (const a of attendances) {
       const ev = (a as any).event;
-      const eventTitle = ev?.lecture?.lectureTitle ?? ev?.journal?.journalTitle ?? ev?.conf?.confTitle ?? "Event";
+      const eventTitle = ev?.lecture?.title ?? ev?.journal?.journalTitle ?? ev?.conf?.confTitle ?? "Event";
       const eventType = ev?.type ?? "event";
       items.push({
         id: a.id,

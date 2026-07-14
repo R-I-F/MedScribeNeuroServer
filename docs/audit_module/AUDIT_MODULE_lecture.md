@@ -1,5 +1,6 @@
 # Module Upgrade Audit: lecture
-**Date**: 2026-07-13 · **Status**: ✅ MIRROR-BACKED (router retired) — no prod ETL
+**Date**: 2026-07-13 · **Status**: ✅ CONFORMED to hub scaled schema + old system removed (2026-07-14)
+**✅ 2026-07-14 — full cut to the hub schema** (LibelusRefApi migration 188): dropped legacy `google_uid` + `mainTopic`, renamed `lectureTitle`→`title`, hub-UUID PK (migration `1783782610090`). Removed the local lecture **CRUD subsystem** (create/update/delete/bulk-import provider+service methods + 4 write validators) — lectures are hub-owned, read-only via `referenceRead`. Mirror sync + mapper updated to the new columns; **re-synced clean (3,237 lectures / 141 topics)**. Attendance bulk-import re-keyed off `google_uid` → **`lectureNumber` OR `title`** (both conventions). Display consumers (event/reports/activityTimeline/instituteAdmin) read `.title`. `events.lectureId` FK → hub lectures (81 historical stay null — prod legacy lectures 0/80 disjoint, no crosswalk). `tsc` green.
 **Old side**: main @ `affa22e` + MySQL `kasr-el-ainy` (READ-ONLY) · **New side**: migration/mysql-to-postgres @ `6f010d2` + PG `ka-institute`
 
 ## 0. TL;DR

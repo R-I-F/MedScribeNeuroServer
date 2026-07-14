@@ -1,42 +1,39 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
 } from "typeorm";
 import { TLectureLevel } from "./lecture.interface";
 
+/**
+ * Lectures mirror (KA spoke) — conforms to the hub's scaled lectures framework
+ * (LibelusRefApi migration 188): `departments → lecture_topics → lectures`.
+ * Hub-owned reference data, READ-ONLY in the spoke: PK is the hub UUID (preserved on sync),
+ * and there is no local CRUD. The legacy `google_uid`/`mainTopic`/`lectureTitle` columns were
+ * dropped (migration 1783782610090); `mainTopic` is now derived from the topic via `topicId`.
+ */
 @Entity("lectures")
 export class LectureEntity {
-  @PrimaryGeneratedColumn("uuid")
+  @PrimaryColumn({ type: "uuid" })
   id!: string;
 
   @Column({ type: "text" })
-  lectureTitle!: string;
+  title!: string;
 
-  // Nullable for hub-mirrored lectures: the reference lectures carry no google_uid,
-  // and level is only set where an authoritative MSc/MD source exists.
-  @Column({ type: "varchar", length: 255, unique: true, nullable: true })
-  google_uid!: string | null;
+  @Column({ type: "text", nullable: true })
+  arTitle!: string | null;
 
-  @Column({ type: "text" })
-  mainTopic!: string;
-
-  // Mirror of hub lectures→lecture_topics: a lecture belongs to a curriculum topic, and the
-  // topic carries the department. topicId is nullable during rollout. `mainTopic` is kept
-  // (populated from the topic title on sync) so the legacy read shape is unchanged.
-  @Column({ type: "uuid", nullable: true })
-  topicId!: string | null;
+  // A lecture belongs to a curriculum topic (hub `lecture_topics`); the topic carries the department.
+  @Column({ type: "uuid" })
+  topicId!: string;
 
   @Column({ type: "varchar", length: 50, nullable: true })
   lectureNumber!: string | null;
 
   @Column({ type: "int", nullable: true })
   sortOrder!: number | null;
-
-  @Column({ type: "text", nullable: true })
-  arTitle!: string | null;
 
   @Column({ type: "enum", enum: ["msc", "md"], nullable: true })
   level!: TLectureLevel | null;

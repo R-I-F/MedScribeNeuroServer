@@ -58,7 +58,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `diagnosis` | ✅ Done (mirror 1,319; router retired) | Diagnosis entity/service (reads from mirror; legacy router removed in spoke conversion) |
 | `mainDiag` | ✅ Done (mirror 196 + join tables) | Main-diagnosis category entity/service (legacy router removed) |
 | `procCpt` | ✅ Done (mirror 1,429) | CPT procedure entity/service (legacy router removed) |
-| `lecture` | ✅ Done (mirror 3,237 lectures / 141 topics) | Lecture + lecture-topic entities/service (mirror-backed; legacy router removed) |
+| `lecture` | ✅ **Done — conformed to hub scaled schema** (migration `610090`): dropped legacy `google_uid`/`mainTopic`/`lectureTitle`→`title`, hub-UUID PK; **old CRUD subsystem removed** (provider/service reads-only, 4 write validators deleted); read-only hub mirror (3,237 lectures / 141 topics). Bulk attendance import now resolves lectures by `lectureNumber`/`title` (google_uid gone). Sync re-run clean. | Lecture + lecture-topic mirror (hub-owned, read-only) |
 | `positions` | ✅ Done (seeded 5 = prod) | Patient-position lookup (seeded; legacy router removed) |
 | `approaches` | ✅ Done (seeded 15 = prod) | Surgical-approach lookup (seeded; legacy router removed) |
 | `regions` | ✅ Done (seeded 4 = prod) | Anatomical-region lookup (seeded; legacy router removed) |

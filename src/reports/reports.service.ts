@@ -248,8 +248,8 @@ export class ReportsService {
         if (e.type === "lecture" && e.lecture) {
           resource = {
             type: "lecture",
-            title: e.lecture.lectureTitle,
-            google_uid: e.lecture.google_uid,
+            title: e.lecture.title,
+            google_uid: undefined,
           };
         } else if (e.type === "journal" && e.journal) {
           resource = {

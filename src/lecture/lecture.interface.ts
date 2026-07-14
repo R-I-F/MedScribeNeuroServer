@@ -1,21 +1,20 @@
-// Removed: import { Types, Document } from "mongoose"; - Now using UUIDs directly for MariaDB
-
 export type TLectureLevel = "msc" | "md";
 
+/**
+ * Read shape of a mirrored hub lecture (scaled framework). The spoke never writes lectures —
+ * they are hub-owned reference data synced by RefMirrorService.
+ */
 export interface ILecture {
-  lectureTitle: string;
-  google_uid: string;
-  mainTopic: string;
-  level: TLectureLevel;
+  title: string;
+  arTitle: string | null;
+  topicId: string;
+  lectureNumber: string | null;
+  sortOrder: number | null;
+  level: TLectureLevel | null;
 }
 
 export interface ILectureDoc extends ILecture {
-  id: string; // UUID (replaces _id from MongoDB Document)
+  id: string; // hub UUID
   createdAt: Date;
   updatedAt: Date;
 }
-
-// Derived types for input operations
-export type ILectureInput = ILecture;
-export type ILectureUpdateInput = Partial<ILecture> & { id: string };
-
