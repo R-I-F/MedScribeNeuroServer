@@ -41,6 +41,20 @@ function dedupePairs(pairs: [string, string][]): [string, string][] {
   return out;
 }
 
+/** Dedupe arbitrary-width tuples by a caller-supplied composite key. */
+function dedupeTuples<T>(rows: T[], keyOf: (row: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const k = keyOf(r);
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
 export interface RefSyncResult {
   dataVersion: string;
   departments: number;
@@ -56,6 +70,10 @@ export interface RefSyncResult {
   departmentConsumables: number;
   mainDiagDiagnoses: number;
   mainDiagProcs: number;
+  refQuestions: number;
+  refQuestionOptions: number;
+  mainDiagQuestions: number;
+  mainDiagQuestionOptions: number;
   sixFlagRowsEnsured: number;
 }
 
@@ -93,12 +111,16 @@ export class RefMirrorService {
     const consumById = new Map<string, MirrorConsumableRow>(); // shared, deduped across depts
     const topicRows: MirrorLectureTopicRow[] = [];
     const lectureRows: MirrorLectureRow[] = [];
+    const refQuestionById = new Map<string, { id: string; departmentId: string; key: string; label: string; arLabel: string | null; inputType: string; isRequired: boolean; sortOrder: number }>();
+    const refOptionById = new Map<string, { id: string; questionId: string; value: string; arValue: string | null; sortOrder: number }>();
     const deptDiagnosisPairSet = new Set<string>(); // "deptId|dxId"
     const deptDiagnosisPairs: [string, string][] = [];
     const deptEquipmentPairs: [string, string][] = [];
     const deptConsumablePairs: [string, string][] = [];
     const mdDiagnosisPairs: [string, string][] = [];
     const mdProcPairs: [string, string][] = [];
+    const mdQuestionRows: [string, string, boolean, number][] = []; // (mainDiagId, questionId, isRequired, sortOrder)
+    const mdQuestionOptionRows: [string, string, string][] = [];    // (mainDiagId, questionId, optionId)
     const allMainDiagIds: string[] = [];
 
     for (const dept of departments) {
@@ -129,6 +151,18 @@ export class RefMirrorService {
         deptConsumablePairs.push([dept.id, co.id]);
       }
 
+      // Dynamic additional-questions framework: definitions + full option lists per department.
+      for (const q of await this.client.getQuestionsByDept(dept.code)) {
+        refQuestionById.set(q.id, {
+          id: q.id, departmentId: dept.id, key: q.key, label: q.label,
+          arLabel: q.arLabel ?? null, inputType: q.inputType,
+          isRequired: q.isRequired, sortOrder: q.sortOrder,
+        });
+        for (const o of q.options) {
+          refOptionById.set(o.id, { id: o.id, questionId: q.id, value: o.value, arValue: o.arValue ?? null, sortOrder: o.sortOrder });
+        }
+      }
+
       const tree = toMirrorLectureTree(await this.client.getRefLecturesByDept(dept.code), dept.id);
       topicRows.push(...tree.topics);
       lectureRows.push(...tree.lectures);
@@ -143,6 +177,11 @@ export class RefMirrorService {
         for (const pc of ps) {
           procById.set(pc.id, toMirrorProcCpt(pc));
           mdProcPairs.push([md.id, pc.id]);
+        }
+        // Effective questions attached to this main_diag (+ its narrowed option set).
+        for (const q of await this.client.getQuestionsByMainDiag(md.id)) {
+          mdQuestionRows.push([md.id, q.id, q.isRequired, q.sortOrder]);
+          for (const o of q.options) mdQuestionOptionRows.push([md.id, q.id, o.id]);
         }
       }
     }
@@ -200,6 +239,21 @@ export class RefMirrorService {
         ["consumables", "arName"],
         [...consumById.values()].map((c) => [c.id, c.consumables, c.arName])
       );
+      // Question definitions (FK → departments, done above) then their options.
+      await this.upsert(
+        qr,
+        "ref_questions",
+        ["id", "departmentId", "key", "label", "arLabel", "inputType", "isRequired", "sortOrder"],
+        ["departmentId", "key", "label", "arLabel", "inputType", "isRequired", "sortOrder"],
+        [...refQuestionById.values()].map((q) => [q.id, q.departmentId, q.key, q.label, q.arLabel, q.inputType, q.isRequired, q.sortOrder])
+      );
+      await this.upsert(
+        qr,
+        "ref_question_options",
+        ["id", "questionId", "value", "arValue", "sortOrder"],
+        ["questionId", "value", "arValue", "sortOrder"],
+        [...refOptionById.values()].map((o) => [o.id, o.questionId, o.value, o.arValue, o.sortOrder])
+      );
 
       // Department-scoped tables.
       await this.upsert(
@@ -240,6 +294,14 @@ export class RefMirrorService {
       await qr.query(`DELETE FROM "department_consumables"`);
       await this.insertPairs(qr, "department_consumables", "departmentId", "consumableId", deptConsumablePairsU);
 
+      // Per-main_diag question wiring (rebuilt each sync). Dedupe defensively.
+      const mdQuestionRowsU = dedupeTuples(mdQuestionRows, (r) => `${r[0]}|${r[1]}`);
+      const mdQuestionOptionRowsU = dedupeTuples(mdQuestionOptionRows, (r) => `${r[0]}|${r[1]}|${r[2]}`);
+      await qr.query(`DELETE FROM "main_diag_question_options"`);
+      await qr.query(`DELETE FROM "main_diag_questions"`);
+      await this.insertTuples(qr, "main_diag_questions", ["mainDiagId", "questionId", "isRequired", "sortOrder"], mdQuestionRowsU);
+      await this.insertTuples(qr, "main_diag_question_options", ["mainDiagId", "questionId", "optionId"], mdQuestionOptionRowsU);
+
       // Six-flag continuity for every main_diag (default all-zero; never overwrite).
       if (allMainDiagIds.length > 0) {
         const values = allMainDiagIds.map((_, i) => `($${i + 1})`).join(", ");
@@ -277,6 +339,10 @@ export class RefMirrorService {
         departmentConsumables: deptConsumablePairsU.length,
         mainDiagDiagnoses: mdDiagnosisPairsU.length,
         mainDiagProcs: mdProcPairsU.length,
+        refQuestions: refQuestionById.size,
+        refQuestionOptions: refOptionById.size,
+        mainDiagQuestions: mdQuestionRowsU.length,
+        mainDiagQuestionOptions: mdQuestionOptionRowsU.length,
         sixFlagRowsEnsured: cnt[0]?.c ?? 0,
       };
     } catch (err) {
@@ -348,6 +414,29 @@ export class RefMirrorService {
         `INSERT INTO "${table}" ("${leftCol}", "${rightCol}") VALUES ${tuples.join(", ")}`,
         params
       );
+    }
+  }
+
+  /** Batched plain INSERT of arbitrary-width rows into a table (chunked under the param limit). */
+  private async insertTuples(
+    qr: QueryRunner,
+    table: string,
+    cols: string[],
+    rows: any[][]
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    const colList = cols.map((c) => `"${c}"`).join(", ");
+    const maxRows = Math.max(1, Math.floor(50000 / cols.length));
+    for (let start = 0; start < rows.length; start += maxRows) {
+      const slice = rows.slice(start, start + maxRows);
+      const params: any[] = [];
+      const tuples: string[] = [];
+      let p = 1;
+      for (const row of slice) {
+        tuples.push(`(${row.map(() => `$${p++}`).join(", ")})`);
+        params.push(...row);
+      }
+      await qr.query(`INSERT INTO "${table}" (${colList}) VALUES ${tuples.join(", ")}`, params);
     }
   }
 }

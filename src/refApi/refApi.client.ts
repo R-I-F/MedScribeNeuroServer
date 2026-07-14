@@ -11,6 +11,7 @@ import {
   IRefLectureTopic,
   IRefEquipment,
   IRefConsumable,
+  IRefQuestion,
 } from "./refApi.types";
 
 dotenv.config();
@@ -126,5 +127,15 @@ export class RefApiClient {
 
   public getConsumablesByDept(deptCode: string = this.deptCode): Promise<IRefConsumable[]> {
     return this.get<IRefConsumable[]>(`/v1/departments/${encodeURIComponent(deptCode)}/consumables`);
+  }
+
+  /** All question definitions (+ full option lists) for a department. */
+  public getQuestionsByDept(deptCode: string = this.deptCode): Promise<IRefQuestion[]> {
+    return this.get<IRefQuestion[]>(`/v1/refAdditionalQuestions/department/${encodeURIComponent(deptCode)}`);
+  }
+
+  /** Questions attached to a main_diag, with per-diag overrides + narrowed options. */
+  public getQuestionsByMainDiag(mainDiagId: string): Promise<IRefQuestion[]> {
+    return this.get<IRefQuestion[]>(`/v1/refAdditionalQuestions/main-diag/${encodeURIComponent(mainDiagId)}`);
   }
 }

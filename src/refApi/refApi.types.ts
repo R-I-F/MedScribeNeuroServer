@@ -73,3 +73,21 @@ export interface IRefConsumable {
   name: string;
   arName: string;
 }
+
+export interface IRefQuestionOption {
+  id: string;
+  value: string;
+  arValue: string | null;
+  sortOrder: number;
+}
+
+export interface IRefQuestion {
+  id: string;
+  key: string;
+  label: string;
+  arLabel: string | null;
+  inputType: "single_choice" | "multi_choice" | "free_text";
+  isRequired: boolean;
+  sortOrder: number;
+  options: IRefQuestionOption[];
+}
