@@ -1,5 +1,6 @@
 # Module Upgrade Audit: clinicalSub
-**Date**: 2026-07-13 · **Status**: 📋 DRAFT — awaiting user approval
+**Date**: 2026-07-13 · **Status**: ✅ IMPLEMENTED (staging) 2026-07-14 — 87 → NS
+**✅ Implemented:** dept-scoped `departmentId` (nullable, migration `1783782610070`); ETL **87** rows → all NS (backfilled candidate→supervisor), **0 FK orphans**. (prod is 87 now; was 86 at audit time.)
 **Old side**: main @ `affa22e` + MySQL `kasr-el-ainy` (READ-ONLY)
 **New side**: migration/mysql-to-postgres @ `6f010d2` + PG `ka-institute`
 

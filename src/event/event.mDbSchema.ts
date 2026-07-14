@@ -62,6 +62,10 @@ export class EventEntity {
   @OneToMany(() => EventAttendanceEntity, (attendance) => attendance.event)
   attendance!: EventAttendanceEntity[];
 
+  // Department this event belongs to (FK → departments). Dept-scoped; nullable during rollout (backfill → NS).
+  @Column({ type: "uuid", nullable: true })
+  departmentId?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

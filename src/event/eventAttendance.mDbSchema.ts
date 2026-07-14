@@ -54,6 +54,10 @@ export class EventAttendanceEntity {
   @Column({ type: "int", default: 1 })
   points!: number;
 
+  // Department this attendance belongs to (FK → departments). Dept-scoped; nullable during rollout (backfill from candidate → NS).
+  @Column({ type: "uuid", nullable: true })
+  departmentId?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

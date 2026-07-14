@@ -12,7 +12,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 
 **Migration status summary**
 - **Implemented (user tables):** `cand`, `supervisor`, `instituteAdmin`, `superAdmin` ✅
-- **ETL still pending (4 tables):** `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27) [`clerk`, `hospital`, `arabProc`, `calSurg`, `sub`, `additionalQuestions` now done]
+- **ETL COMPLETE — all prod operational tables loaded to `ka-institute`.** Final batch (dept-scoped NS, migrations `610070`/`610080`): `clinicalSub` (87), `conf` (2), `journal` (27), `event` (102) + `event_attendance` (1,264). **`events.lectureId` nulled for 81 lecture-events** — prod's legacy lectures are disjoint from the hub-mirror catalog (0/80 match on id/title/google_uid); events + attendance kept, dead pointer dropped.
 - **Follow-on (not ETL):** `arab_procs → proc_cpts` semantic remap for `cal_surgs.procCptId` (hub procedure-search + user review + backfill), then retire arab_procs.
 - **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`, **`consumables` (204+301) & `equipment` (102+234)** — the latter two now hub-mirrored + dept-scoped as of commit `696c87f` (hub endpoint added + spoke sync wired + synced; superseded my earlier "sync gap" note).
 - **No table / stateless (no ETL):** `auth`, `institution`, `bundler`, `reports`, `activityTimeline`, `externalService`, `mailer`, `aiAgent`, `pdf`
@@ -34,11 +34,11 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `instituteAdmin` | `/instituteAdmin` | ✅ **Implemented** (3 → NS; PG fix; dept nullable) | Institute admin users |
 | `superAdmin` | `/superAdmin` | ✅ **Implemented** (1 already loaded; no idioms) | Super admin users |
 | `sub` | `/sub` | ✅ **Done** — 3,599 → NS (dept-scoped) + `mainDiagDocId` remapped legacy→hub (10/10 by title); 0 FK orphans | Surgical submissions (the core logbook entries) |
-| `clinicalSub` | `/clinicalSub` | 🔁 ETL pending (86) | Clinical (non-surgical) submissions |
+| `clinicalSub` | `/clinicalSub` | ✅ **Done** — 87 → NS (dept-scoped, nullable via candidate→supervisor); migration `610070` | Clinical (non-surgical) submissions |
 | `additionalQuestions` | ~~`/additionalQuestions`~~ (route retired) | ✅ **Fully replaced by hub questions framework** (Fable `1758c6d`→`dbf4c2a`→`9544976`, verified) — 4 mirror tables (98 Q / 472 opt / 700 main_diag_q / 1,989 mdq_opt) + `submission_question_answers` (5,948 answers). **Legacy fully removed:** six-flag module + `additional_questions` table + the 6 inline `submissions` cols dropped (migration `1783782610060`); `getSubById` resolves the 6 named fields from the answer store at read time. `tsc` green. | Dynamic additional questions (hub-mirrored, per-main_diag) — legacy six-flag retired |
-| `journal` | `/journal` | 🔁 ETL pending (27; before events) | Journal club entries |
-| `conf` | `/conf` | 🔁 ETL pending (2; before events) | Conferences |
-| `event` | `/event` | 🔁 ETL pending (102 events / 1,264 attendance) | Events + attendance (`eventAttendance.mDbSchema.ts`) |
+| `journal` | `/journal` | ✅ **Done** — 27 → NS (dept-scoped); migration `610080` | Journal club entries |
+| `conf` | `/conf` | ✅ **Done** — 2 → NS (dept-scoped); migration `610080` | Conferences |
+| `event` | `/event` | ✅ **Done** — 102 events + 1,264 attendance → NS (dept-scoped); migration `610080`; **`lectureId` nulled for 81** (prod lectures disjoint from hub mirror) | Events + attendance (`eventAttendance.mDbSchema.ts`) |
 | `activityTimeline` | `/activityTimeline` | ✅ Done (no table; derived reads) | Candidate activity timeline |
 | `consumables` | `/consumables` | ✅ **Mirror-synced** (hub, dept-scoped) — 204 items + 301 dept-links; `arName` + `department_consumables` (commit `696c87f`) | Consumables reference (hub-mirrored, dept-scoped read) |
 | `equipment` | `/equipment` | ✅ **Mirror-synced** (hub, dept-scoped) — 102 items + 234 dept-links; `arName` + `department_equipment` (commit `696c87f`) | Equipment reference (hub-mirrored, dept-scoped read) |
@@ -74,7 +74,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `config` | ✅ Done (pinned datasource + wiring) | App wiring: Inversify container, database config + `datasource.manager.ts` (pinned single-institution), `ka-migrations.config.ts`, `routes.config.ts`, `server.config.ts` |
 | `middleware` | ✅ Done (static resolver) | `authorize`, `extractJWT`, `globalErrorHandler`, `institutionResolver` (defaults to static institution), `rateLimiter`, `requestLogger`, `responseFormatter` |
 | `migrations` | ⚠️ Quarantine (legacy MySQL — must NOT run on PG) | Legacy MySQL tenant migrations (1735*) — incompatible with the Postgres-native entities; superseded by `migrations-ka` |
-| `migrations-ka` | ✅ Active (authoritative PG set) | KA spoke Postgres migrations (git-tracked): `InitKaSchema`, `SeedKaLookups`, `SeedKaSixFlags`, `AddDepartmentScoping`, `WidenMirrorTextColumns`, `AddCandidatesPhoneUnique`, `AddSupervisorsPhoneUnique`, `SupervisorDepartmentNotNull`, `CandidateDepartmentNotNull` |
+| `migrations-ka` | ✅ Active (authoritative PG set) | KA spoke Postgres migrations (git-tracked): `InitKaSchema`, `SeedKaLookups`, `AddDepartmentScoping`, `WidenMirrorTextColumns`, phone-unique + dept-NOT-NULL (cand/supervisor), `AddHospitalDepartment`(+NotNull), `AddArabProcDepartment`, `AddCalSurgDepartmentAndProcCpt`, `AddSubmissionDepartment`, questions framework `MirrorRefQuestions`/`AddSubmissionQuestionAnswers`/`DropLegacyAdditionalQuestions` (Fable), `AddClinicalSubDepartment` (`610070`), `AddEventsBranchDepartment` (`610080`) |
 | `types` | ✅ Done (keep Arabic reshaper/bidi shims) | Shared TS declarations (`role.types.ts`, `supervisorPosition.types.ts`, express augmentation, arabic-reshaper/bidi shims) |
 | `utils` | ✅ Done | Utilities: `censored.mapper.ts`, `cookie.utils.ts`, `utils.service.ts` |
 | `validators` | ✅ Done (updated: cand/supervisor `departmentId` required) | express-validator request validators for all modules |

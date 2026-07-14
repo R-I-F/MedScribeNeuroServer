@@ -30,6 +30,10 @@ export class ConfEntity {
   @Column({ type: "date" })
   date!: Date;
 
+  // Department this conference belongs to (FK → departments). Dept-scoped; nullable during rollout (backfill → NS).
+  @Column({ type: "uuid", nullable: true })
+  departmentId?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

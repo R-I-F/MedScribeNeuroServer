@@ -1,5 +1,6 @@
 # Module Upgrade Audit: conf
-**Date**: 2026-07-13 · **Status**: 📋 DRAFT — awaiting user approval
+**Date**: 2026-07-13 · **Status**: ✅ IMPLEMENTED (staging) 2026-07-14 — 2 → NS
+**✅ Implemented:** dept-scoped `departmentId` (nullable, migration `1783782610080`); ETL **2** confs → NS; `presenterId`→supervisors resolves (0 orphans). Loaded before events.
 **Old side**: main @ `affa22e` + MySQL `kasr-el-ainy` (READ-ONLY) · **New side**: migration/mysql-to-postgres @ `6f010d2` + PG `ka-institute`
 
 ## 0. TL;DR

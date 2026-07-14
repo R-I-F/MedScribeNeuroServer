@@ -70,6 +70,10 @@ export class ClinicalSubEntity {
   @Column({ type: "timestamp", nullable: true })
   reviewedAt?: Date | null;
 
+  // Department this clinical submission belongs to (FK → departments). Dept-scoped; nullable during rollout (backfill from candidate → NS).
+  @Column({ type: "uuid", nullable: true })
+  departmentId?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

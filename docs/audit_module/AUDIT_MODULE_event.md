@@ -1,5 +1,6 @@
 # Module Upgrade Audit: event
-**Date**: 2026-07-13 · **Status**: 📋 DRAFT — awaiting user approval
+**Date**: 2026-07-13 · **Status**: ✅ IMPLEMENTED (staging) 2026-07-14 — 102 events / 1,264 attendance → NS
+**✅ Implemented:** dept-scoped `departmentId` (nullable, migration `1783782610080`); ETL **102** events + **1,264** attendance → all NS (attendance dept via candidate), **0 FK orphans**, points sum 1,264. **`events.lectureId` nulled for 81 lecture-events** — prod's legacy lectures are disjoint from the KA hub-mirror catalog (**0/80** match on id/title/google_uid), so the dead pointer was dropped (events + attendance preserved; injecting legacy lectures would pollute the hub mirror, skipping would orphan attendance). `conf`/`journal` links resolve (same prod ids, loaded first).
 **Old side**: main @ `affa22e` + MySQL `kasr-el-ainy` (READ-ONLY)
 **New side**: migration/mysql-to-postgres @ `6f010d2` + PG `ka-institute`
 
