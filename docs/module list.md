@@ -12,7 +12,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 
 **Migration status summary**
 - **Implemented (user tables):** `cand`, `supervisor`, `instituteAdmin`, `superAdmin` ✅
-- **ETL still pending (6 tables):** `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `additionalQuestions` (reconcile) [`clerk`, `hospital`, `arabProc`, `calSurg`, `sub` now done]
+- **ETL still pending (4 tables):** `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27) [`clerk`, `hospital`, `arabProc`, `calSurg`, `sub`, `additionalQuestions` now done]
 - **Follow-on (not ETL):** `arab_procs → proc_cpts` semantic remap for `cal_surgs.procCptId` (hub procedure-search + user review + backfill), then retire arab_procs.
 - **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`, **`consumables` (204+301) & `equipment` (102+234)** — the latter two now hub-mirrored + dept-scoped as of commit `696c87f` (hub endpoint added + spoke sync wired + synced; superseded my earlier "sync gap" note).
 - **No table / stateless (no ETL):** `auth`, `institution`, `bundler`, `reports`, `activityTimeline`, `externalService`, `mailer`, `aiAgent`, `pdf`
@@ -35,7 +35,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `superAdmin` | `/superAdmin` | ✅ **Implemented** (1 already loaded; no idioms) | Super admin users |
 | `sub` | `/sub` | ✅ **Done** — 3,599 → NS (dept-scoped) + `mainDiagDocId` remapped legacy→hub (10/10 by title); 0 FK orphans | Surgical submissions (the core logbook entries) |
 | `clinicalSub` | `/clinicalSub` | 🔁 ETL pending (86) | Clinical (non-surgical) submissions |
-| `additionalQuestions` | `/additionalQuestions` | 🔁 Pending (reconcile: seeded 196 vs prod 10) | Legacy per-tenant six-flag additional questions (spOrCran/pos/approach/region/clinPres/intEvents) |
+| `additionalQuestions` | ~~`/additionalQuestions`~~ (route retired) | ✅ **Fully replaced by hub questions framework** (Fable `1758c6d`→`dbf4c2a`→`9544976`, verified) — 4 mirror tables (98 Q / 472 opt / 700 main_diag_q / 1,989 mdq_opt) + `submission_question_answers` (5,948 answers). **Legacy fully removed:** six-flag module + `additional_questions` table + the 6 inline `submissions` cols dropped (migration `1783782610060`); `getSubById` resolves the 6 named fields from the answer store at read time. `tsc` green. | Dynamic additional questions (hub-mirrored, per-main_diag) — legacy six-flag retired |
 | `journal` | `/journal` | 🔁 ETL pending (27; before events) | Journal club entries |
 | `conf` | `/conf` | 🔁 ETL pending (2; before events) | Conferences |
 | `event` | `/event` | 🔁 ETL pending (102 events / 1,264 attendance) | Events + attendance (`eventAttendance.mDbSchema.ts`) |

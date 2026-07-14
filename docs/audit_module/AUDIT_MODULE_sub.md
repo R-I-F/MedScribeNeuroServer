@@ -12,13 +12,14 @@ The core logbook, loaded. Applied to `migration/mysql-to-postgres` + `ka-institu
 | B | ETL 3,599 submissions → NS (PII + Arabic verbatim) | `scripts/etl-submissions-prod-to-ka.cjs` | ✅ loaded, batched |
 | C | **`mainDiagDocId` REMAP** (legacy prod ids → hub-mirror ids) | in ETL, by exact title (NS dept) | ✅ 10/10 categories, deterministic 1:1 |
 | D | `departmentId` backfill from candidate → supervisor fallback | in ETL | ✅ all 3,599 = NS, 0 null |
+| E | **Additional-questions cutover** — after Fable's dynamic-questions rebuild dropped the 6 inline answer cols (`spOrCran/pos/approach/region/clinPres/IntEvents`, migration `1783782610060`), the ETL no longer writes them; it loads prod's 6 legacy values into `submission_question_answers` (`COLUMN_TO_KEY` → NS `ref_questions`; choice values resolved to `optionId` by `lower(value)`, raw value always kept) | in ETL, mirrors Fable's Stage-C backfill | ✅ **5,948** answers, **2,939** optionId-resolved, **7** raw, 0 FK-orphan subs; pipeline re-runnable end-to-end |
 
-**ETL verification (counts only, no PII):** total **3,599** ✅ · `departmentId=NS` **3,599** / NULL **0** · distribution candidate approved **3002** / pending **551** / rejected **41** / supervisor approved **5** (exact match to prod) ✅ · **FK orphans: mainDiag 0 / proc 0 / supervisor 0 / candidate 0** ✅ · Arabic `surgNotes` **29** preserved. `diagnosisName`/`procedureName` longtext→json; `isItRevSurg` tinyint→boolean.
+**ETL verification (counts only, no PII):** total **3,599** ✅ · `departmentId=NS` **3,599** / NULL **0** · distribution candidate approved **3002** / pending **551** / rejected **41** / supervisor approved **5** (exact match to prod) ✅ · **FK orphans: mainDiag 0 / proc 0 / supervisor 0 / candidate 0** ✅ · Arabic `surgNotes` **29** preserved. `diagnosisName`/`procedureName` longtext→json; `isItRevSurg` tinyint→boolean. **Answer store:** `submission_question_answers` **5,948** (intraopEvents 2928 / approach 807 / position 807 / surgicalDomain 802 / region 530 / clinicalPresentation 74) — matches the 6 legacy column counts 1:1.
 
 **Key finding — `mainDiagDocId` needed remapping (like arab_procs):** the 3,599 submissions referenced **prod's 10 legacy main_diag ids**, none of which exist in the KA hub-mirror `main_diags`. Unlike the arab_procs case, the fix was **clean & deterministic** — every legacy category (`cns tumors`, `neuro-vascular diseases`, …) matches exactly one KA (NS) main_diag by title (1:1, verified), so the ETL swapped the ids with no ambiguity/review. (The `procDocId`/`candDocId`/`supervisorDocId` ids were preserved from prod and resolve directly.)
 
 ## 🔄 Progress Checkpoint
-**Status**: ✅ implemented on staging. ▶ Next: `conf`/`journal` → `events` → `event_attendance`; `clinicalSub`; `additionalQuestions` reconcile. (Follow-on: cal_surgs `arabProcId` display-layer refactor → procCpt.)
+**Status**: ✅ implemented on staging (incl. additional-questions cutover to `submission_question_answers`). ▶ Next: `conf`/`journal` → `events` → `event_attendance`; `clinicalSub`. (Follow-on: cal_surgs `arabProcId` display-layer refactor → procCpt.)
 ### ▶ Next action
 User decisions on §9, then (separate task) implement §7: benign `institutionId` cleanup (optional) + the big ETL of 3,599 submissions — **which is blocked on `cal_surgs` (calSurg) being loaded first**.
 
