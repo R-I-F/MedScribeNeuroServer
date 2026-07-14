@@ -58,9 +58,6 @@ export function addRoutes(app: Application) {
   const { ActivityTimelineRouter } = require("../activityTimeline/activityTimeline.router");
   const activityTimelineRouter = container.get(ActivityTimelineRouter) as any;
 
-  const { AdditionalQuestionsRouter } = require("../additionalQuestions/additionalQuestions.router");
-  const additionalQuestionsRouter = container.get(AdditionalQuestionsRouter) as any;
-
   const { ConsumablesRouter } = require("../consumables/consumables.router");
   const consumablesRouter = container.get(ConsumablesRouter) as any;
 
@@ -106,7 +103,6 @@ export function addRoutes(app: Application) {
   app.use("/event", eventRouter.router);
   app.use("/clerk", clerkRouter.router);
   app.use("/activityTimeline", activityTimelineRouter.router);
-  app.use("/additionalQuestions", additionalQuestionsRouter.router);
   app.use("/consumables", consumablesRouter.router);
   app.use("/equipment", equipmentRouter.router);
   app.use("/clinicalSub", clinicalSubRouter.router);

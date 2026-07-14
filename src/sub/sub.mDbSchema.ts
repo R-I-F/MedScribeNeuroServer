@@ -112,23 +112,9 @@ export class SubmissionEntity {
   @Column({ type: "text", nullable: true })
   surgNotes?: string;
 
-  @Column({ type: "text", nullable: true })
-  IntEvents?: string;
-
-  @Column({ type: "varchar", length: 50, nullable: true })
-  spOrCran?: string;
-
-  @Column({ type: "varchar", length: 50, nullable: true })
-  pos?: string;
-
-  @Column({ type: "varchar", length: 255, nullable: true })
-  approach?: string;
-
-  @Column({ type: "text", nullable: true })
-  clinPres?: string;
-
-  @Column({ type: "varchar", length: 50, nullable: true })
-  region?: string;
+  // The 6 legacy additional-question answer columns (spOrCran/pos/approach/region/clinPres/
+  // IntEvents) were removed — answers now live in `submission_question_answers` and are
+  // resolved onto the doc at read time (SubService.attachAnswerFields).
 
   // Department this submission belongs to (FK → departments). Dept-scoped; nullable during rollout.
   // Backfilled from the candidate (or the supervisor for supervisor-type subs).

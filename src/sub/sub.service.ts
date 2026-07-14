@@ -263,9 +263,39 @@ export class SubService {
         where: { id: subId },
         relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.arabProc", "supervisor", "mainDiag", "procCpts", "icds"],
       });
+      if (sub) await this.attachAnswerFields(dataSource, sub as any);
       return sub as unknown as ISubDoc | null;
     } catch (error: any) {
       throw new Error(error.message);
+    }
+  }
+
+  /**
+   * Additional-question answers are stored in `submission_question_answers` (dynamic-questions
+   * framework). For the report/AI consumers that still read the legacy named fields, resolve
+   * them from the answer store by question key and attach them to the loaded submission — the
+   * 6 columns no longer exist on `submissions`.
+   */
+  private static readonly ANSWER_KEY_TO_FIELD: Record<string, string> = {
+    surgicalDomain: "spOrCran",
+    position: "pos",
+    approach: "approach",
+    region: "region",
+    clinicalPresentation: "clinPres",
+    intraopEvents: "IntEvents",
+  };
+  private async attachAnswerFields(dataSource: DataSource, sub: Record<string, unknown>): Promise<void> {
+    if (!sub || !sub.id) return;
+    const rows: Array<{ key: string; value: string | null }> = await dataSource.query(
+      `SELECT q."key" AS key, a."value" AS value
+         FROM "submission_question_answers" a
+         JOIN "ref_questions" q ON q."id" = a."questionId"
+        WHERE a."submissionId" = $1`,
+      [sub.id]
+    );
+    for (const r of rows) {
+      const field = SubService.ANSWER_KEY_TO_FIELD[r.key];
+      if (field && r.value != null) sub[field] = r.value;
     }
   }
 

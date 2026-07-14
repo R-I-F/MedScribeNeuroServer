@@ -21,7 +21,6 @@ import { EventEntity } from "../event/event.mDbSchema";
 import { EventAttendanceEntity } from "../event/eventAttendance.mDbSchema";
 import { PasswordResetTokenEntity } from "../passwordReset/passwordReset.mDbSchema";
 import { ClerkEntity } from "../clerk/clerk.mDbSchema";
-import { AdditionalQuestionEntity } from "../additionalQuestions/additionalQuestions.mDbSchema";
 import { ConsumableEntity } from "../consumables/consumables.mDbSchema";
 import { EquipmentEntity } from "../equipment/equipment.mDbSchema";
 import { PositionEntity } from "../positions/positions.mDbSchema";
@@ -78,7 +77,6 @@ function getDbConfig(): DataSourceOptions {
       EventAttendanceEntity,
       PasswordResetTokenEntity,
       ClerkEntity,
-      AdditionalQuestionEntity,
       ConsumableEntity,
       EquipmentEntity,
       PositionEntity,

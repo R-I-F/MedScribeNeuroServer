@@ -68,32 +68,6 @@ export class SubProvider {
     @inject(SupervisorService) private supervisorService: SupervisorService
   ) {}
 
-  /**
-   * Dynamic additional-question keys (hub framework) → the 6 legacy `submissions` columns.
-   * Lets the frontend speak one language (keyed answers) while the legacy columns stay in
-   * sync for existing analytics until the six-flag model is dropped (Stage D).
-   */
-  private static readonly ANSWER_KEY_TO_COLUMN: Record<string, "spOrCran" | "pos" | "approach" | "region" | "clinPres" | "IntEvents"> = {
-    surgicalDomain: "spOrCran",
-    position: "pos",
-    approach: "approach",
-    region: "region",
-    clinicalPresentation: "clinPres",
-    intraopEvents: "IntEvents",
-  };
-
-  /** Reverse-map keyed answers onto the 6 legacy columns (dual-write bridge). */
-  private legacyFromAnswers(
-    answers?: Array<{ questionKey?: string; value?: string | null }>
-  ): Partial<Record<"spOrCran" | "pos" | "approach" | "region" | "clinPres" | "IntEvents", string>> {
-    const out: Record<string, string> = {};
-    for (const a of answers ?? []) {
-      const col = a.questionKey ? SubProvider.ANSWER_KEY_TO_COLUMN[a.questionKey] : undefined;
-      if (col && a.value != null && String(a.value).trim() !== "") out[col] = String(a.value).trim();
-    }
-    return out;
-  }
-
   /** Persist keyed answers into submission_question_answers (idempotent per submission+question). */
   private async writeAnswers(
     dataSource: DataSource,
@@ -399,12 +373,6 @@ export class SubProvider {
       preOpClinCond?: string;
       consDetails?: string;
       surgNotes?: string;
-      IntEvents?: string;
-      spOrCran?: string;
-      pos?: string;
-      approach?: string;
-      clinPres?: string;
-      region?: string;
       answers?: Array<{ questionId: string; questionKey?: string; optionId?: string | null; value?: string | null }>;
     },
     dataSource: DataSource,
@@ -533,24 +501,16 @@ export class SubProvider {
 
     const diagnosisName = toArr(body.diagnosisName);
     const procedureName = toArr(body.procedureName);
-    // Dual-write bridge: keyed answers backfill any legacy field the client didn't send.
-    const la = this.legacyFromAnswers(body.answers);
     const payload: ISub = {
       ...subBase,
       diagnosisName,
       procedureName,
       surgNotes: toOpt(body.surgNotes),
-      IntEvents: toOpt(body.IntEvents ?? la.IntEvents),
-      spOrCran: (body.spOrCran ?? la.spOrCran) ? (toReq((body.spOrCran ?? la.spOrCran)!) as "spinal" | "cranial") : undefined,
-      pos: (body.pos ?? la.pos) ? toReq((body.pos ?? la.pos)!) : undefined,
-      approach: toOpt(body.approach ?? la.approach),
-      clinPres: toOpt(body.clinPres ?? la.clinPres),
-      region: (body.region ?? la.region) ? toReq((body.region ?? la.region)!) : undefined,
     } as ISub;
 
     const savedSub = await this.subService.createOneSub(payload, dataSource);
 
-    // Dual-write the keyed answers into the flexible store (dynamic-questions framework).
+    // Additional-question answers → flexible store (dynamic-questions framework).
     await this.writeAnswers(dataSource, (savedSub as any).id, body.answers);
 
     // Notify supervisor to review in background (do not block API response)
@@ -580,12 +540,6 @@ export class SubProvider {
       preOpClinCond?: string;
       consDetails?: string;
       surgNotes?: string;
-      IntEvents?: string;
-      spOrCran?: string;
-      pos?: string;
-      approach?: string;
-      clinPres?: string;
-      region?: string;
       answers?: Array<{ questionId: string; questionKey?: string; optionId?: string | null; value?: string | null }>;
     },
     dataSource: DataSource
@@ -663,18 +617,11 @@ export class SubProvider {
 
     const diagnosisName = toArr(body.diagnosisName);
     const procedureName = toArr(body.procedureName);
-    const la = this.legacyFromAnswers(body.answers);
     const payload: ISub = {
       ...subBase,
       diagnosisName,
       procedureName,
       surgNotes: toOpt(body.surgNotes),
-      IntEvents: toOpt(body.IntEvents ?? la.IntEvents),
-      spOrCran: (body.spOrCran ?? la.spOrCran) ? (toReq((body.spOrCran ?? la.spOrCran)!) as "spinal" | "cranial") : undefined,
-      pos: (body.pos ?? la.pos) ? toReq((body.pos ?? la.pos)!) : undefined,
-      approach: toOpt(body.approach ?? la.approach),
-      clinPres: toOpt(body.clinPres ?? la.clinPres),
-      region: (body.region ?? la.region) ? toReq((body.region ?? la.region)!) : undefined,
     } as ISub;
 
     const savedSub = await this.subService.createOneSub(payload, dataSource);

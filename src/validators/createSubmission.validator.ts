@@ -22,7 +22,6 @@ const OTHER_SURG_RANK = [
   "other",
 ] as const;
 
-const SP_OR_CRAN = ["spinal", "cranial"] as const;
 
 export const createSubmissionValidator = checkSchema({
   procDocId: {
@@ -147,48 +146,6 @@ export const createSubmissionValidator = checkSchema({
     in: ["body"],
     optional: true,
     isString: true,
-    trim: true,
-  },
-  IntEvents: {
-    in: ["body"],
-    optional: true,
-    isString: true,
-    trim: true,
-  },
-  spOrCran: {
-    in: ["body"],
-    optional: true,
-    isIn: {
-      options: [SP_OR_CRAN],
-      errorMessage: `spOrCran must be one of: ${SP_OR_CRAN.join(", ")}`,
-    },
-    trim: true,
-  },
-  pos: {
-    in: ["body"],
-    optional: true,
-    isString: true,
-    isLength: { options: { max: 255 }, errorMessage: "pos must not exceed 255 characters." },
-    trim: true,
-  },
-  approach: {
-    in: ["body"],
-    optional: true,
-    isString: true,
-    isLength: { options: { max: 255 }, errorMessage: "approach must not exceed 255 characters." },
-    trim: true,
-  },
-  clinPres: {
-    in: ["body"],
-    optional: true,
-    isString: true,
-    trim: true,
-  },
-  region: {
-    in: ["body"],
-    optional: true,
-    isString: true,
-    isLength: { options: { max: 255 }, errorMessage: "region must not exceed 255 characters." },
     trim: true,
   },
   // Dynamic additional-question answers (hub framework). Optional during the dual-write

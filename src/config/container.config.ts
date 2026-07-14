@@ -102,10 +102,6 @@ import { ActivityTimelineController } from "../activityTimeline/activityTimeline
 import { ActivityTimelineRouter } from "../activityTimeline/activityTimeline.router";
 import { ActivityTimelineProvider } from "../activityTimeline/activityTimeline.provider";
 
-import { AdditionalQuestionsController } from "../additionalQuestions/additionalQuestions.controller";
-import { AdditionalQuestionsRouter } from "../additionalQuestions/additionalQuestions.router";
-import { AdditionalQuestionsService } from "../additionalQuestions/additionalQuestions.service";
-import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQuestions.provider";
 
 import { ConsumablesController } from "../consumables/consumables.controller";
 import { ConsumablesRouter } from "../consumables/consumables.router";
@@ -256,10 +252,6 @@ container.bind(ActivityTimelineProvider).toSelf().inTransientScope();
 container.bind(ActivityTimelineController).toSelf().inTransientScope();
 container.bind(ActivityTimelineRouter).toSelf().inTransientScope();
 
-container.bind(AdditionalQuestionsController).toSelf().inTransientScope();
-container.bind(AdditionalQuestionsRouter).toSelf().inTransientScope();
-container.bind(AdditionalQuestionsService).toSelf().inTransientScope();
-container.bind(AdditionalQuestionsProvider).toSelf().inTransientScope();
 
 container.bind(ConsumablesController).toSelf().inTransientScope();
 container.bind(ConsumablesRouter).toSelf().inTransientScope();

@@ -5,19 +5,16 @@ import { MainDiagEntity } from "./mainDiag.mDbSchema";
 import { ProcCptService } from "../procCpt/procCpt.service";
 import { DiagnosisService } from "../diagnosis/diagnosis.service";
 import { UtilService } from "../utils/utils.service";
-import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQuestions.provider";
 import { Repository, In } from "typeorm";
 import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
 import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
-import { AdditionalQuestionEntity } from "../additionalQuestions/additionalQuestions.mDbSchema";
 
 @injectable()
 export class MainDiagProvider {
   constructor(
     @inject(ProcCptService) private procCptService: ProcCptService,
     @inject(DiagnosisService) private diagnosisService: DiagnosisService,
-    @inject(UtilService) private utilService: UtilService,
-    @inject(AdditionalQuestionsProvider) private additionalQuestionsProvider: AdditionalQuestionsProvider
+    @inject(UtilService) private utilService: UtilService
   ) {}
 
   public async createMainDiag(validatedReq: IMainDiagInput, dataSource: DataSource): Promise<IMainDiagDoc> | never {
@@ -80,18 +77,6 @@ export class MainDiagProvider {
       // Save with relationships
       const finalMainDiag = await mainDiagRepository.save(savedMainDiag);
 
-      // Create corresponding row in additional_questions (all flags default 0)
-      const aqRepo = dataSource.getRepository(AdditionalQuestionEntity);
-      await aqRepo.insert({
-        mainDiagDocId: finalMainDiag.id,
-        spOrCran: 0,
-        pos: 0,
-        approach: 0,
-        region: 0,
-        clinPres: 0,
-        intEvents: 0,
-      });
-
       // Load with relations for return
       const result = await mainDiagRepository.findOne({
         where: { id: finalMainDiag.id },
@@ -111,16 +96,7 @@ export class MainDiagProvider {
         relations: ["procs", "diagnosis"],
         order: { createdAt: "DESC" },
       });
-      const additionalQuestionsList = await this.additionalQuestionsProvider.getAll(dataSource);
-      const aqByMainDiagId = new Map(
-        additionalQuestionsList.map((aq) => [aq.mainDiagDocId, aq])
-      );
-      const result: IMainDiagDoc[] = allMainDiags.map((md) => {
-        const doc = md as unknown as IMainDiagDoc;
-        doc.additionalQuestions = aqByMainDiagId.get(md.id) ?? null;
-        return doc;
-      });
-      return result;
+      return allMainDiags as unknown as IMainDiagDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
@@ -139,9 +115,7 @@ export class MainDiagProvider {
         relations: ["procs", "diagnosis"],
       });
       if (!mainDiag) return null;
-      const doc = mainDiag as unknown as IMainDiagDoc;
-      doc.additionalQuestions = await this.additionalQuestionsProvider.getByMainDiagDocId(id, dataSource) ?? null;
-      return doc;
+      return mainDiag as unknown as IMainDiagDoc;
     } catch (err: any) {
       throw new Error(err);
     }
@@ -244,9 +218,6 @@ export class MainDiagProvider {
       if (!uuidRegex.test(id)) {
         throw new Error("Invalid mainDiag ID format");
       }
-      // Delete child rows that reference this main_diag so the FK constraint allows the delete
-      const aqRepo = dataSource.getRepository(AdditionalQuestionEntity);
-      await aqRepo.delete({ mainDiagDocId: id });
       const result = await mainDiagRepository.delete(id);
       return (result.affected ?? 0) > 0;
     } catch (err: any) {

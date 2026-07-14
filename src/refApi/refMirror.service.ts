@@ -74,7 +74,6 @@ export interface RefSyncResult {
   refQuestionOptions: number;
   mainDiagQuestions: number;
   mainDiagQuestionOptions: number;
-  sixFlagRowsEnsured: number;
 }
 
 /**
@@ -121,13 +120,10 @@ export class RefMirrorService {
     const mdProcPairs: [string, string][] = [];
     const mdQuestionRows: [string, string, boolean, number][] = []; // (mainDiagId, questionId, isRequired, sortOrder)
     const mdQuestionOptionRows: [string, string, string][] = [];    // (mainDiagId, questionId, optionId)
-    const allMainDiagIds: string[] = [];
-
     for (const dept of departments) {
       const mds = await this.client.getMainDiagsByDept(dept.code);
       for (const md of mds) {
         mainDiagRows.push(toMirrorMainDiag(md, dept.id));
-        allMainDiagIds.push(md.id);
       }
 
       for (const dx of await this.client.getDiagnosesByDept(dept.code)) {
@@ -302,20 +298,6 @@ export class RefMirrorService {
       await this.insertTuples(qr, "main_diag_questions", ["mainDiagId", "questionId", "isRequired", "sortOrder"], mdQuestionRowsU);
       await this.insertTuples(qr, "main_diag_question_options", ["mainDiagId", "questionId", "optionId"], mdQuestionOptionRowsU);
 
-      // Six-flag continuity for every main_diag (default all-zero; never overwrite).
-      if (allMainDiagIds.length > 0) {
-        const values = allMainDiagIds.map((_, i) => `($${i + 1})`).join(", ");
-        await qr.query(
-          `INSERT INTO "additional_questions" ("mainDiagDocId") VALUES ${values}
-           ON CONFLICT ("mainDiagDocId") DO NOTHING`,
-          allMainDiagIds
-        );
-      }
-      const cnt: any[] = await qr.query(
-        `SELECT COUNT(*)::int AS c FROM "additional_questions" WHERE "mainDiagDocId" = ANY($1)`,
-        [allMainDiagIds]
-      );
-
       await qr.query(
         `INSERT INTO "ref_sync_state" ("id", "dataVersion", "syncedAt") VALUES (1, $1, now())
          ON CONFLICT ("id") DO UPDATE SET "dataVersion" = EXCLUDED."dataVersion", "syncedAt" = now()`,
@@ -343,7 +325,6 @@ export class RefMirrorService {
         refQuestionOptions: refOptionById.size,
         mainDiagQuestions: mdQuestionRowsU.length,
         mainDiagQuestionOptions: mdQuestionOptionRowsU.length,
-        sixFlagRowsEnsured: cnt[0]?.c ?? 0,
       };
     } catch (err) {
       await qr.rollbackTransaction();

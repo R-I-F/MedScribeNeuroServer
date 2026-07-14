@@ -1,7 +1,6 @@
-import { inject, injectable } from "inversify";
+import { injectable } from "inversify";
 import { DataSource } from "typeorm";
 import { MainDiagEntity } from "../mainDiag/mainDiag.mDbSchema";
-import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQuestions.provider";
 
 /**
  * Department-scoped reads over the reference mirror (KA spoke, full institute).
@@ -15,10 +14,6 @@ import { AdditionalQuestionsProvider } from "../additionalQuestions/additionalQu
  */
 @injectable()
 export class ReferenceReadProvider {
-  constructor(
-    @inject(AdditionalQuestionsProvider)
-    private additionalQuestionsProvider: AdditionalQuestionsProvider
-  ) {}
 
   /** Resolve a mirror department id from its code (case-insensitive); null when unknown. */
   public async resolveDepartmentId(ds: DataSource, deptCode: string): Promise<string | null> {
@@ -44,19 +39,13 @@ export class ReferenceReadProvider {
     );
   }
 
-  /** Legacy /mainDiag list shape (relations + attached six-flag config), one department. */
+  /** Legacy /mainDiag list shape (relations), one department. */
   public async getMainDiagsByDepartment(ds: DataSource, departmentId: string) {
     const repo = ds.getRepository(MainDiagEntity);
-    const mainDiags = await repo.find({
+    return repo.find({
       where: { departmentId },
       relations: ["procs", "diagnosis"],
       order: { createdAt: "DESC" },
-    });
-    const additionalQuestionsList = await this.additionalQuestionsProvider.getAll(ds);
-    const aqByMainDiagId = new Map(additionalQuestionsList.map((aq) => [aq.mainDiagDocId, aq]));
-    return mainDiags.map((md) => {
-      (md as any).additionalQuestions = aqByMainDiagId.get(md.id) ?? null;
-      return md;
     });
   }
 

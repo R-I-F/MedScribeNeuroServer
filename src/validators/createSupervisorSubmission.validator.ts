@@ -22,7 +22,6 @@ const OTHER_SURG_RANK = [
   "other",
 ] as const;
 
-const SP_OR_CRAN = ["spinal", "cranial"] as const;
 
 /**
  * Validator for supervisor submissions.
@@ -123,12 +122,6 @@ export const createSupervisorSubmissionValidator = checkSchema({
   preOpClinCond: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 1000 } }, trim: true },
   consDetails: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 1000 } }, trim: true },
   surgNotes: { in: ["body"], optional: true, isString: true, trim: true },
-  IntEvents: { in: ["body"], optional: true, isString: true, trim: true },
-  spOrCran: { in: ["body"], optional: true, isIn: { options: [SP_OR_CRAN] }, trim: true },
-  pos: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
-  approach: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
-  clinPres: { in: ["body"], optional: true, isString: true, trim: true },
-  region: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 255 } }, trim: true },
   answers: {
     in: ["body"],
     optional: true,
