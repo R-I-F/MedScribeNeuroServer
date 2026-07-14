@@ -12,7 +12,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 
 **Migration status summary**
 - **Implemented (user tables):** `cand`, `supervisor`, `instituteAdmin`, `superAdmin` ✅
-- **ETL still pending (7 tables):** `sub` (3,599), `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `additionalQuestions` (reconcile) [`clerk`, `hospital`, `arabProc`, `calSurg` now done]
+- **ETL still pending (6 tables):** `event`+`event_attendance` (102/1,264), `clinicalSub` (86), `conf` (2), `journal` (27), `additionalQuestions` (reconcile) [`clerk`, `hospital`, `arabProc`, `calSurg`, `sub` now done]
 - **Follow-on (not ETL):** `arab_procs → proc_cpts` semantic remap for `cal_surgs.procCptId` (hub procedure-search + user review + backfill), then retire arab_procs.
 - **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`, **`consumables` (204+301) & `equipment` (102+234)** — the latter two now hub-mirrored + dept-scoped as of commit `696c87f` (hub endpoint added + spoke sync wired + synced; superseded my earlier "sync gap" note).
 - **No table / stateless (no ETL):** `auth`, `institution`, `bundler`, `reports`, `activityTimeline`, `externalService`, `mailer`, `aiAgent`, `pdf`
@@ -33,7 +33,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `clerk` | `/clerk` | 🔁 Pending (audit draft; impl + ETL) | Clerk users |
 | `instituteAdmin` | `/instituteAdmin` | ✅ **Implemented** (3 → NS; PG fix; dept nullable) | Institute admin users |
 | `superAdmin` | `/superAdmin` | ✅ **Implemented** (1 already loaded; no idioms) | Super admin users |
-| `sub` | `/sub` | 🔁 ETL pending (3,599; after cal_surgs) | Surgical submissions (the core logbook entries) |
+| `sub` | `/sub` | ✅ **Done** — 3,599 → NS (dept-scoped) + `mainDiagDocId` remapped legacy→hub (10/10 by title); 0 FK orphans | Surgical submissions (the core logbook entries) |
 | `clinicalSub` | `/clinicalSub` | 🔁 ETL pending (86) | Clinical (non-surgical) submissions |
 | `additionalQuestions` | `/additionalQuestions` | 🔁 Pending (reconcile: seeded 196 vs prod 10) | Legacy per-tenant six-flag additional questions (spOrCran/pos/approach/region/clinPres/intEvents) |
 | `journal` | `/journal` | 🔁 ETL pending (27; before events) | Journal club entries |

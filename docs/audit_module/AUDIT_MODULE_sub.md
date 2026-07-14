@@ -1,10 +1,24 @@
 # Module Upgrade Audit: sub
-**Date**: 2026-07-13 · **Status**: 📋 DRAFT — awaiting user approval
+**Date**: 2026-07-14 · **Status**: ✅ IMPLEMENTED (staging) — 3,599 → NS
 **Old side**: main @ `affa22e` + MySQL `kasr-el-ainy` (READ-ONLY)
-**New side**: migration/mysql-to-postgres @ `6f010d2` + PG `ka-institute`
+**New side**: migration/mysql-to-postgres @ `dda69ef` + PG `ka-institute`
+
+## ✅ Implementation record (2026-07-14)
+The core logbook, loaded. Applied to `migration/mysql-to-postgres` + `ka-institute` staging. Prod read-only; PII/Arabic never printed; `main` untouched.
+
+| # | Item | Where | Status |
+|---|---|---|---|
+| A | Add `departmentId` FK → departments (dept-scoped, nullable) | entity `sub.mDbSchema.ts` + migration `1783782610030-AddSubmissionDepartment` | ✅ `FK_submissions_department` live |
+| B | ETL 3,599 submissions → NS (PII + Arabic verbatim) | `scripts/etl-submissions-prod-to-ka.cjs` | ✅ loaded, batched |
+| C | **`mainDiagDocId` REMAP** (legacy prod ids → hub-mirror ids) | in ETL, by exact title (NS dept) | ✅ 10/10 categories, deterministic 1:1 |
+| D | `departmentId` backfill from candidate → supervisor fallback | in ETL | ✅ all 3,599 = NS, 0 null |
+
+**ETL verification (counts only, no PII):** total **3,599** ✅ · `departmentId=NS` **3,599** / NULL **0** · distribution candidate approved **3002** / pending **551** / rejected **41** / supervisor approved **5** (exact match to prod) ✅ · **FK orphans: mainDiag 0 / proc 0 / supervisor 0 / candidate 0** ✅ · Arabic `surgNotes` **29** preserved. `diagnosisName`/`procedureName` longtext→json; `isItRevSurg` tinyint→boolean.
+
+**Key finding — `mainDiagDocId` needed remapping (like arab_procs):** the 3,599 submissions referenced **prod's 10 legacy main_diag ids**, none of which exist in the KA hub-mirror `main_diags`. Unlike the arab_procs case, the fix was **clean & deterministic** — every legacy category (`cns tumors`, `neuro-vascular diseases`, …) matches exactly one KA (NS) main_diag by title (1:1, verified), so the ETL swapped the ids with no ambiguity/review. (The `procDocId`/`candDocId`/`supervisorDocId` ids were preserved from prod and resolve directly.)
 
 ## 🔄 Progress Checkpoint
-**Status**: draft complete — awaiting approval. Phases 1–5 done (analysis-only; prod/prod-cts/ka read-only).
+**Status**: ✅ implemented on staging. ▶ Next: `conf`/`journal` → `events` → `event_attendance`; `clinicalSub`; `additionalQuestions` reconcile. (Follow-on: cal_surgs `arabProcId` display-layer refactor → procCpt.)
 ### ▶ Next action
 User decisions on §9, then (separate task) implement §7: benign `institutionId` cleanup (optional) + the big ETL of 3,599 submissions — **which is blocked on `cal_surgs` (calSurg) being loaded first**.
 

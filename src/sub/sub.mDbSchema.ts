@@ -130,6 +130,11 @@ export class SubmissionEntity {
   @Column({ type: "varchar", length: 50, nullable: true })
   region?: string;
 
+  // Department this submission belongs to (FK → departments). Dept-scoped; nullable during rollout.
+  // Backfilled from the candidate (or the supervisor for supervisor-type subs).
+  @Column({ type: "uuid", nullable: true })
+  departmentId?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 
