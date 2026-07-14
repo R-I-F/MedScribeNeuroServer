@@ -2,7 +2,7 @@
 
 All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA single-institution spoke). Grouped by role. Route paths are as mounted in `src/config/routes.config.ts`.
 
-> **Every module has an audit doc** at `docs/audit_module/AUDIT_MODULE_<module>.md` (38 total). The **Status** column below tracks the migration/implementation state, updated 2026-07-13.
+> **Every module has an audit doc** at `docs/audit_module/AUDIT_MODULE_<module>.md` (38 total). The **Status** column below tracks the migration/implementation state, updated 2026-07-14.
 
 **Status legend**
 - ✅ **Done** — implemented, converted, or nothing to do (no prod data to migrate).
@@ -12,8 +12,17 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 
 **Migration status summary**
 - **Implemented (user tables):** `cand`, `supervisor`, `instituteAdmin`, `superAdmin` ✅
-- **ETL COMPLETE — all prod operational tables loaded to `ka-institute`.** Final batch (dept-scoped NS, migrations `610070`/`610080`): `clinicalSub` (87), `conf` (2), `journal` (27), `event` (102) + `event_attendance` (1,264). **`events.lectureId` nulled for 81 lecture-events** — prod's legacy lectures are disjoint from the hub-mirror catalog (0/80 match on id/title/google_uid); events + attendance kept, dead pointer dropped.
-- **Follow-on (not ETL):** `arab_procs → proc_cpts` semantic remap for `cal_surgs.procCptId` (hub procedure-search + user review + backfill), then retire arab_procs.
+- **ETL COMPLETE — all prod operational tables loaded to `ka-institute`.** Final batch (dept-scoped NS, migrations `610070`/`610080`): `clinicalSub` (87), `conf` (2), `journal` (27), `event` (102) + `event_attendance` (1,264). ~~`events.lectureId` nulled for 81 lecture-events~~ → ✅ **all 81 relinked to hub lectures 2026-07-14** (commit `a86be5e`; prod title "2.3.1 xyz" crosswalked to hub `lectureNumber`+`title` — 78 by number, 3 by title, 0 unmatched, full consistency check vs prod).
+- **Follow-on (not ETL):** `arab_procs → proc_cpts` semantic remap for `cal_surgs.procCptId` (hub procedure-search + user review + backfill), then retire arab_procs. **IN PROGRESS** — clinical review sheet `docs/CALSURG_PROC_MAPPING_REVIEW.md` (commit `e1edfc0` + uncommitted revisions) awaiting user review; backfill not yet run.
+
+**⬜ Still open (the honest not-done list, 2026-07-14)**
+1. **calSurg→proc_cpts remap backfill** (above) — review sheet awaiting user approval, then backfill + retire `arabProc`.
+2. **Production cutover** — final idempotent ETL re-run (users + operational tables drift since copy), frontend switch, decommission plan. Nothing scheduled yet.
+3. **Deep tenant E2E** — hospital→calSurg→POST /sub→analytics→PDF with fixtures (planned since Stage E, never run).
+4. **Frontend TODOs** — send `departmentId` at registration; department picker from public `GET /departments`; six-flag→dynamic-questions UI cutover.
+5. **Deferred module items** — `updateClerk` validator `departmentId` whitelist; per-department dashboard read-filtering for scoped institute admins (new feature, post-migration); hospital reads-filtering; waBot optional tenancy cleanup.
+6. **Tidy** — delete empty `mailgun`/`references` dirs; keep legacy `src/migrations/` quarantined; 3 audit-doc headers still say DRAFT (`additionalQuestions`, `passwordReset`, `waBot`) though their decisions/implementations are recorded — refresh on next touch.
+7. **Hub-side (LibelusRefApi, not this repo)** — lectures `level` (msc/md) backfill for the 14 NULL depts from an authoritative Egyptian source; NS `2F7C`/`2F7Z` re-review.
 - **Reference = hub mirror / seeded (no prod ETL):** `departments`, `diagnosis`, `mainDiag`, `procCpt`, `lecture`, `positions`, `approaches`, `regions`, `refApi`, `referenceRead`, **`consumables` (204+301) & `equipment` (102+234)** — the latter two now hub-mirrored + dept-scoped as of commit `696c87f` (hub endpoint added + spoke sync wired + synced; superseded my earlier "sync gap" note).
 - **No table / stateless (no ETL):** `auth`, `institution`, `bundler`, `reports`, `activityTimeline`, `externalService`, `mailer`, `aiAgent`, `pdf`
 - **Ephemeral (skip ETL):** `waBot`, `passwordReset`
@@ -30,7 +39,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `calSurg` | `/calSurg` | ✅ **Done** — 5,578 → NS (dept-scoped, nullable) + `procCptId` FK staged; legacy `arabProcId` kept (proc_cpts remap = follow-on) | Surgical case calendar (dept-scoped) |
 | `cand` | `/cand` | ✅ **Implemented** (110 → NS; PG fixes; phone-unique; dept NOT NULL) | Candidates (trainees): registration, profile, management |
 | `supervisor` | `/supervisor` | ✅ **Implemented** (56 → NS; PG fixes; phone-unique; dept NOT NULL) | Supervisors: registration, profile, management |
-| `clerk` | `/clerk` | 🔁 Pending (audit draft; impl + ETL) | Clerk users |
+| `clerk` | `/clerk` | ✅ **Implemented** (1 → NS; `split_part` fix; `departmentId` on create validator; commit `f3286ee`) | Clerk users |
 | `instituteAdmin` | `/instituteAdmin` | ✅ **Implemented** (3 → NS; PG fix; dept nullable) | Institute admin users |
 | `superAdmin` | `/superAdmin` | ✅ **Implemented** (1 already loaded; no idioms) | Super admin users |
 | `sub` | `/sub` | ✅ **Done** — 3,599 → NS (dept-scoped) + `mainDiagDocId` remapped legacy→hub (10/10 by title); 0 FK orphans | Surgical submissions (the core logbook entries) |
@@ -38,7 +47,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `additionalQuestions` | ~~`/additionalQuestions`~~ (route retired) | ✅ **Fully replaced by hub questions framework** (Fable `1758c6d`→`dbf4c2a`→`9544976`, verified) — 4 mirror tables (98 Q / 472 opt / 700 main_diag_q / 1,989 mdq_opt) + `submission_question_answers` (5,948 answers). **Legacy fully removed:** six-flag module + `additional_questions` table + the 6 inline `submissions` cols dropped (migration `1783782610060`); `getSubById` resolves the 6 named fields from the answer store at read time. `tsc` green. | Dynamic additional questions (hub-mirrored, per-main_diag) — legacy six-flag retired |
 | `journal` | `/journal` | ✅ **Done** — 27 → NS (dept-scoped); migration `610080` | Journal club entries |
 | `conf` | `/conf` | ✅ **Done** — 2 → NS (dept-scoped); migration `610080` | Conferences |
-| `event` | `/event` | ✅ **Done** — 102 events + 1,264 attendance → NS (dept-scoped); migration `610080`; **`lectureId` nulled for 81** (prod lectures disjoint from hub mirror) | Events + attendance (`eventAttendance.mDbSchema.ts`) |
+| `event` | `/event` | ✅ **Done** — 102 events + 1,264 attendance → NS (dept-scoped); migration `610080`; **all 81 `lectureId` links relinked to hub lectures** (crosswalk 2026-07-14, commit `a86be5e`) | Events + attendance (`eventAttendance.mDbSchema.ts`) |
 | `activityTimeline` | `/activityTimeline` | ✅ Done (no table; derived reads) | Candidate activity timeline |
 | `consumables` | `/consumables` | ✅ **Mirror-synced** (hub, dept-scoped) — 204 items + 301 dept-links; `arName` + `department_consumables` (commit `696c87f`) | Consumables reference (hub-mirrored, dept-scoped read) |
 | `equipment` | `/equipment` | ✅ **Mirror-synced** (hub, dept-scoped) — 102 items + 234 dept-links; `arName` + `department_equipment` (commit `696c87f`) | Equipment reference (hub-mirrored, dept-scoped read) |
@@ -58,7 +67,7 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | `diagnosis` | ✅ Done (mirror 1,319; router retired) | Diagnosis entity/service (reads from mirror; legacy router removed in spoke conversion) |
 | `mainDiag` | ✅ Done (mirror 196 + join tables) | Main-diagnosis category entity/service (legacy router removed) |
 | `procCpt` | ✅ Done (mirror 1,429) | CPT procedure entity/service (legacy router removed) |
-| `lecture` | ✅ **Done — conformed to hub scaled schema** (migration `610090`): dropped legacy `google_uid`/`mainTopic`/`lectureTitle`→`title`, hub-UUID PK; **old CRUD subsystem removed** (provider/service reads-only, 4 write validators deleted); read-only hub mirror (3,237 lectures / 141 topics). Bulk attendance import now resolves lectures by `lectureNumber`/`title` (google_uid gone). Sync re-run clean. | Lecture + lecture-topic mirror (hub-owned, read-only) |
+| `lecture` | ✅ **Done — conformed to hub scaled schema** (migration `610090`): dropped legacy `google_uid`/`mainTopic`/`lectureTitle`→`title`, hub-UUID PK; **old CRUD subsystem removed** (provider/service reads-only, 4 write validators deleted); read-only hub mirror (3,237 lectures / 141 topics). Bulk attendance import now resolves lectures by `lectureNumber`/`title` (google_uid gone). **+ post-conform serving fixes (commit `a86be5e`)**: `GET /lecture` 500 fixed (legacy shape restored by aliasing `title`→`lectureTitle`, topic title→`mainTopic`), legacy-shaped `/lecture/:id`, event-dashboard title fix, 81 event links relinked. Verified live NS=152/CTS=625. | Lecture + lecture-topic mirror (hub-owned, read-only) |
 | `positions` | ✅ Done (seeded 5 = prod) | Patient-position lookup (seeded; legacy router removed) |
 | `approaches` | ✅ Done (seeded 15 = prod) | Surgical-approach lookup (seeded; legacy router removed) |
 | `regions` | ✅ Done (seeded 4 = prod) | Anatomical-region lookup (seeded; legacy router removed) |
