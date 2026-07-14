@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "start": "node dist/index.js",
-    "start:dev": "nodemon src/index.ts",
+    "start:dev": "dotenv -e .env.staging -- nodemon src/index.ts",
     "start:staging": "dotenv -e .env.staging -- nodemon src/index.ts",
     "db:ka:migrate": "dotenv -e .env.staging -- ts-node scripts/run-ka-migrations.ts",
     "db:ka:revert": "dotenv -e .env.staging -- ts-node scripts/revert-ka-migrations.ts",
