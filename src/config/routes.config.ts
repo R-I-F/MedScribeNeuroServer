@@ -4,8 +4,8 @@ import { container } from "./container.config";
 
 export function addRoutes(app: Application) {
   // Using dynamic requires to avoid circular dependency with container.config.ts
-  const { InstitutionRouter } = require("../institution/institution.router");
-  const institutionRouter = container.get(InstitutionRouter) as any;
+  // NB: no /institutions route — single-institution (KA spoke) mode pins the institution
+  // statically (getStaticInstitution); the frontend no longer asks.
 
     const { HospitalRouter } = require("../hospital/hospital.router");
     const hospitalRouter = container.get(HospitalRouter) as any;
@@ -13,8 +13,6 @@ export function addRoutes(app: Application) {
   const { ExternalRouter } = require("../externalService/external.router");
   const externalRouter = container.get(ExternalRouter) as any;
 
-  const { ArabProcRouter } = require("../arabProc/arabProc.router");
-  const arabProcRouter = container.get(ArabProcRouter) as any;
 
   const { CalSurgRouter } = require("../calSurg/calSurg.router");
   const calSurgRouter = container.get(CalSurgRouter) as any;
@@ -85,9 +83,7 @@ export function addRoutes(app: Application) {
   // Unhandled GET / and POST / return 404 (bots/scanners get 404, not 200).
   app.get("/health", healthRateLimiter, (_req: any, res: any) => res.status(200).json({ status: "ok" }));
 
-  app.use("/institutions", institutionRouter.router);
   app.use("/hospital", hospitalRouter.router);
-  app.use("/arabProc", arabProcRouter.router);
   app.use("/calSurg", calSurgRouter.router);
   app.use("/cand", candRouter.router);
   app.use("/external", externalRouter.router);

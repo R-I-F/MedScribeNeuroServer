@@ -1,14 +1,26 @@
 import { inject, injectable } from "inversify";
 import { CalSurgService } from "./calSurg.service";
 import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
-import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
+import { IExternalRow } from "../types/externalRow.interface";
 import { ExternalService } from "../externalService/external.service";
 import { UtilService } from "../utils/utils.service";
 import { HospitalService } from "../hospital/hospital.service";
 import { IHospitalDoc } from "../hospital/hospital.interface";
-import { IArabProcDoc } from "../arabProc/arabProc.interface";
-import { ArabProcService } from "../arabProc/arabProc.service";
+import { ClerkProcService } from "../clerkProc/clerkProc.service";
+import { PatientNameService } from "./patientName.service";
 import { DataSource } from "typeorm";
+
+/** Webapp create input: the clerk types a free-text procedure phrase (learning pipeline). */
+export interface ICalSurgClerkInput {
+  hospital: string;
+  patientName: string;
+  gender: "male" | "female";
+  procedureText: string;
+  surgeryDate: Date;
+  patientDob?: Date;
+  departmentId?: string;
+  clerkId: string | null;
+}
 
 @injectable()
 export class CalSurgProvider {
@@ -16,9 +28,54 @@ export class CalSurgProvider {
     @inject(CalSurgService) private calSurgService: CalSurgService,
     @inject(ExternalService) private externalService: ExternalService,
     @inject(UtilService) private utilService: UtilService,
-    @inject(ArabProcService) private arabProcService: ArabProcService,
-    @inject(HospitalService) private hospitalService: HospitalService
+    @inject(HospitalService) private hospitalService: HospitalService,
+    @inject(ClerkProcService) private clerkProcService: ClerkProcService,
+    @inject(PatientNameService) private patientNameService: PatientNameService
   ) {}
+
+  /**
+   * Webapp create path (plan §2 + §6): resolve the clerk's phrase through the learning
+   * pipeline (clerk_procs), fill the bilingual patient-name slots, then persist. The
+   * surgery saves even when the hub search or Gemini fail (unresolved fields stay NULL).
+   */
+  public async createCalSurgFromClerkInput(input: ICalSurgClerkInput, dataSource: DataSource): Promise<ICalSurgDoc> {
+    const departmentId = input.departmentId ?? (await this.getDefaultDepartmentId(dataSource));
+
+    const clerkProc = departmentId
+      ? await this.clerkProcService.resolveOrCreate(input.procedureText, departmentId, input.clerkId, dataSource)
+      : null;
+
+    const names = await this.patientNameService.bilingual(input.patientName);
+
+    const payload: ICalSurg = {
+      timeStamp: new Date(),
+      patientName: input.patientName,
+      patientNameAr: names.ar,
+      patientNameEn: names.en,
+      patientDob: input.patientDob ?? input.surgeryDate,
+      gender: input.gender,
+      hospital: input.hospital,
+      procCpt: clerkProc?.procCptId ?? undefined,
+      clerkProcId: clerkProc?.id ?? null,
+      procDate: input.surgeryDate,
+      departmentId: departmentId ?? undefined,
+    };
+    return this.createCalSurg(payload, dataSource);
+  }
+
+  /** Default department (REF_DEPT_CODE, NS) resolved against the mirror. */
+  private async getDefaultDepartmentId(dataSource: DataSource): Promise<string | null> {
+    const code = process.env.REF_DEPT_CODE || "NS";
+    const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [code]);
+    return rows[0]?.id ?? null;
+  }
+
+  /** Learned clerk phrases for the default department (create-form typeahead). */
+  public async getClerkProcs(dataSource: DataSource) {
+    const departmentId = await this.getDefaultDepartmentId(dataSource);
+    if (!departmentId) return [];
+    return this.clerkProcService.listByDepartment(departmentId, dataSource);
+  }
 
   /**
    * Processes and validates calSurg data before creating a single calSurg
@@ -221,10 +278,14 @@ export class CalSurgProvider {
     const processedData: ICalSurg = {
       timeStamp: calSurgData.timeStamp,
       patientName: this.utilService.sanitizeName(calSurgData.patientName), // Sanitize patient name
+      patientNameAr: calSurgData.patientNameAr,
+      patientNameEn: calSurgData.patientNameEn,
       patientDob: calSurgData.patientDob,
       gender: calSurgData.gender,
       hospital: calSurgData.hospital,
-      arabProc: calSurgData.arabProc,
+      procCpt: calSurgData.procCpt,
+      clerkProcId: calSurgData.clerkProcId,
+      departmentId: calSurgData.departmentId,
       procDate: calSurgData.procDate,
       google_uid: calSurgData.google_uid,
       formLink: calSurgData.formLink
@@ -261,22 +322,30 @@ export class CalSurgProvider {
       return [h.engName, { ...h, id: hospitalId }];
     }));
 
-    // Use arabProcService instead of direct Mongoose model access
-    const arabicProcs: IArabProcDoc[] = await this.arabProcService.getAllArabProcs(dataSource);
-    const arabicProcsMap = new Map(arabicProcs.map(p => [p.title, p]));
+    // Procedure resolution matches ONLY exact proc_cpts titles (EN `title` or AR `arTitle`).
+    // The colloquial-name alias lookup was dropped with arab_procs (user decision 2026-07-15,
+    // migration 610120): sheet rows whose procedure doesn't match import with no procedure.
+    const procRows: Array<{ id: string; title: string; arTitle: string | null }> = await dataSource.query(
+      `SELECT "id", "title", "arTitle" FROM "proc_cpts"`
+    );
+    const procAliasMap = new Map<string, string>();
+    for (const p of procRows) {
+      if (p.title) procAliasMap.set(p.title, p.id);
+      if (p.arTitle) procAliasMap.set(p.arTitle, p.id);
+    }
 
     const items: ICalSurg[] = [];
 
     // Business logic: Process each external data item
     for (let i: number = 0; i < externalData.data.data.length; i++) {
       const rawItem = externalData.data.data[i];
-      
+
       // Business logic: Sanitize and validate data
       const sanPatientName = this.utilService.sanitizeName(rawItem["Patient Name"]);
       const location: any = hospitalsMap.get(rawItem["Location"]);
-      const arabicProc: IArabProcDoc | undefined = arabicProcsMap.get(rawItem["Procedure"]);
-      
-      // Business logic: Create record if hospital exists; arabProc is optional (null when not detected)
+      const procCptId: string | undefined = procAliasMap.get(rawItem["Procedure"]);
+
+      // Business logic: Create record if hospital exists; procedure is optional (null when not detected)
       if (location) {
         const normalizedItem: ICalSurg = {
           timeStamp: this.utilService.stringToDateConverter(rawItem["Timestamp"]),
@@ -286,7 +355,7 @@ export class CalSurgProvider {
             : this.utilService.stringToDateConverter(rawItem["Timestamp"]), // fallback if DOB missing
           gender: rawItem["Gender"],
           hospital: location.id, // Use UUID directly (handles both MongoDB _id and MariaDB id)
-          arabProc: arabicProc?.id, // UUID when procedure matched; undefined → null in DB when not detected
+          procCpt: procCptId, // UUID when the colloquial name matched an alias; undefined → null when not detected
           procDate: this.utilService.stringToDateConverter(rawItem["Operation Date"]),
           google_uid: rawItem["uid"],
           formLink: rawItem["Link"]

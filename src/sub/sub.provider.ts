@@ -2,7 +2,7 @@ import { injectable, inject } from "inversify";
 import { DataSource } from "typeorm";
 import crypto from "crypto";
 import { ExternalService } from "../externalService/external.service";
-import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
+import { IExternalRow } from "../types/externalRow.interface";
 import { UtilService } from "../utils/utils.service";
 import { CandService } from "../cand/cand.service";
 import { CalSurgService } from "../calSurg/calSurg.service";
@@ -1690,7 +1690,7 @@ export class SubProvider {
     const roleInSurg = submission.roleInSurg ?? "—";
     const calSurg = subAny.calSurg;
     const procedureLabel =
-      calSurg?.arabProc?.title ?? (Array.isArray(submission.procedureName) && submission.procedureName[0]) ?? "—";
+      calSurg?.procCpt?.arTitle ?? calSurg?.procCpt?.title ?? (Array.isArray(submission.procedureName) && submission.procedureName[0]) ?? "—";
     const mainDiag = subAny.mainDiag;
     const mainDiagTitle = mainDiag?.title ?? (submission as any).mainDiagDocId ?? "—";
     const hospitalName = calSurg?.hospital?.engName ?? calSurg?.hospital?.arabName ?? "—";
@@ -1767,7 +1767,7 @@ export class SubProvider {
       : "—";
     const roleInSurg = submission.roleInSurg ?? "—";
     const calSurg = subAny.calSurg;
-    const procedureLabel = calSurg?.arabProc?.title ?? (Array.isArray(submission.procedureName) && submission.procedureName[0]) ?? "—";
+    const procedureLabel = calSurg?.procCpt?.arTitle ?? calSurg?.procCpt?.title ?? (Array.isArray(submission.procedureName) && submission.procedureName[0]) ?? "—";
     const mainDiag = subAny.mainDiag;
     const mainDiagTitle = mainDiag?.title ?? "—";
     const hospitalName = calSurg?.hospital?.engName ?? calSurg?.hospital?.arabName ?? "—";
@@ -1829,8 +1829,8 @@ export class SubProvider {
     const hospital = procDoc?.hospital;
     const hospitalEngName = hospital?.engName || "N/A";
     const hospitalArabName = hospital?.arabName || "N/A";
-    const arabProc = procDoc?.arabProc;
-    const arabProcTitle = arabProc?.title || "N/A";
+    const procCpt = procDoc?.procCpt;
+    const arabProcTitle = procCpt?.arTitle || procCpt?.title || "N/A";
     const procDate = procDoc?.procDate ? new Date(procDoc.procDate).toLocaleDateString() : "N/A";
     const patientName = procDoc?.patientName || "N/A";
     const patientDob = procDoc?.patientDob ? new Date(procDoc.patientDob).toLocaleDateString() : "N/A";
@@ -2035,8 +2035,8 @@ export class SubProvider {
     const hospital = procDoc?.hospital;
     const hospitalEngName = hospital?.engName || "N/A";
     const hospitalArabName = hospital?.arabName || "N/A";
-    const arabProc = procDoc?.arabProc;
-    const arabProcTitle = arabProc?.title || "N/A";
+    const procCpt = procDoc?.procCpt;
+    const arabProcTitle = procCpt?.arTitle || procCpt?.title || "N/A";
     const procDate = procDoc?.procDate ? new Date(procDoc.procDate).toLocaleDateString() : "N/A";
     const patientName = procDoc?.patientName || "N/A";
     const patientDob = procDoc?.patientDob ? new Date(procDoc.patientDob).toLocaleDateString() : "N/A";

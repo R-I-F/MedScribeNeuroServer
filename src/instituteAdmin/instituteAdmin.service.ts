@@ -121,8 +121,8 @@ export class InstituteAdminService {
 
   public async getCalendarProcedures(filters: {
     hospitalId?: string;
-    arabProcTitle?: string;
-    arabProcNumCode?: string;
+    procTitle?: string;
+    procNumCode?: string;
     month?: number;
     year?: number;
     startDate?: Date;
@@ -138,14 +138,6 @@ export class InstituteAdminService {
   public async getAllHospitals(dataSource: DataSource) {
     try {
       return await this.instituteAdminProvider.getAllHospitals(dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
-  }
-
-  public async getArabicProcedures(search: string | undefined, dataSource: DataSource) {
-    try {
-      return await this.instituteAdminProvider.getArabicProcedures(search, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

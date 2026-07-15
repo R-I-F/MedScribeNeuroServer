@@ -1,7 +1,7 @@
 import express, { Request, Response, Router } from "express";
 import { ExternalController } from "./external.controller";
 import { inject, injectable } from "inversify";
-import { getArabProcDataValidator } from "../validators/getArabProcData.validator";
+import { getSheetDataValidator } from "../validators/getSheetData.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 
@@ -16,14 +16,14 @@ export class ExternalRouter {
   }
 
   private initRoutes() {
-    //GET ArabProcList
+    // GET external sheet data (generic Google-sheet proxy: ?spreadsheetName=&sheetName=[&row=])
     this.router.get(
       "",
-      getArabProcDataValidator,
+      getSheetDataValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);
         if (result.isEmpty()) {
-          const data = await this.externalController.getArabProcData(req, res);
+          const data = await this.externalController.getSheetData(req, res);
           res.json(data);
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());

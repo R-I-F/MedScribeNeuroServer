@@ -10,7 +10,6 @@ import { getCandidateSubmissionsValidator } from "../validators/getCandidateSubm
 import { getCandidateSubmissionByIdValidator } from "../validators/getCandidateSubmissionById.validator";
 import { getSubmissionReportValidator } from "../validators/getSubmissionReport.validator";
 import { getCalendarProceduresValidator } from "../validators/getCalendarProcedures.validator";
-import { getArabicProceduresValidator } from "../validators/getArabicProcedures.validator";
 import { getHospitalAnalysisValidator } from "../validators/getHospitalAnalysis.validator";
 import { getCandidateDashboardsValidator } from "../validators/getCandidateDashboards.validator";
 import { getCandidateSummaryValidator } from "../validators/getCandidateSummary.validator";
@@ -406,28 +405,7 @@ export class InstituteAdminRouter {
       }
     );
 
-    // Dashboard endpoints - Get Arabic procedures with optional search (MUST be before /:id route)
-    this.router.get(
-      "/arabicProcedures",
-      extractJWT,
-      institutionResolver,
-      userBasedRateLimiter,
-      requireInstituteAdmin,
-      getArabicProceduresValidator,
-      async (req: Request, res: Response) => {
-        const result = validationResult(req);
-        if (result.isEmpty()) {
-          try {
-            const resp = await this.instituteAdminController.handleGetArabicProcedures(req, res);
-            res.status(StatusCodes.OK).json(resp);
-          } catch (err: any) {
-            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
-          }
-        } else {
-          res.status(StatusCodes.BAD_REQUEST).json(result.array());
-        }
-      }
-    );
+    // NB: /arabicProcedures retired 2026-07-15 with arab_procs (procedures now = proc_cpts).
 
     // Submission case report PDF (institute admin only) — single submission by ID
     this.router.get(

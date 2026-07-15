@@ -34,25 +34,41 @@ export class CalSurgController {
         hospital: string;
         patientName: string;
         gender: "male" | "female";
-        procedure: string;
+        procedureText: string;
         surgeryDate: Date;
         patientDob?: Date;
         departmentId?: string;
       };
-      const payload: ICalSurg = {
-        timeStamp: new Date(),
-        patientName: body.patientName,
-        patientDob: body.patientDob ?? body.surgeryDate,
-        gender: body.gender,
-        hospital: body.hospital,
-        arabProc: body.procedure,
-        procDate: body.surgeryDate,
-        google_uid: undefined,
-        formLink: undefined,
-        departmentId: body.departmentId,
-      };
-      const newCalSurg = await this.calSurgProvider.createCalSurg(payload, dataSource);
+      // Only a clerk "teaches" the system (plan §8 Q4): other roles create with clerkId NULL.
+      const jwt = (res as any).locals?.jwt;
+      const clerkId: string | null = jwt?.role === "clerk" ? (jwt.id ?? jwt._id ?? null) : null;
+
+      const newCalSurg = await this.calSurgProvider.createCalSurgFromClerkInput(
+        {
+          hospital: body.hospital,
+          patientName: body.patientName,
+          gender: body.gender,
+          procedureText: body.procedureText,
+          surgeryDate: body.surgeryDate,
+          patientDob: body.patientDob,
+          departmentId: body.departmentId,
+          clerkId,
+        },
+        dataSource
+      );
       return newCalSurg;
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async handleGetClerkProcs(req: Request, res: Response): Promise<any[]> | never {
+    try {
+      const dataSource = (req as any).institutionDataSource;
+      if (!dataSource) {
+        throw new Error("Institution DataSource not resolved");
+      }
+      return await this.calSurgProvider.getClerkProcs(dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

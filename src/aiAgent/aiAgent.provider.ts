@@ -79,9 +79,9 @@ export class AiAgentProvider {
         arabName: procDocId?.hospital?.arabName,
       },
       procedure: {
-        name: procDocId?.arabProc?.title || "N/A",
+        name: procDocId?.procCpt?.arTitle || procDocId?.procCpt?.title || "N/A",
         date: procDocId?.procDate || submission.timeStamp || new Date(),
-        description: procDocId?.arabProc?.description,
+        description: procDocId?.procCpt?.description,
       },
       candidate: {
         name: candDocId?.fullName || "N/A",

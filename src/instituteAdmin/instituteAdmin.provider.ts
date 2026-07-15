@@ -8,13 +8,11 @@ import { CandService } from "../cand/cand.service";
 import { SubService } from "../sub/sub.service";
 import { CalSurgService } from "../calSurg/calSurg.service";
 import { HospitalService } from "../hospital/hospital.service";
-import { ArabProcService } from "../arabProc/arabProc.service";
 import { ISupervisorDoc } from "../supervisor/supervisor.interface";
 import { ICandDoc } from "../cand/cand.interface";
 import { ISubDoc } from "../sub/interfaces/sub.interface";
 import { ICalSurgDoc } from "../calSurg/calSurg.interface";
 import { IHospitalDoc } from "../hospital/hospital.interface";
-import { IArabProcDoc } from "../arabProc/arabProc.interface";
 import { CandidateEntity } from "../cand/cand.mDbSchema";
 import { SubProvider } from "../sub/sub.provider";
 import { EventService } from "../event/event.service";
@@ -129,7 +127,6 @@ export class InstituteAdminProvider {
     @inject(SubService) private subService: SubService,
     @inject(CalSurgService) private calSurgService: CalSurgService,
     @inject(HospitalService) private hospitalService: HospitalService,
-    @inject(ArabProcService) private arabProcService: ArabProcService,
     @inject(SubProvider) private subProvider: SubProvider,
     @inject(EventService) private eventService: EventService,
     @inject(EventProvider) private eventProvider: EventProvider,
@@ -394,8 +391,8 @@ export class InstituteAdminProvider {
 
   public async getCalendarProcedures(filters: {
     hospitalId?: string;
-    arabProcTitle?: string;
-    arabProcNumCode?: string;
+    procTitle?: string;
+    procNumCode?: string;
     month?: number;
     year?: number;
     startDate?: Date;
@@ -411,14 +408,6 @@ export class InstituteAdminProvider {
   public async getAllHospitals(dataSource: DataSource): Promise<IHospitalDoc[]> | never {
     try {
       return await this.hospitalService.getAllHospitals(dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
-  }
-
-  public async getArabicProcedures(search: string | undefined, dataSource: DataSource): Promise<IArabProcDoc[]> | never {
-    try {
-      return await this.arabProcService.getArabProcsWithSearch(search, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -449,12 +438,12 @@ export class InstituteAdminProvider {
       }>();
 
       calSurgs.forEach((calSurg) => {
-        if (!calSurg.hospital || !calSurg.arabProc) {
-          return; // Skip if hospital or arabProc is not populated
+        const procCpt = (calSurg as any).procCpt;
+        if (!calSurg.hospital || !procCpt) {
+          return; // Skip if hospital or procedure is not populated
         }
 
         const hospital = calSurg.hospital as any;
-        const arabProc = calSurg.arabProc as any;
         // Handle both id (MariaDB) and _id (MongoDB) formats
         const hospitalId = (hospital as any).id || (hospital as any)._id?.toString() || (hospital as any)._id;
 
@@ -466,7 +455,7 @@ export class InstituteAdminProvider {
         }
 
         const entry = hospitalMap.get(hospitalId)!;
-        const key = filters.groupBy === "alphaCode" ? arabProc.alphaCode : arabProc.title;
+        const key = filters.groupBy === "alphaCode" ? procCpt.alphaCode : procCpt.title;
 
         if (key) {
           const currentCount = entry.procedures.get(key) || 0;

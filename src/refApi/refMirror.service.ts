@@ -210,16 +210,16 @@ export class RefMirrorService {
       await this.upsert(
         qr,
         "diagnoses",
-        ["id", "icdCode", "icdName", "neuroLogName"],
-        ["icdCode", "icdName"],
-        [...diagById.values()].map((d) => [d.id, d.icdCode, d.icdName, null])
+        ["id", "icdCode", "icdName", "icdArName", "description", "arDescription", "neuroLogName"],
+        ["icdCode", "icdName", "icdArName", "description", "arDescription"],
+        [...diagById.values()].map((d) => [d.id, d.icdCode, d.icdName, d.icdArName, d.description, d.arDescription, null])
       );
       await this.upsert(
         qr,
         "proc_cpts",
-        ["id", "title", "alphaCode", "numCode", "description"],
-        ["title", "alphaCode", "numCode", "description"],
-        [...procById.values()].map((p) => [p.id, p.title, p.alphaCode, p.numCode, p.description])
+        ["id", "title", "arTitle", "alphaCode", "numCode", "description", "arDescription"],
+        ["title", "arTitle", "alphaCode", "numCode", "description", "arDescription"],
+        [...procById.values()].map((p) => [p.id, p.title, p.arTitle, p.alphaCode, p.numCode, p.description, p.arDescription])
       );
       await this.upsert(
         qr,
@@ -255,9 +255,9 @@ export class RefMirrorService {
       await this.upsert(
         qr,
         "main_diags",
-        ["id", "title", "departmentId"],
-        ["title", "departmentId"],
-        mainDiagRowsU.map((m) => [m.id, m.title, m.departmentId])
+        ["id", "title", "arTitle", "departmentId"],
+        ["title", "arTitle", "departmentId"],
+        mainDiagRowsU.map((m) => [m.id, m.title, m.arTitle, m.departmentId])
       );
       await this.upsert(
         qr,

@@ -12,6 +12,7 @@ import {
   IRefEquipment,
   IRefConsumable,
   IRefQuestion,
+  IRefProcSearchHit,
 } from "./refApi.types";
 
 dotenv.config();
@@ -89,8 +90,44 @@ export class RefApiClient {
     throw new RefApiError(`GET ${path} failed after retries`, undefined, lastErr);
   }
 
+  /** POST with envelope-unwrap + retries (same policy as get). */
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    const maxAttempts = 3;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const resp = await this.http.post(path, body);
+        const respBody = resp.data;
+        if (respBody && typeof respBody === "object" && "data" in respBody) {
+          return (respBody as { data: T }).data;
+        }
+        return respBody as T;
+      } catch (err: any) {
+        lastErr = err;
+        const status = err?.response?.status as number | undefined;
+        const retryable = status === undefined || status >= 500 || status === 429;
+        if (retryable && attempt < maxAttempts - 1) {
+          const delayMs = status === 429 ? 600 * (attempt + 1) : 200;
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+        throw new RefApiError(`POST ${path} failed: ${err?.message ?? "unknown error"}`, status, err);
+      }
+    }
+    throw new RefApiError(`POST ${path} failed after retries`, undefined, lastErr);
+  }
+
   public getVersion(): Promise<IRefVersion> {
     return this.get<IRefVersion>("/v1/version");
+  }
+
+  /** Semantic CPT-procedure search (hub embeds the query; pgvector cosine, dept-scoped). */
+  public procedureSearch(
+    query: string,
+    deptCode: string = this.deptCode,
+    limit = 3
+  ): Promise<IRefProcSearchHit[]> {
+    return this.post<IRefProcSearchHit[]>("/v1/procedure-search", { deptCode, query, limit });
   }
 
   public getDepartments(): Promise<IRefDepartment[]> {

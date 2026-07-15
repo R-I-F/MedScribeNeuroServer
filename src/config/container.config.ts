@@ -9,14 +9,13 @@ import { ExternalService } from "../externalService/external.service";
 import { ExternalController } from "../externalService/external.controller";
 import { ExternalRouter } from "../externalService/external.router";
 
-import { ArabProcController } from "../arabProc/arabProc.controller";
-import { ArabProcService } from "../arabProc/arabProc.service";
-import { ArabProcRouter } from "../arabProc/arabProc.router";
 
 import { CalSurgController } from "../calSurg/calSurg.controller";
 import { CalSurgRouter } from "../calSurg/calSurg.router";
 import { CalSurgService } from "../calSurg/calSurg.service";
 import { CalSurgProvider } from "../calSurg/calSurg.provider";
+import { ClerkProcService } from "../clerkProc/clerkProc.service";
+import { PatientNameService } from "../calSurg/patientName.service";
 
 import { CandController } from "../cand/cand.controller";
 import { CandRouter } from "../cand/cand.router";
@@ -95,9 +94,6 @@ import { ClerkRouter } from "../clerk/clerk.router";
 import { ClerkService } from "../clerk/clerk.service";
 import { ClerkProvider } from "../clerk/clerk.provider";
 
-import { InstitutionController } from "../institution/institution.controller";
-import { InstitutionRouter } from "../institution/institution.router";
-
 import { ActivityTimelineController } from "../activityTimeline/activityTimeline.controller";
 import { ActivityTimelineRouter } from "../activityTimeline/activityTimeline.router";
 import { ActivityTimelineProvider } from "../activityTimeline/activityTimeline.provider";
@@ -159,14 +155,13 @@ container.bind(ExternalService).toSelf().inTransientScope();
 container.bind(ExternalController).toSelf().inTransientScope();
 container.bind(ExternalRouter).toSelf().inTransientScope();
 
-container.bind(ArabProcController).toSelf().inTransientScope();
-container.bind(ArabProcService).toSelf().inTransientScope();
-container.bind(ArabProcRouter).toSelf().inTransientScope();
 
 container.bind(CalSurgController).toSelf().inTransientScope();
 container.bind(CalSurgRouter).toSelf().inTransientScope();
 container.bind(CalSurgService).toSelf().inTransientScope();
 container.bind(CalSurgProvider).toSelf().inTransientScope();
+container.bind(ClerkProcService).toSelf().inTransientScope();
+container.bind(PatientNameService).toSelf().inTransientScope();
 
 container.bind(CandController).toSelf().inTransientScope();
 container.bind(CandService).toSelf().inTransientScope();
@@ -244,9 +239,6 @@ container.bind(ClerkProvider).toSelf().inTransientScope();
 
 container.bind(LectureService).toSelf().inTransientScope();
 container.bind(LectureProvider).toSelf().inTransientScope();
-
-container.bind(InstitutionController).toSelf().inTransientScope();
-container.bind(InstitutionRouter).toSelf().inTransientScope();
 
 container.bind(ActivityTimelineProvider).toSelf().inTransientScope();
 container.bind(ActivityTimelineController).toSelf().inTransientScope();

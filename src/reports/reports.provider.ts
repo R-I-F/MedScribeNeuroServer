@@ -920,15 +920,15 @@ export class ReportsProvider {
 
             calSurgs.forEach((calSurg) => {
               const hospital = calSurg.hospital as any;
-              const arabProc = calSurg.arabProc as any;
+              const procCpt = (calSurg as any).procCpt;
 
-              if (!hospital || !arabProc) return;
+              if (!hospital || !procCpt) return;
 
               // Handle both id (MariaDB) and _id (MongoDB) formats
               const hospitalId = (hospital as any).id || (hospital as any)._id?.toString() || (hospital as any)._id;
-              const key = filters.groupBy === "alphaCode" 
-                ? arabProc.alphaCode 
-                : arabProc.title;
+              const key = filters.groupBy === "alphaCode"
+                ? procCpt.alphaCode
+                : procCpt.title;
 
               if (!hospitalMap.has(hospitalId)) {
                 hospitalMap.set(hospitalId, {

@@ -11,7 +11,7 @@ export class ExternalController {
   constructor(
     @inject(ExternalService) private externalService: ExternalService
   ) {}
-  async getArabProcData(req: Request, res: Response) {
+  async getSheetData(req: Request, res: Response) {
     const validatedData: IExternalQuery = matchedData(req);
     let apiString: string;
     if (validatedData.row) {

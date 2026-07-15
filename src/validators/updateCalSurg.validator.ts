@@ -53,13 +53,13 @@ export const updateCalSurgValidator = checkSchema({
     custom: uuidValidator,
     errorMessage: "hospital must be a valid UUID",
   },
-  arabProc: {
+  procCpt: {
     in: ["body"],
     optional: true,
     isString: true,
     trim: true,
     custom: uuidValidator,
-    errorMessage: "arabProc must be a valid UUID",
+    errorMessage: "procCpt must be a valid UUID",
   },
   procDate: {
     in: ["body"],

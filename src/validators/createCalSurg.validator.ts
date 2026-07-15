@@ -30,13 +30,18 @@ export const createCalSurgValidator = checkSchema({
       errorMessage: "gender must be either 'male' or 'female'",
     },
   },
-  procedure: {
+  // Free-text procedure phrase as the clerk types it ("ورم بالمخ") — the learning pipeline
+  // (clerk_procs) resolves it semantically; NOT a UUID anymore (plan §2).
+  procedureText: {
     in: ["body"],
     notEmpty: true,
     isString: true,
     trim: true,
-    custom: uuidValidator,
-    errorMessage: "procedure must be a valid UUID",
+    isLength: {
+      options: { max: 500 },
+      errorMessage: "procedureText should have a maximum of 500 characters",
+    },
+    errorMessage: "procedureText is required",
   },
   surgeryDate: {
     in: ["body"],

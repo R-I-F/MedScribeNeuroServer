@@ -119,13 +119,14 @@ export class ReferenceReadRouter {
       listHandler((req, res) => this.ctrl.getAllDiagnoses(req, res))
     );
 
-    // GET /procCpt — superAdmin only (unchanged from legacy)
+    // GET /procCpt — superAdmin (legacy) + instituteAdmin/clerk (calendar-form procedure
+    // picker; replaced the retired GET /arabProc list, 2026-07-15).
     this.router.get(
       "/procCpt",
       extractJWT,
       institutionResolver,
       userBasedRateLimiter,
-      requireSuperAdmin,
+      authorize(UserRole.SUPER_ADMIN, UserRole.INSTITUTE_ADMIN, UserRole.CLERK),
       deptCodeQueryValidator,
       listHandler((req, res) => this.ctrl.getAllProcCpts(req, res))
     );

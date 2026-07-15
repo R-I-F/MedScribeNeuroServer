@@ -10,6 +10,9 @@ export class MainDiagEntity {
   @Column({ type: "text" })
   title!: string;
 
+  @Column({ type: "text", nullable: true })
+  arTitle!: string | null;
+
   // Department this main-diag belongs to (mirror of hub main_diags.departmentId). Nullable
   // during the multi-department rollout; the mirror stamps it from the per-dept sync.
   @Column({ type: "uuid", nullable: true })

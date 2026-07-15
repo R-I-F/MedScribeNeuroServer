@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { UtilService } from "../utils/utils.service";
-import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
+import { IExternalRow } from "../types/externalRow.interface";
 import { ExternalService } from "../externalService/external.service";
 import { ICand, ICandDoc } from "./cand.interface";
 

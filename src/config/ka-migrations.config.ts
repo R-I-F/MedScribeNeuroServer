@@ -6,9 +6,9 @@ import * as path from "path";
 import { HospitalEntity } from "../hospital/hospital.mDbSchema";
 import { DiagnosisEntity } from "../diagnosis/diagnosis.mDbSchema";
 import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
-import { ArabProcEntity } from "../arabProc/arabProc.mDbSchema";
 import { MainDiagEntity } from "../mainDiag/mainDiag.mDbSchema";
 import { CalSurgEntity } from "../calSurg/calSurg.mDbSchema";
+import { ClerkProcEntity } from "../clerkProc/clerkProc.mDbSchema";
 import { CandidateEntity } from "../cand/cand.mDbSchema";
 import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
 import { InstituteAdminEntity } from "../instituteAdmin/instituteAdmin.mDbSchema";
@@ -70,9 +70,9 @@ function getKaMigrationsConfig(): DataSourceOptions {
       HospitalEntity,
       DiagnosisEntity,
       ProcCptEntity,
-      ArabProcEntity,
       MainDiagEntity,
       CalSurgEntity,
+      ClerkProcEntity,
       CandidateEntity,
       SupervisorEntity,
       InstituteAdminEntity,

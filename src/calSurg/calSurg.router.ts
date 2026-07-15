@@ -112,6 +112,24 @@ export class CalSurgRouter {
       }
     );
 
+    // Learned clerk procedures (typeahead source for the create form).
+    // Accessible to: superAdmin, instituteAdmin, clerk
+    this.router.get(
+      "/clerkProcs",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSuperAdminOrInstituteAdminOrClerk,
+      async (req: Request, res: Response) => {
+        try {
+          const rows = await this.calSurgController.handleGetClerkProcs(req, res);
+          res.status(StatusCodes.OK).json(rows);
+        } catch (err: any) {
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
     // Dashboard: calSurg within last 60 days, stripped of formLink and google_uid
     // Accessible to: candidate, supervisor, clerk, instituteAdmin, superAdmin
     this.router.get(

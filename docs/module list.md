@@ -16,10 +16,11 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 - **Follow-on (not ETL):** `arab_procs → proc_cpts` semantic remap for `cal_surgs.procCptId` (hub procedure-search + user review + backfill), then retire arab_procs. **IN PROGRESS** — clinical review sheet `docs/CALSURG_PROC_MAPPING_REVIEW.md` (commit `e1edfc0` + uncommitted revisions) awaiting user review; backfill not yet run.
 
 **⬜ Still open (the honest not-done list, 2026-07-14)**
-1. **calSurg→proc_cpts remap backfill** (above) — review sheet awaiting user approval, then backfill + retire `arabProc`.
+1. ~~calSurg→proc_cpts remap~~ → ✅ **APPROVED + LIVE 2026-07-14**; ~~retire arabProc~~ → ✅ **RETIRED 2026-07-15** (migrations `610110`+`610120`: table, `cal_surgs.arabProcId`, and the `proc_aliases` import-lookup all dropped; every consumer reads `proc_cpts` EN+AR; sheet-import matches exact CPT titles only — colloquial values import without a procedure, per user).
 2. **Production cutover** — final idempotent ETL re-run (users + operational tables drift since copy), frontend switch, decommission plan. Nothing scheduled yet.
 3. **Deep tenant E2E** — hospital→calSurg→POST /sub→analytics→PDF with fixtures (planned since Stage E, never run).
-4. **Frontend TODOs** — send `departmentId` at registration; department picker from public `GET /departments`; six-flag→dynamic-questions UI cutover.
+4. **Frontend TODOs** — send `departmentId` at registration; department picker from public `GET /departments`; six-flag→dynamic-questions UI cutover. ~~Remove institution modal + GET /institutions + institutionId at login~~ → ✅ **DONE 2026-07-14** (NeuroLogBookFront `design-integration`: `STATIC_INSTITUTION` pinned in authSlice, InstitutionSelector deleted, landing Log-in navigates straight to `/login`, 4 login bodies send email+password only; build clean). Residue kept deliberately: signup institution dropdown (auto-preselects the single static option — dies when the department picker replaces it) + inert `X-Institution-Id` headers on ~100 API methods (backend ignores; bulk-remove later).
+4b. ~~Retire the public `/institutions` endpoint~~ → ✅ **DONE 2026-07-14** (this repo: router/controller deleted, mount + DI bindings removed; `getStaticInstitution()` kept; verified 404 + login-without-institutionId OK). Still later: drop the `institutionId` JWT claim once pre-migration tokens expire.
 5. **Deferred module items** — `updateClerk` validator `departmentId` whitelist; per-department dashboard read-filtering for scoped institute admins (new feature, post-migration); hospital reads-filtering; waBot optional tenancy cleanup.
 6. **Tidy** — delete empty `mailgun`/`references` dirs; keep legacy `src/migrations/` quarantined; 3 audit-doc headers still say DRAFT (`additionalQuestions`, `passwordReset`, `waBot`) though their decisions/implementations are recorded — refresh on next touch.
 7. **Hub-side (LibelusRefApi, not this repo)** — lectures `level` (msc/md) backfill for the 14 NULL depts from an authoritative Egyptian source; NS `2F7C`/`2F7Z` re-review.
@@ -33,9 +34,9 @@ All modules under `src/`, as of the `migration/mysql-to-postgres` branch (KA sin
 | Module | Route | Status | Description |
 |---|---|---|---|
 | `auth` | `/auth` | ✅ Done (no table; converted) | Authentication: login/refresh for all roles, JWT issuing (`authToken.service.ts`, incl. `departmentId` claim) |
-| `institution` | `/institutions` | ✅ Done (retired → static-pinned) | Institutions (public list; spoke is pinned to the static KA institution) |
+| `institution` | ~~`/institutions`~~ (endpoint retired 2026-07-14) | ✅ **Done — public endpoint REMOVED** (router/controller deleted, mount+DI unbound → 404); internal `getStaticInstitution()` kept (env-pinned). Frontend `design-integration` no longer calls it. | Static KA institution (service-only) |
 | `hospital` | `/hospital` | ✅ **Done** — dept-scoped (`departmentId` FK NOT NULL) + 7 → NS + location→json (reads-filtering deferred) | Hospitals/units per department (surgery venues) |
-| `arabProc` | `/arabProc` | ✅ **Done** — dept-scoped (`departmentId` FK, nullable) + 81 → NS | Arabic procedure names (per department) |
+| `arabProc` | ~~`/arabProc`~~ | 🗑️ **RETIRED 2026-07-15** (user decision) — module/routes/table dropped (migration `610110`); procedures = `proc_cpts` (EN `title` + AR `arTitle`) everywhere. `proc_aliases` import-lookup also dropped (user, migration `610120`) — sheet-import matches exact proc_cpts titles only; unmatched rows import without a procedure | ~~Arabic procedure names~~ (superseded by proc_cpts) |
 | `calSurg` | `/calSurg` | ✅ **Done** — 5,578 → NS (dept-scoped, nullable) + `procCptId` FK staged; legacy `arabProcId` kept (proc_cpts remap = follow-on) | Surgical case calendar (dept-scoped) |
 | `cand` | `/cand` | ✅ **Implemented** (110 → NS; PG fixes; phone-unique; dept NOT NULL) | Candidates (trainees): registration, profile, management |
 | `supervisor` | `/supervisor` | ✅ **Implemented** (56 → NS; PG fixes; phone-unique; dept NOT NULL) | Supervisors: registration, profile, management |

@@ -24,12 +24,13 @@ function mapHospital(obj: unknown): PlainObject | undefined {
   return picked;
 }
 
-function mapArabProc(obj: unknown): PlainObject | undefined {
+function mapCalSurgProcCpt(obj: unknown): PlainObject | undefined {
   if (!obj || typeof obj !== "object") return undefined;
   const o = obj as PlainObject;
   const picked: PlainObject = {};
   if (o.id != null) picked.id = o.id;
   if (o.title != null) picked.title = o.title;
+  if (o.arTitle != null) picked.arTitle = o.arTitle;
   if (o.alphaCode != null) picked.alphaCode = o.alphaCode;
   if (o.numCode != null) picked.numCode = o.numCode;
   if (o.description != null) picked.description = o.description;
@@ -46,7 +47,7 @@ function mapCalSurg(obj: unknown): PlainObject | undefined {
   if (o.gender != null) result.gender = o.gender;
   if (o.procDate != null) result.procDate = o.procDate;
   if (o.hospital) result.hospital = mapHospital(o.hospital);
-  if (o.arabProc) result.arabProc = mapArabProc(o.arabProc);
+  if (o.procCpt) result.procCpt = mapCalSurgProcCpt(o.procCpt);
   return result;
 }
 
@@ -117,12 +118,13 @@ function mapHospitalForSupervisor(obj: unknown): PlainObject | undefined {
   return picked;
 }
 
-function mapArabProcForSupervisor(obj: unknown): PlainObject | undefined {
+function mapCalSurgProcCptForSupervisor(obj: unknown): PlainObject | undefined {
   if (!obj || typeof obj !== "object") return undefined;
   const o = obj as PlainObject;
   const picked: PlainObject = {};
   if (o.id != null) picked.id = o.id;
   if (o.title != null) picked.title = o.title;
+  if (o.arTitle != null) picked.arTitle = o.arTitle;
   if (o.alphaCode != null) picked.alphaCode = o.alphaCode;
   if (o.description != null) picked.description = o.description;
   return picked;
@@ -140,7 +142,7 @@ function mapCalSurgForSupervisor(obj: unknown): PlainObject | undefined {
   if (o.procDate != null) result.procDate = o.procDate;
   if (o.createdAt != null) result.createdAt = o.createdAt;
   if (o.hospital != null) result.hospital = mapHospitalForSupervisor(o.hospital);
-  if (o.arabProc != null) result.arabProc = mapArabProcForSupervisor(o.arabProc);
+  if (o.procCpt != null) result.procCpt = mapCalSurgProcCptForSupervisor(o.procCpt);
   return result;
 }
 

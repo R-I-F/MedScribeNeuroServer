@@ -29,7 +29,7 @@ export function mapSubmissionToViewModel(sub: ISubDoc): SubmissionReportViewMode
   const supervisor = raw.supervisor;
   const mainDiag = raw.mainDiag;
   const hospital = calSurg?.hospital;
-  const arabProc = calSurg?.arabProc;
+  const procCpt = calSurg?.procCpt;
 
   return {
     submissionId: sub.id,
@@ -51,8 +51,8 @@ export function mapSubmissionToViewModel(sub: ISubDoc): SubmissionReportViewMode
       gender: calSurg?.gender ?? "—",
       procDate: calSurg?.procDate ? formatDate(calSurg.procDate) : "—",
       hospitalName: hospital?.engName ?? hospital?.arabName ?? "—",
-      arabProcTitle: arabProc?.title ?? "—",
-      arabProcNumCode: arabProc?.numCode ?? arabProc?.alphaCode ?? "—",
+      procTitle: procCpt?.arTitle ?? procCpt?.title ?? "—",
+      procNumCode: procCpt?.numCode ?? procCpt?.alphaCode ?? "—",
     },
     mainDiagnosis: mainDiag?.title ?? "—",
     icds: Array.isArray(raw.icds)

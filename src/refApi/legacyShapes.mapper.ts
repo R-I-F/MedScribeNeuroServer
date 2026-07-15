@@ -17,7 +17,10 @@ import {
  *   - department_diagnoses      (M2M dept↔diagnosis; diagnoses stay shared/deduped)
  *   - lecture_topics.departmentId + lectures.topicId (topic carries the department)
  *   - proc_cpts have no direct department link (transitive via main_diag_procs)
- * Arabic/description fields the mirror tables don't carry are dropped.
+ *
+ * HONEST MIRROR RULE (user directive 2026-07-15): the mirror carries EVERY field the hub
+ * serves — nothing is projected away. If the hub adds a field, add it here and to the
+ * mirror table in the same change.
  */
 
 export interface MirrorDepartmentRow {
@@ -32,6 +35,7 @@ export interface MirrorDepartmentRow {
 export interface MirrorMainDiagRow {
   id: string;
   title: string;
+  arTitle: string | null;
   departmentId: string;
 }
 
@@ -39,15 +43,20 @@ export interface MirrorDiagnosisRow {
   id: string;
   icdCode: string;
   icdName: string;
+  icdArName: string | null;
+  description: string | null;
+  arDescription: string | null;
   neuroLogName: null;
 }
 
 export interface MirrorProcCptRow {
   id: string;
   title: string;
+  arTitle: string | null;
   alphaCode: string;
   numCode: string;
   description: string;
+  arDescription: string | null;
 }
 
 export interface MirrorLectureTopicRow {
@@ -92,20 +101,30 @@ export function toMirrorDepartment(h: IRefDepartment): MirrorDepartmentRow {
 }
 
 export function toMirrorMainDiag(h: IRefMainDiag, departmentId: string): MirrorMainDiagRow {
-  return { id: h.id, title: h.title, departmentId };
+  return { id: h.id, title: h.title, arTitle: h.arTitle ?? null, departmentId };
 }
 
 export function toMirrorDiagnosis(h: IRefDiagnosis): MirrorDiagnosisRow {
-  return { id: h.id, icdCode: h.icdCode, icdName: h.icdName, neuroLogName: null };
+  return {
+    id: h.id,
+    icdCode: h.icdCode,
+    icdName: h.icdName,
+    icdArName: h.icdArName ?? null,
+    description: h.description ?? null,
+    arDescription: h.arDescription ?? null,
+    neuroLogName: null,
+  };
 }
 
 export function toMirrorProcCpt(h: IRefProcCpt): MirrorProcCptRow {
   return {
     id: h.id,
     title: h.title,
+    arTitle: h.arTitle ?? null,
     alphaCode: h.alphaCode,
     numCode: h.numCode,
     description: h.description,
+    arDescription: h.arDescription ?? null,
   };
 }
 

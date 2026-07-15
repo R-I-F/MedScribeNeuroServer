@@ -4,7 +4,7 @@ import { JournalService } from "./journal.service";
 import { IJournal, IJournalDoc, IJournalInput, IJournalUpdateInput } from "./journal.interface";
 import { UtilService } from "../utils/utils.service";
 import { ExternalService } from "../externalService/external.service";
-import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
+import { IExternalRow } from "../types/externalRow.interface";
 
 @injectable()
 export class JournalProvider {

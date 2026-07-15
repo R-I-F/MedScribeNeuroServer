@@ -337,8 +337,8 @@ export class InstituteAdminController {
   public async handleGetCalendarProcedures(req: Request, res: Response) {
     const validatedReq = matchedData(req) as {
       hospitalId?: string;
-      arabProcTitle?: string;
-      arabProcNumCode?: string;
+      procTitle?: string;
+      procNumCode?: string;
       month?: number;
       year?: number;
       startDate?: string;
@@ -351,8 +351,8 @@ export class InstituteAdminController {
       }
       const filters: any = {
         hospitalId: validatedReq.hospitalId,
-        arabProcTitle: validatedReq.arabProcTitle,
-        arabProcNumCode: validatedReq.arabProcNumCode,
+        procTitle: validatedReq.procTitle,
+        procNumCode: validatedReq.procNumCode,
         month: validatedReq.month,
         year: validatedReq.year
       };
@@ -377,19 +377,6 @@ export class InstituteAdminController {
         throw new Error("Institution DataSource not resolved");
       }
       return await this.instituteAdminService.getAllHospitals(dataSource);
-    } catch (err: any) {
-      throw new Error(err);
-    }
-  }
-
-  public async handleGetArabicProcedures(req: Request, res: Response) {
-    const validatedReq = matchedData(req) as { search?: string };
-    try {
-      const dataSource = (req as any).institutionDataSource;
-      if (!dataSource) {
-        throw new Error("Institution DataSource not resolved");
-      }
-      return await this.instituteAdminService.getArabicProcedures(validatedReq.search, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }

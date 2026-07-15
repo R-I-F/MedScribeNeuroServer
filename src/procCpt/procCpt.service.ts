@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
-import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
+import { IExternalRow } from "../types/externalRow.interface";
 import { ExternalService } from "../externalService/external.service";
 import { IProcCpt, IProcCptDoc } from "./procCpt.interface";
 import { UtilService } from "../utils/utils.service";

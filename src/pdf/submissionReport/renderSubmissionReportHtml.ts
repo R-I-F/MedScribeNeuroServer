@@ -105,8 +105,8 @@ export function renderSubmissionReportHtml(
       <h2 class="section-title">Procedure Details</h2>
       ${sectionRow("Procedure date", orDash(data.calSurg.procDate))}
       ${sectionRow("Hospital", orDash(data.calSurg.hospitalName))}
-      ${sectionRow("Procedure", orDash(data.calSurg.arabProcTitle))}
-      ${sectionRow("Procedure code", orDash(data.calSurg.arabProcNumCode))}
+      ${sectionRow("Procedure", orDash(data.calSurg.procTitle))}
+      ${sectionRow("Procedure code", orDash(data.calSurg.procNumCode))}
       ${sectionRow("Patient name", orDash(data.calSurg.patientName))}
       ${sectionRow("Patient DOB", orDash(data.calSurg.patientDob))}
       ${sectionRow(

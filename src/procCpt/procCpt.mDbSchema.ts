@@ -9,6 +9,9 @@ export class ProcCptEntity implements IProcCpt {
   @Column({ type: "text" })
   title!: string;
 
+  @Column({ type: "text", nullable: true })
+  arTitle!: string | null;
+
   @Column({ type: "varchar", length: 20 })
   alphaCode!: string;
 
@@ -17,6 +20,9 @@ export class ProcCptEntity implements IProcCpt {
 
   @Column({ type: "text" })
   description!: string;
+
+  @Column({ type: "text", nullable: true })
+  arDescription!: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

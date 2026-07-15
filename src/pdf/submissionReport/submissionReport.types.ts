@@ -26,8 +26,8 @@ export interface SubmissionReportViewModel {
     gender: string;
     procDate: string;
     hospitalName: string;
-    arabProcTitle: string;
-    arabProcNumCode: string;
+    procTitle: string;
+    procNumCode: string;
   };
   /** Main diagnosis */
   mainDiagnosis: string;

@@ -12,6 +12,15 @@ export class DiagnosisEntity implements IDiagnosis {
   @Column({ type: "text" })
   icdName!: string;
 
+  @Column({ type: "text", nullable: true })
+  icdArName!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  description!: string | null;
+
+  @Column({ type: "text", nullable: true })
+  arDescription!: string | null;
+
   @Column({ type: "json", nullable: true })
   neuroLogName?: string[];
 

@@ -1,15 +1,17 @@
 export interface ICalSurg {
   timeStamp: Date;
   patientName: string;
+  patientNameAr?: string | null; // bilingual slot (pipeline-filled)
+  patientNameEn?: string | null; // bilingual slot (pipeline-filled)
   patientDob: Date;
   gender: "male" | "female";
   hospital: string; // UUID (replaces Types.ObjectId)
-  arabProc?: string; // UUID (replaces Types.ObjectId, optional)
+  procCpt?: string; // UUID → proc_cpts (denormalized from the clerk_procs row)
+  clerkProcId?: string | null; // UUID → clerk_procs (what the clerk actually entered)
   procDate: Date;
   google_uid?: string;
   formLink?: string;
   departmentId?: string; // FK → departments; surgeries are dept-scoped (nullable during rollout)
-  procCptId?: string; // FK → proc_cpts (modern procedure link; backfilled via semantic mapping)
 }
 
 export interface ICalSurgDoc extends ICalSurg {

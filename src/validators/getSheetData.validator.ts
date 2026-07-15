@@ -1,6 +1,6 @@
 import { checkSchema } from "express-validator";
 
-export const getArabProcDataValidator = checkSchema({
+export const getSheetDataValidator = checkSchema({
   spreadsheetName: {
     in: ["query"],
     notEmpty: true,

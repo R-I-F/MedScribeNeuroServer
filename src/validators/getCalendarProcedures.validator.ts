@@ -8,13 +8,13 @@ export const getCalendarProceduresValidator = checkSchema({
     custom: uuidValidator,
     trim: true,
   },
-  arabProcTitle: {
+  procTitle: {
     in: ["query"],
     optional: true,
     isString: true,
     trim: true,
   },
-  arabProcNumCode: {
+  procNumCode: {
     in: ["query"],
     optional: true,
     isString: true,

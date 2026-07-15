@@ -9,14 +9,18 @@ export class CalSurgService {
   public async createCalSurg(calSurgData: ICalSurg, dataSource: DataSource): Promise<ICalSurgDoc> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
-      // Map interface fields to entity fields (hospital/arabProc are UUIDs in interface, but entity uses hospitalId/arabProcId)
+      // Map interface fields to entity fields (hospital/procCpt are UUIDs in interface, but entity uses hospitalId/procCptId)
       const entityData: any = {
         timeStamp: calSurgData.timeStamp,
         patientName: calSurgData.patientName,
+        patientNameAr: calSurgData.patientNameAr,
+        patientNameEn: calSurgData.patientNameEn,
         patientDob: calSurgData.patientDob,
         gender: calSurgData.gender,
         hospitalId: calSurgData.hospital,
-        arabProcId: calSurgData.arabProc,
+        procCptId: calSurgData.procCpt,
+        clerkProcId: calSurgData.clerkProcId,
+        departmentId: calSurgData.departmentId,
         procDate: calSurgData.procDate,
         google_uid: calSurgData.google_uid,
         formLink: calSurgData.formLink,
@@ -27,7 +31,7 @@ export class CalSurgService {
       // Load with relations for return
       const result = await calSurgRepository.findOne({
         where: { id: savedCalSurg.id },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
       });
       
       return result as unknown as ICalSurgDoc;
@@ -43,10 +47,14 @@ export class CalSurgService {
       const entityDataArray = calSurgData.map(data => ({
         timeStamp: data.timeStamp,
         patientName: data.patientName,
+        patientNameAr: data.patientNameAr,
+        patientNameEn: data.patientNameEn,
         patientDob: data.patientDob,
         gender: data.gender,
         hospitalId: data.hospital,
-        arabProcId: data.arabProc,
+        procCptId: data.procCpt,
+        clerkProcId: data.clerkProcId,
+        departmentId: data.departmentId,
         procDate: data.procDate,
         google_uid: data.google_uid,
         formLink: data.formLink,
@@ -58,7 +66,7 @@ export class CalSurgService {
       const ids = savedCalSurgs.map(cs => cs.id);
       const results = await calSurgRepository.find({
         where: { id: In(ids) },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
       });
       
       return results as unknown as ICalSurgDoc[];
@@ -78,7 +86,7 @@ export class CalSurgService {
       
       const calSurg = await calSurgRepository.findOne({
         where: { id: calSurgId },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
       });
       
       if (!calSurg) {
@@ -95,7 +103,7 @@ export class CalSurgService {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const calSurgs = await calSurgRepository.find({
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
         order: { procDate: "DESC" },
       });
       
@@ -132,7 +140,7 @@ export class CalSurgService {
 
     const calSurgs = await calSurgRepository.find({
       where: { procDate: MoreThanOrEqual(cutoff) },
-      relations: ["hospital", "arabProc"],
+      relations: ["hospital", "procCpt", "clerkProc"],
       order: { procDate: "DESC" },
       take: CalSurgService.DASHBOARD_TAKE,
     });
@@ -143,7 +151,10 @@ export class CalSurgService {
         ...rest,
         _id: rest.id ?? rest._id,
         hospital: rest.hospital ? { _id: rest.hospital.id, engName: rest.hospital.engName, arabName: rest.hospital.arabName } : undefined,
-        arabProc: rest.arabProc ? { _id: rest.arabProc.id, title: rest.arabProc.title, numCode: rest.arabProc.numCode, alphaCode: rest.arabProc.alphaCode, description: rest.arabProc.description } : undefined,
+        // Procedure (proc_cpts, hub-mirrored, EN title + AR arTitle). Absent when no procedure recorded.
+        procCpt: rest.procCpt ? { _id: rest.procCpt.id, title: rest.procCpt.title, arTitle: rest.procCpt.arTitle, numCode: rest.procCpt.numCode, alphaCode: rest.procCpt.alphaCode } : undefined,
+        // What the clerk actually typed (learning pipeline) — the calendar's AR-mode display.
+        clerkProc: rest.clerkProc ? { _id: rest.clerkProc.id, title: rest.clerkProc.title } : undefined,
       };
     });
   }
@@ -155,7 +166,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
         order: { procDate: "ASC" },
       });
       
@@ -175,7 +186,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
         order: { procDate: "ASC" },
       });
       
@@ -198,7 +209,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
         order: { procDate: "ASC" },
       });
       
@@ -218,7 +229,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
         order: { procDate: "ASC" },
       });
       
@@ -230,8 +241,8 @@ export class CalSurgService {
 
   public async getCalSurgWithFilters(filters: {
     hospitalId?: string;
-    arabProcTitle?: string;
-    arabProcNumCode?: string;
+    procTitle?: string;
+    procNumCode?: string;
     month?: number;
     year?: number;
     startDate?: Date;
@@ -266,18 +277,22 @@ export class CalSurgService {
 
       let calSurgs = await calSurgRepository.find({
         where: whereConditions,
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
         order: { procDate: "ASC" },
       });
 
-      // Filter by arabProc title or numCode after loading relations
-      if (filters.arabProcTitle || filters.arabProcNumCode) {
+      // Filter by procedure title (EN or AR) or code after loading relations
+      if (filters.procTitle || filters.procNumCode) {
         calSurgs = calSurgs.filter(cs => {
-          if (!cs.arabProc) return false;
-          if (filters.arabProcTitle && !cs.arabProc.title?.toLowerCase().includes(filters.arabProcTitle.toLowerCase())) {
-            return false;
+          if (!cs.procCpt) return false;
+          if (filters.procTitle) {
+            const q = filters.procTitle.toLowerCase();
+            const matches =
+              cs.procCpt.title?.toLowerCase().includes(q) ||
+              cs.procCpt.arTitle?.toLowerCase().includes(q);
+            if (!matches) return false;
           }
-          if (filters.arabProcNumCode && !cs.arabProc.numCode?.includes(filters.arabProcNumCode)) {
+          if (filters.procNumCode && !cs.procCpt.numCode?.includes(filters.procNumCode)) {
             return false;
           }
           return true;
@@ -346,7 +361,7 @@ export class CalSurgService {
       if (updateData.patientDob !== undefined) entityUpdateData.patientDob = updateData.patientDob;
       if (updateData.gender !== undefined) entityUpdateData.gender = updateData.gender;
       if (updateData.hospital !== undefined) entityUpdateData.hospitalId = updateData.hospital;
-      if (updateData.arabProc !== undefined) entityUpdateData.arabProcId = updateData.arabProc;
+      if (updateData.procCpt !== undefined) entityUpdateData.procCptId = updateData.procCpt;
       if (updateData.procDate !== undefined) entityUpdateData.procDate = updateData.procDate;
       if (updateData.google_uid !== undefined) entityUpdateData.google_uid = updateData.google_uid;
       if (updateData.formLink !== undefined) entityUpdateData.formLink = updateData.formLink;
@@ -357,7 +372,7 @@ export class CalSurgService {
       // Load with relations for return
       const updatedCalSurg = await calSurgRepository.findOne({
         where: { id },
-        relations: ["hospital", "arabProc"],
+        relations: ["hospital", "procCpt"],
       });
 
       if (!updatedCalSurg) {

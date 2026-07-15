@@ -74,6 +74,28 @@ export interface IRefConsumable {
   arName: string;
 }
 
+/** A dept-scoped main diagnosis attached to a procedure-search hit. `id` present once the
+ *  hub enhancement (2026-07-15) is deployed; title is always present (mirror fallback key). */
+export interface IRefProcSearchMainDiag {
+  id?: string;
+  title: string;
+  arTitle: string | null;
+}
+
+/** One hit from the hub's POST /v1/procedure-search. `procCptId` present once the hub
+ *  enhancement is deployed; (alphaCode,numCode) is the exact mirror fallback key. */
+export interface IRefProcSearchHit {
+  procCptId?: string;
+  alphaCode: string;
+  numCode: string;
+  title: string;
+  arTitle: string | null;
+  description: string;
+  arDescription: string | null;
+  similarity: number;
+  mainDiagnoses: IRefProcSearchMainDiag[];
+}
+
 export interface IRefQuestionOption {
   id: string;
   value: string;

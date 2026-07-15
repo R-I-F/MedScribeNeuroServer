@@ -61,10 +61,14 @@ export class ReferenceReadProvider {
     );
   }
 
-  /** Legacy /procCpt list shape, scoped transitively via main_diag_procs → main_diags. */
+  /**
+   * Legacy /procCpt list shape (+ additive `arTitle` since the honest-mirror resync —
+   * the calendar form shows Arabic procedure names from it), scoped transitively via
+   * main_diag_procs → main_diags.
+   */
   public async getProcCptsByDepartment(ds: DataSource, departmentId: string) {
     return ds.query(
-      `SELECT DISTINCT p."id", p."title", p."alphaCode", p."numCode", p."description", p."createdAt", p."updatedAt"
+      `SELECT DISTINCT p."id", p."title", p."arTitle", p."alphaCode", p."numCode", p."description", p."createdAt", p."updatedAt"
          FROM "proc_cpts" p
          JOIN "main_diag_procs" mdp ON mdp."procCptId" = p."id"
          JOIN "main_diags" md ON md."id" = mdp."mainDiagId"

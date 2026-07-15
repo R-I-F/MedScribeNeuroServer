@@ -226,8 +226,8 @@ export async function renderSubmissionReportPdfKit(
     drawSectionTitle("Procedure Details");
     drawRow("Procedure date", orDash(data.calSurg.procDate));
     drawRow("Hospital", orDash(data.calSurg.hospitalName));
-    drawRow("Procedure", orDash(data.calSurg.arabProcTitle), undefined, true);
-    drawRow("Procedure code", orDash(data.calSurg.arabProcNumCode));
+    drawRow("Procedure", orDash(data.calSurg.procTitle), undefined, true);
+    drawRow("Procedure code", orDash(data.calSurg.procNumCode));
     drawRow("Patient name", orDash(data.calSurg.patientName), undefined, true);
     drawRow("Patient DOB", orDash(data.calSurg.patientDob));
     const ageAtProc = calculateAgeAt(data.calSurg.patientDob, data.calSurg.procDate);

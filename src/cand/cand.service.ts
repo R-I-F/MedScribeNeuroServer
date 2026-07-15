@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
-import { IExternalRow } from "../arabProc/interfaces/IExternalRow.interface";
+import { IExternalRow } from "../types/externalRow.interface";
 import { ICand, ICandDoc } from "./cand.interface";
 import { AppDataSource } from "../config/database.config";
 import { CandidateEntity } from "./cand.mDbSchema";

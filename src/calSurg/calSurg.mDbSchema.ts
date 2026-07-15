@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from "typeorm";
 import { HospitalEntity } from "../hospital/hospital.mDbSchema";
-import { ArabProcEntity } from "../arabProc/arabProc.mDbSchema";
+import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
+import { ClerkProcEntity } from "../clerkProc/clerkProc.mDbSchema";
 
 @Entity("cal_surgs")
 export class CalSurgEntity {
@@ -10,8 +11,15 @@ export class CalSurgEntity {
   @Column({ type: "timestamp" })
   timeStamp!: Date;
 
+  // As-typed original (audit + display default); the bilingual pair below is pipeline-filled.
   @Column({ type: "varchar", length: 255 })
   patientName!: string;
+
+  @Column({ type: "text", nullable: true })
+  patientNameAr?: string | null;
+
+  @Column({ type: "text", nullable: true })
+  patientNameEn?: string | null;
 
   @Column({ type: "date" })
   patientDob!: Date;
@@ -26,23 +34,28 @@ export class CalSurgEntity {
   @JoinColumn({ name: "hospitalId" })
   hospital!: HospitalEntity;
 
-  @Column({ type: "uuid", nullable: true })
-  arabProcId?: string;
-
-  @ManyToOne(() => ArabProcEntity, { onDelete: "RESTRICT", nullable: true })
-  @JoinColumn({ name: "arabProcId" })
-  arabProc?: ArabProcEntity;
-
   // Department this surgery belongs to (FK → departments). Dept-scoped; nullable during rollout
   // (an active bulk external-import path would break under NOT NULL). Existing rows backfilled NS.
   @Column({ type: "uuid", nullable: true })
   departmentId?: string;
 
-  // Modern procedure link (FK → proc_cpts). Nullable: many surgeries have no procedure, and
-  // existing rows are backfilled from arab_procs via the reviewed semantic mapping. Transitional
-  // alongside the legacy `arabProcId` until arab_procs is retired.
+  // Procedure link (FK → proc_cpts, hub-mirrored with EN + AR titles). Nullable: many surgeries
+  // have no procedure recorded. Denormalized copy stamped from the clerk_procs row at creation
+  // so downstream consumers (dashboard/subs/PDF/analytics) read one stable relation.
   @Column({ type: "uuid", nullable: true })
   procCptId?: string;
+
+  // What the clerk actually entered (learning pipeline). NULL = surgery logged no procedure.
+  @Column({ type: "uuid", nullable: true })
+  clerkProcId?: string | null;
+
+  @ManyToOne(() => ClerkProcEntity, { onDelete: "SET NULL", nullable: true })
+  @JoinColumn({ name: "clerkProcId" })
+  clerkProc?: ClerkProcEntity;
+
+  @ManyToOne(() => ProcCptEntity, { onDelete: "RESTRICT", nullable: true })
+  @JoinColumn({ name: "procCptId" })
+  procCpt?: ProcCptEntity;
 
   @Column({ type: "date" })
   procDate!: Date;
