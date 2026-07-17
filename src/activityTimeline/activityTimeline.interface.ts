@@ -9,6 +9,8 @@ export interface IActivityTimelineItem {
     submissionId?: string;
     subStatus?: string;
     patientName?: string | null;
+    patientNameAr?: string | null;
+    patientNameEn?: string | null;
     procedureName?: string[];
     eventId?: string;
     eventType?: string;

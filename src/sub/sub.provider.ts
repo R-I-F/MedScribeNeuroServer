@@ -1824,15 +1824,19 @@ export class SubProvider {
     const candidateEmail = candidate?.email || "N/A";
     const candidatePhone = candidate?.phoneNum || "N/A";
     
-    // Procedure details (calSurg relation)
+    // Procedure details (calSurg relation) — bilingual at ALL levels (plan §3.5/Q5):
+    // patient name + clerk phrase each rendered in both languages, like the hospital lines.
     const procDoc = subAny.calSurg;
     const hospital = procDoc?.hospital;
     const hospitalEngName = hospital?.engName || "N/A";
     const hospitalArabName = hospital?.arabName || "N/A";
     const procCpt = procDoc?.procCpt;
-    const arabProcTitle = procCpt?.arTitle || procCpt?.title || "N/A";
+    const clerkProc = procDoc?.clerkProc;
+    const arabProcTitle = clerkProc?.titleAr || clerkProc?.title || procCpt?.arTitle || procCpt?.title || "N/A";
+    const engProcTitle = clerkProc?.titleEn || procCpt?.title || clerkProc?.title || "N/A";
     const procDate = procDoc?.procDate ? new Date(procDoc.procDate).toLocaleDateString() : "N/A";
-    const patientName = procDoc?.patientName || "N/A";
+    const patientNameEn = procDoc?.patientNameEn || procDoc?.patientName || "N/A";
+    const patientNameAr = procDoc?.patientNameAr || procDoc?.patientName || "N/A";
     const patientDob = procDoc?.patientDob ? new Date(procDoc.patientDob).toLocaleDateString() : "N/A";
     const patientGender = procDoc?.gender || "N/A";
     
@@ -1927,10 +1931,12 @@ export class SubProvider {
                 <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Procedure Date:</strong> ${procDate}</p>
                 <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Hospital (English):</strong> ${hospitalEngName}</p>
                 <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Hospital (Arabic):</strong> ${hospitalArabName}</p>
-                <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Patient Name:</strong> ${patientName}</p>
+                <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Patient Name (English):</strong> ${patientNameEn}</p>
+                <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Patient Name (Arabic):</strong> <span dir="auto">${patientNameAr}</span></p>
                 <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Patient Date of Birth:</strong> ${patientDob}</p>
                 <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Patient Gender:</strong> ${patientGender}</p>
-                <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Arabic Procedure Title:</strong> ${arabProcTitle}</p>
+                <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Procedure Title (English):</strong> ${engProcTitle}</p>
+                <p style="margin: 0 0 6px; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">Procedure Title (Arabic):</strong> <span dir="auto">${arabProcTitle}</span></p>
                 <p style="margin: 0; font-size: 1rem; color: #4b5563;"><strong style="color: #374151;">All Procedure Names:</strong> ${procedureNames}</p>
               </div>
 
@@ -2036,9 +2042,13 @@ export class SubProvider {
     const hospitalEngName = hospital?.engName || "N/A";
     const hospitalArabName = hospital?.arabName || "N/A";
     const procCpt = procDoc?.procCpt;
-    const arabProcTitle = procCpt?.arTitle || procCpt?.title || "N/A";
+    // Bilingual at ALL levels (plan §3.5/Q5): clerk phrase + patient name in both languages.
+    const clerkProc = procDoc?.clerkProc;
+    const arabProcTitle = clerkProc?.titleAr || clerkProc?.title || procCpt?.arTitle || procCpt?.title || "N/A";
+    const engProcTitle = clerkProc?.titleEn || procCpt?.title || clerkProc?.title || "N/A";
     const procDate = procDoc?.procDate ? new Date(procDoc.procDate).toLocaleDateString() : "N/A";
-    const patientName = procDoc?.patientName || "N/A";
+    const patientNameEn = procDoc?.patientNameEn || procDoc?.patientName || "N/A";
+    const patientNameAr = procDoc?.patientNameAr || procDoc?.patientName || "N/A";
     const patientDob = procDoc?.patientDob ? new Date(procDoc.patientDob).toLocaleDateString() : "N/A";
     const patientGender = procDoc?.gender || "N/A";
     
@@ -2107,10 +2117,12 @@ export class SubProvider {
     text += `Procedure Date: ${procDate}\n`;
     text += `Hospital (English): ${hospitalEngName}\n`;
     text += `Hospital (Arabic): ${hospitalArabName}\n`;
-    text += `Patient Name: ${patientName}\n`;
+    text += `Patient Name (English): ${patientNameEn}\n`;
+    text += `Patient Name (Arabic): ${patientNameAr}\n`;
     text += `Patient Date of Birth: ${patientDob}\n`;
     text += `Patient Gender: ${patientGender}\n`;
-    text += `Arabic Procedure Title: ${arabProcTitle}\n`;
+    text += `Procedure Title (English): ${engProcTitle}\n`;
+    text += `Procedure Title (Arabic): ${arabProcTitle}\n`;
     text += `All Procedure Names: ${procedureNames}\n\n`;
     
     text += `═══════════════════════════════════════════════════════════\n`;

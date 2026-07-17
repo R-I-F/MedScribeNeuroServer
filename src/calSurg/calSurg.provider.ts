@@ -7,6 +7,7 @@ import { UtilService } from "../utils/utils.service";
 import { HospitalService } from "../hospital/hospital.service";
 import { IHospitalDoc } from "../hospital/hospital.interface";
 import { ClerkProcService } from "../clerkProc/clerkProc.service";
+import { ClerkProcEntity } from "../clerkProc/clerkProc.mDbSchema";
 import { PatientNameService } from "./patientName.service";
 import { DataSource } from "typeorm";
 
@@ -34,33 +35,84 @@ export class CalSurgProvider {
   ) {}
 
   /**
-   * Webapp create path (plan §2 + §6): resolve the clerk's phrase through the learning
-   * pipeline (clerk_procs), fill the bilingual patient-name slots, then persist. The
-   * surgery saves even when the hub search or Gemini fail (unresolved fields stay NULL).
+   * Webapp create path — INSTANT SAVE (bilingual-titles plan §3.6): everything synchronous
+   * is local DB work (find-or-insert the clerk_procs row, typed-language slots, persist);
+   * the hub semantic resolution and ALL Gemini translations run fire-and-forget after the
+   * response. Failed enrichment leaves slots NULL — retried on the next encounter.
    */
   public async createCalSurgFromClerkInput(input: ICalSurgClerkInput, dataSource: DataSource): Promise<ICalSurgDoc> {
     const departmentId = input.departmentId ?? (await this.getDefaultDepartmentId(dataSource));
 
+    // Local-only learning step: known phrase = reuse (zero tokens); new phrase = insert with
+    // the typed-language title slot filled verbatim. No hub, no AI — the save never waits.
     const clerkProc = departmentId
       ? await this.clerkProcService.resolveOrCreate(input.procedureText, departmentId, input.clerkId, dataSource)
       : null;
 
-    const names = await this.patientNameService.bilingual(input.patientName);
+    // Privacy format (plan Q8) applied server-side, then the free typed-language name slot.
+    const storedName = this.utilService.formatPatientNameForStore(this.utilService.sanitizeName(input.patientName));
+    const typedName = this.patientNameService.typedSlot(storedName);
 
     const payload: ICalSurg = {
       timeStamp: new Date(),
-      patientName: input.patientName,
-      patientNameAr: names.ar,
-      patientNameEn: names.en,
+      patientName: storedName,
+      patientNameAr: typedName.ar,
+      patientNameEn: typedName.en,
       patientDob: input.patientDob ?? input.surgeryDate,
       gender: input.gender,
       hospital: input.hospital,
-      procCpt: clerkProc?.procCptId ?? undefined,
+      procCpt: clerkProc?.procCptId ?? undefined, // known phrase → immediate; new → filled by enrichment
       clerkProcId: clerkProc?.id ?? null,
+      clerkId: input.clerkId, // who registered it (plan §4.4)
       procDate: input.surgeryDate,
       departmentId: departmentId ?? undefined,
     };
-    return this.createCalSurg(payload, dataSource);
+    const created = await this.createCalSurg(payload, dataSource);
+
+    // Fire-and-forget enrichment: hub resolution + title translation + name transliteration.
+    setImmediate(() => {
+      void this.enrichCalSurgInBackground(created.id, clerkProc, storedName, dataSource);
+    });
+    return created;
+  }
+
+  /**
+   * Background half of the instant-save split (§3.6). Never throws; every failure leaves
+   * a NULL slot behind, healed opportunistically the next time the phrase/name is seen.
+   */
+  private async enrichCalSurgInBackground(
+    calSurgId: string,
+    clerkProc: ClerkProcEntity | null,
+    storedName: string,
+    dataSource: DataSource
+  ): Promise<void> {
+    try {
+      if (clerkProc) {
+        await this.clerkProcService.enrich(clerkProc, dataSource);
+        if (clerkProc.procCptId) {
+          await dataSource.query(
+            `UPDATE "cal_surgs" SET "procCptId" = $1 WHERE "id" = $2 AND "procCptId" IS NULL`,
+            [clerkProc.procCptId, calSurgId]
+          );
+        }
+      }
+      await this.fillNameSlotsInBackground(calSurgId, storedName, dataSource);
+    } catch (err: any) {
+      console.warn(`[CalSurg] background enrichment failed for ${calSurgId} (slots stay NULL, retryable): ${err?.message ?? err}`);
+    }
+  }
+
+  /** Fill the missing bilingual name slot for one row (COALESCE keeps anything already set). */
+  private async fillNameSlotsInBackground(calSurgId: string, storedName: string, dataSource: DataSource): Promise<void> {
+    try {
+      const names = await this.patientNameService.bilingual(storedName);
+      await dataSource.query(
+        `UPDATE "cal_surgs" SET "patientNameAr" = COALESCE($1, "patientNameAr"), "patientNameEn" = COALESCE($2, "patientNameEn") WHERE "id" = $3`,
+        [names.ar, names.en, calSurgId]
+      );
+    } catch (err: any) {
+      console.warn(`[CalSurg] background name transliteration failed for ${calSurgId} (slot stays NULL): ${err?.message ?? err}`);
+    }
   }
 
   /** Default department (REF_DEPT_CODE, NS) resolved against the mirror. */
@@ -70,9 +122,17 @@ export class CalSurgProvider {
     return rows[0]?.id ?? null;
   }
 
-  /** Learned clerk phrases for the default department (create-form typeahead). */
-  public async getClerkProcs(dataSource: DataSource) {
-    const departmentId = await this.getDefaultDepartmentId(dataSource);
+  /**
+   * Learned clerk phrases for the create-form typeahead. Department resolution mirrors the
+   * create path: the caller's JWT department claim → an explicit deptCode → the NS default.
+   */
+  public async getClerkProcs(dataSource: DataSource, jwtDepartmentId?: string, deptCode?: string) {
+    let departmentId = jwtDepartmentId ?? null;
+    if (!departmentId && deptCode) {
+      const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [deptCode]);
+      departmentId = rows[0]?.id ?? null;
+    }
+    if (!departmentId) departmentId = await this.getDefaultDepartmentId(dataSource);
     if (!departmentId) return [];
     return this.clerkProcService.listByDepartment(departmentId, dataSource);
   }
@@ -277,7 +337,8 @@ export class CalSurgProvider {
     // Business logic: Transform data as needed
     const processedData: ICalSurg = {
       timeStamp: calSurgData.timeStamp,
-      patientName: this.utilService.sanitizeName(calSurgData.patientName), // Sanitize patient name
+      // Sanitize + enforce the privacy format (complete first name + initials, plan Q8)
+      patientName: this.utilService.formatPatientNameForStore(this.utilService.sanitizeName(calSurgData.patientName)),
       patientNameAr: calSurgData.patientNameAr,
       patientNameEn: calSurgData.patientNameEn,
       patientDob: calSurgData.patientDob,
@@ -285,6 +346,7 @@ export class CalSurgProvider {
       hospital: calSurgData.hospital,
       procCpt: calSurgData.procCpt,
       clerkProcId: calSurgData.clerkProcId,
+      clerkId: calSurgData.clerkId,
       departmentId: calSurgData.departmentId,
       procDate: calSurgData.procDate,
       google_uid: calSurgData.google_uid,
@@ -450,14 +512,28 @@ export class CalSurgProvider {
       // Business logic: Validate ID format
       this.validateObjectId(id);
 
-      // Business logic: Process update data (sanitize patient name if provided)
+      // Business logic: Process update data (sanitize + privacy-format the name if provided)
       const processedUpdateData: Partial<ICalSurg> = { ...updateData };
       if (updateData.patientName !== undefined) {
-        processedUpdateData.patientName = this.utilService.sanitizeName(updateData.patientName);
+        const storedName = this.utilService.formatPatientNameForStore(this.utilService.sanitizeName(updateData.patientName));
+        processedUpdateData.patientName = storedName;
+        // An edited name invalidates the stored bilingual slots: set the typed slot now
+        // (free), NULL the other so it can never go stale, and refill it in the background
+        // (instant-save split, plan §3.6).
+        const typed = this.patientNameService.typedSlot(storedName);
+        processedUpdateData.patientNameAr = typed.ar;
+        processedUpdateData.patientNameEn = typed.en;
       }
 
       // Call service to update calSurg
       const updatedCalSurg = await this.calSurgService.updateCalSurg(id, processedUpdateData, dataSource);
+
+      if (processedUpdateData.patientName !== undefined) {
+        const storedName = processedUpdateData.patientName;
+        setImmediate(() => {
+          void this.fillNameSlotsInBackground(id, storedName, dataSource);
+        });
+      }
 
       return updatedCalSurg;
     } catch (error: any) {

@@ -4,7 +4,7 @@ import {
   getInstitutionById,
   type IInstitution,
 } from "../institution/institution.service";
-import { DataSourceManager } from "../config/datasource.manager";
+import { AppDataSource, initializeDatabase } from "../config/database.config";
 import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { WaBotService } from "./waBot.service";
@@ -527,7 +527,10 @@ export class WaBotProvider {
       return;
     }
 
-    const ds = await DataSourceManager.getInstance().getDataSource(institutionId);
+    if (!AppDataSource.isInitialized) {
+      await initializeDatabase();
+    }
+    const ds = AppDataSource;
 
     const candidate = await this.candService.getCandByPhoneDigits(digits, ds);
     if (candidate) {

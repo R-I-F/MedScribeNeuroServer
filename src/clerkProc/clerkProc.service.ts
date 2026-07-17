@@ -3,24 +3,35 @@ import { DataSource } from "typeorm";
 import { ClerkProcEntity } from "./clerkProc.mDbSchema";
 import { RefApiClient } from "../refApi/refApi.client";
 import { IRefProcSearchHit } from "../refApi/refApi.types";
+import { ProcPhraseService } from "./procPhrase.service";
 
 /**
- * The clerk-procedure learning pipeline (docs/CLERK_PROCS_LEARNING_PIPELINE_PLAN.md §2).
+ * The clerk-procedure learning pipeline (docs/CLERK_PROCS_LEARNING_PIPELINE_PLAN.md §2 +
+ * docs/CLERK_PROCS_BILINGUAL_TITLES_AND_DELTA_SYNC_PLAN.md §2/§3.6).
  *
- * resolveOrCreate(): looks the normalized phrase up per department; on first sight it runs
- * ONE hub semantic search and stores the best proc_cpt + its main diagnosis + the score.
- * Repeats reuse the stored row — no re-search, no token spend. The clerk flow NEVER blocks
- * on the hub: search failure leaves the row unresolved (retryable on the next encounter).
+ * Instant-save split (§3.6):
+ *   resolveOrCreate() — SYNCHRONOUS, local-only: find-or-insert the phrase row per
+ *     (departmentId, normalized title), typed-language title slot filled verbatim (free).
+ *     No hub call, no AI — the clerk's save never waits.
+ *   enrich() — BACKGROUND (fire-and-forget from the provider): ONE dept-scoped hub semantic
+ *     search per new phrase (department narrowing happens INSIDE the hub query, before the
+ *     cosine ranking — plan §2.0) + ONE translation for the missing title slot. Repeats of a
+ *     known phrase reuse the stored row — no re-search, no re-translation, zero token spend.
+ *   Failures leave the slots NULL — retried opportunistically on the next encounter.
  */
 @injectable()
 export class ClerkProcService {
-  constructor(@inject(RefApiClient) private refApiClient: RefApiClient) {}
+  constructor(
+    @inject(RefApiClient) private refApiClient: RefApiClient,
+    @inject(ProcPhraseService) private procPhraseService: ProcPhraseService
+  ) {}
 
   /** Trim + collapse internal whitespace; original script/casing kept. */
   public static normalizeTitle(raw: string): string {
     return (raw ?? "").trim().replace(/\s+/g, " ");
   }
 
+  /** Synchronous learning step: find-or-insert the phrase row. Local DB work only. */
   public async resolveOrCreate(
     rawTitle: string,
     departmentId: string,
@@ -33,18 +44,29 @@ export class ClerkProcService {
     const repo = dataSource.getRepository(ClerkProcEntity);
 
     const existing = await repo.findOne({ where: { departmentId, title } });
-    if (existing) {
-      // Learned already. If a past resolution failed, retry it opportunistically.
-      if (!existing.procCptId) {
-        await this.tryResolve(existing, dataSource);
-      }
-      return existing;
-    }
+    if (existing) return existing; // learned already — reuse, zero tokens
 
-    const row = repo.create({ title, departmentId, clerkId });
+    const typedIsArabic = ProcPhraseService.isArabic(title);
+    const row = repo.create({
+      title,
+      departmentId,
+      clerkId,
+      titleAr: typedIsArabic ? title : null,
+      titleEn: typedIsArabic ? null : title,
+    });
     await repo.save(row);
-    await this.tryResolve(row, dataSource);
     return row;
+  }
+
+  /**
+   * Background enrichment: hub semantic resolution (if unresolved) + missing-title-slot
+   * translation. Opportunistically retries past failures. Never throws.
+   */
+  public async enrich(row: ClerkProcEntity, dataSource: DataSource): Promise<void> {
+    if (!row.procCptId) {
+      await this.tryResolve(row, dataSource);
+    }
+    await this.tryTranslateTitle(row, dataSource);
   }
 
   /**
@@ -95,6 +117,43 @@ export class ClerkProcService {
     }
   }
 
+  /**
+   * Fill the missing bilingual title slot (ONE translation per new phrase — plan §2.3).
+   * Also heals legacy rows created before the bilingual columns (typed slot backfilled free).
+   * Never throws: a failed translation leaves the slot NULL, retryable.
+   */
+  private async tryTranslateTitle(row: ClerkProcEntity, dataSource: DataSource): Promise<void> {
+    try {
+      const typedIsArabic = ProcPhraseService.isArabic(row.title);
+      let dirty = false;
+      if (typedIsArabic && !row.titleAr) {
+        row.titleAr = row.title;
+        dirty = true;
+      }
+      if (!typedIsArabic && !row.titleEn) {
+        row.titleEn = row.title;
+        dirty = true;
+      }
+
+      const missing: "ar" | "en" | null = !row.titleEn ? "en" : !row.titleAr ? "ar" : null;
+      if (missing) {
+        const map = await this.procPhraseService.translateBatch([row.title], missing);
+        const translated = map.get(row.title) ?? null;
+        if (translated) {
+          if (missing === "en") row.titleEn = translated;
+          else row.titleAr = translated;
+          dirty = true;
+        }
+      }
+
+      if (dirty) await dataSource.getRepository(ClerkProcEntity).save(row);
+    } catch (err: any) {
+      console.warn(
+        `[ClerkProc] title translation failed for "${row.title}" (slot stays NULL, retryable): ${err?.message ?? err}`
+      );
+    }
+  }
+
   private async getDeptCode(departmentId: string, dataSource: DataSource): Promise<string | null> {
     const rows = await dataSource.query(`SELECT "code" FROM "departments" WHERE "id" = $1`, [departmentId]);
     return rows[0]?.code ?? null;
@@ -103,7 +162,7 @@ export class ClerkProcService {
   /** Typeahead source: the department's learned phrases with their resolved context. */
   public async listByDepartment(departmentId: string, dataSource: DataSource) {
     return dataSource.query(
-      `SELECT cp."id", cp."title", cp."matchScore",
+      `SELECT cp."id", cp."title", cp."titleAr", cp."titleEn", cp."matchScore",
               p."title" AS "procTitle", p."arTitle" AS "procArTitle", p."alphaCode"
          FROM "clerk_procs" cp
          LEFT JOIN "proc_cpts" p ON p."id" = cp."procCptId"

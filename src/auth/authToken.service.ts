@@ -38,7 +38,7 @@ export class AuthTokenService {
     console.log(`  Refresh Token: ${refreshExpireTimeInSeconds} seconds`);
   }
 
-  public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string; institutionId?: string; departmentId?: string }): Promise<string> {
+  public async sign(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string; departmentId?: string }): Promise<string> {
     try {
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
       const userId = user.id || user._id || "";
@@ -53,12 +53,8 @@ export class AuthTokenService {
         _id: userId,     // Keep for backward compatibility
       };
 
-      // Include institutionId if provided (for multi-tenant support)
-      if (user.institutionId) {
-        payload.institutionId = user.institutionId;
-      }
-
-      // Include departmentId if provided (multi-department institute; reads default to it)
+      // Include departmentId if provided (multi-department institute; reads default to it).
+      // NOTE: single-institution KA spoke — there is NO institutionId claim anymore.
       if (user.departmentId) {
         payload.departmentId = user.departmentId;
       }
@@ -86,7 +82,7 @@ export class AuthTokenService {
   /**
    * Sign a refresh token with longer expiration
    */
-  public async signRefreshToken(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string; institutionId?: string; departmentId?: string }): Promise<string> {
+  public async signRefreshToken(user: Pick<IAuth, "email"> & { role: TUserRole; id?: string; _id?: string; departmentId?: string }): Promise<string> {
     try {
       // Support both 'id' (UUID) and '_id' (ObjectId) for backward compatibility
       const userId = user.id || user._id || "";
@@ -102,12 +98,8 @@ export class AuthTokenService {
         type: "refresh",
       };
 
-      // Include institutionId if provided (for multi-tenant support)
-      if (user.institutionId) {
-        payload.institutionId = user.institutionId;
-      }
-
-      // Include departmentId if provided (multi-department institute; reads default to it)
+      // Include departmentId if provided (multi-department institute; reads default to it).
+      // NOTE: single-institution KA spoke — there is NO institutionId claim anymore.
       if (user.departmentId) {
         payload.departmentId = user.departmentId;
       }

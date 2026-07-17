@@ -20,6 +20,7 @@ export class CalSurgService {
         hospitalId: calSurgData.hospital,
         procCptId: calSurgData.procCpt,
         clerkProcId: calSurgData.clerkProcId,
+        clerkId: calSurgData.clerkId,
         departmentId: calSurgData.departmentId,
         procDate: calSurgData.procDate,
         google_uid: calSurgData.google_uid,
@@ -54,6 +55,7 @@ export class CalSurgService {
         hospitalId: data.hospital,
         procCptId: data.procCpt,
         clerkProcId: data.clerkProcId,
+        clerkId: data.clerkId,
         departmentId: data.departmentId,
         procDate: data.procDate,
         google_uid: data.google_uid,
@@ -153,8 +155,11 @@ export class CalSurgService {
         hospital: rest.hospital ? { _id: rest.hospital.id, engName: rest.hospital.engName, arabName: rest.hospital.arabName } : undefined,
         // Procedure (proc_cpts, hub-mirrored, EN title + AR arTitle). Absent when no procedure recorded.
         procCpt: rest.procCpt ? { _id: rest.procCpt.id, title: rest.procCpt.title, arTitle: rest.procCpt.arTitle, numCode: rest.procCpt.numCode, alphaCode: rest.procCpt.alphaCode } : undefined,
-        // What the clerk actually typed (learning pipeline) — the calendar's AR-mode display.
-        clerkProc: rest.clerkProc ? { _id: rest.clerkProc.id, title: rest.clerkProc.title } : undefined,
+        // What the clerk actually typed (learning pipeline), in both languages — the calendar
+        // shows the phrase per UI language (AR: titleAr, EN: titleEn; plan §2.5).
+        clerkProc: rest.clerkProc
+          ? { _id: rest.clerkProc.id, title: rest.clerkProc.title, titleAr: rest.clerkProc.titleAr, titleEn: rest.clerkProc.titleEn }
+          : undefined,
       };
     });
   }
@@ -358,6 +363,8 @@ export class CalSurgService {
       const entityUpdateData: any = {};
       if (updateData.timeStamp !== undefined) entityUpdateData.timeStamp = updateData.timeStamp;
       if (updateData.patientName !== undefined) entityUpdateData.patientName = updateData.patientName;
+      if (updateData.patientNameAr !== undefined) entityUpdateData.patientNameAr = updateData.patientNameAr;
+      if (updateData.patientNameEn !== undefined) entityUpdateData.patientNameEn = updateData.patientNameEn;
       if (updateData.patientDob !== undefined) entityUpdateData.patientDob = updateData.patientDob;
       if (updateData.gender !== undefined) entityUpdateData.gender = updateData.gender;
       if (updateData.hospital !== undefined) entityUpdateData.hospitalId = updateData.hospital;

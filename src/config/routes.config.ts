@@ -78,10 +78,31 @@ export function addRoutes(app: Application) {
   const { RefResyncRouter } = require("../refApi/refResync.router");
   const refResyncRouter = container.get(RefResyncRouter) as any;
 
-  const { healthRateLimiter } = require("../middleware/rateLimiter.middleware");
+  const { healthRateLimiter, apiRateLimiter } = require("../middleware/rateLimiter.middleware");
+  const { getInstitution } = require("../institution/institution.service");
   // Health check: use GET /health for load balancer / k8s probes. Rate-limited to throttle bot traffic.
   // Unhandled GET / and POST / return 404 (bots/scanners get 404, not 200).
   app.get("/health", healthRateLimiter, (_req: any, res: any) => res.status(200).json({ status: "ok" }));
+
+  // GET /institution — public: the single institution's identity + feature flags. Replaces the
+  // retired multi-tenant GET /institutions; the frontend fetches this once to gate academic/
+  // practical/clinical UI. No JWT (like GET /departments); rate-limited.
+  app.get("/institution", apiRateLimiter, async (_req: any, res: any) => {
+    try {
+      const inst = await getInstitution();
+      res.status(200).json({
+        id: inst.id,
+        code: inst.code,
+        name: inst.name,
+        department: inst.department,
+        isAcademic: inst.isAcademic,
+        isPractical: inst.isPractical,
+        isClinical: inst.isClinical,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message ?? "Failed to load institution" });
+    }
+  });
 
   app.use("/hospital", hospitalRouter.router);
   app.use("/calSurg", calSurgRouter.router);

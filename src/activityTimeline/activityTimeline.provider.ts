@@ -52,6 +52,9 @@ export class ActivityTimelineProvider {
           submissionId: s.id,
           subStatus: s.subStatus,
           patientName: calSurg?.patientName ?? null,
+          // Bilingual slots so the dashboard timeline can follow the UI language (plan §3.5).
+          patientNameAr: calSurg?.patientNameAr ?? null,
+          patientNameEn: calSurg?.patientNameEn ?? null,
           procedureName: (s as any).procedureName ?? [],
         },
       });

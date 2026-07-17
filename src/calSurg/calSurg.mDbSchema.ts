@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { HospitalEntity } from "../hospital/hospital.mDbSchema";
 import { ProcCptEntity } from "../procCpt/procCpt.mDbSchema";
 import { ClerkProcEntity } from "../clerkProc/clerkProc.mDbSchema";
+import { ClerkEntity } from "../clerk/clerk.mDbSchema";
 
 @Entity("cal_surgs")
 export class CalSurgEntity {
@@ -56,6 +57,15 @@ export class CalSurgEntity {
   @ManyToOne(() => ProcCptEntity, { onDelete: "RESTRICT", nullable: true })
   @JoinColumn({ name: "procCptId" })
   procCpt?: ProcCptEntity;
+
+  // Who registered this surgery (plan §4.4). Historic rows backfilled to the single legacy
+  // clerk; new rows stamped from the authenticated clerk's JWT. NULL only if the clerk is deleted.
+  @Column({ type: "uuid", nullable: true })
+  clerkId?: string | null;
+
+  @ManyToOne(() => ClerkEntity, { onDelete: "SET NULL", nullable: true })
+  @JoinColumn({ name: "clerkId" })
+  clerk?: ClerkEntity;
 
   @Column({ type: "date" })
   procDate!: Date;

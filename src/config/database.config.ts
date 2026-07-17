@@ -30,6 +30,7 @@ import { ClinicalSubEntity } from "../clinicalSub/clinicalSub.mDbSchema";
 import { WhatsappSessionEntity } from "../waBot/whatsappSession.mDbSchema";
 import { DepartmentEntity } from "../departments/department.mDbSchema";
 import { LectureTopicEntity } from "../lecture/lectureTopic.mDbSchema";
+import { InstitutionEntity } from "../institution/institution.mDbSchema";
 
 dotenv.config();
 
@@ -86,6 +87,7 @@ function getDbConfig(): DataSourceOptions {
       WhatsappSessionEntity,
       DepartmentEntity,
       LectureTopicEntity,
+      InstitutionEntity,
     ],
     migrations: [
       __dirname + "/../migrations-ka/*.ts",
@@ -100,7 +102,7 @@ function getDbConfig(): DataSourceOptions {
 
 // Create and export the DataSource instance.
 // This is the single application datasource (the KA `ka-institute` database). In
-// single-institution mode, DataSourceManager.getDataSource() and every request resolve here.
+// single-institution mode, every request and service resolves to this one connection.
 export const AppDataSource = new DataSource(getDbConfig());
 
 // Initialize database connection
@@ -131,6 +133,9 @@ export async function closeDatabase(): Promise<void> {
 
 // Validate environment variables for the single-institution (KA spoke) connection.
 export function validateDatabaseConfig(): void {
+  // NB: INSTITUTION_ID / INSTITUTION_* env vars are no longer required — the institution
+  // (id + feature flags) is a DB row (`institutions` table), loaded by institution.service.
+  // Those env vars are now inert and may be pruned from env files at the operator's discretion.
   const required = [
     "PSQL_HOST",
     "PSQL_PORT",
@@ -138,7 +143,6 @@ export function validateDatabaseConfig(): void {
     "PSQL_USERNAME",
     "PSQL_PASSWORD",
     "SSL_CA_PATH",
-    "INSTITUTION_ID",
   ];
   const missing = required.filter((k) => !process.env[k]);
 

@@ -11,7 +11,6 @@ import { requestLogger } from "./middleware/requestLogger.middleware";
 import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware";
 import { globalIpRateLimiter } from "./middleware/rateLimiter.middleware";
 import { initializeDatabase, validateDatabaseConfig, closeDatabase } from "./config/database.config";
-import { DataSourceManager } from "./config/datasource.manager";
 import { getAllActiveInstitutions } from "./institution/institution.service";
 import { container } from "./config/container.config";
 import { RefDataService } from "./refApi/refData.service";
@@ -96,7 +95,6 @@ async function gracefulShutdown(): Promise<void> {
       server = null;
     }
     refData?.stopPolling();
-    await DataSourceManager.getInstance().closeAll();
     await closeDatabase();
     console.log("[App] Shutdown complete");
     process.exit(0);

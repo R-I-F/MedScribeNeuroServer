@@ -12,6 +12,7 @@ export interface ICalSurg {
   google_uid?: string;
   formLink?: string;
   departmentId?: string; // FK → departments; surgeries are dept-scoped (nullable during rollout)
+  clerkId?: string | null; // FK → clerks; who registered the surgery (plan §4.4)
 }
 
 export interface ICalSurgDoc extends ICalSurg {

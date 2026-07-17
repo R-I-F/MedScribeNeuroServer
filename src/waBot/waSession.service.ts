@@ -1,6 +1,6 @@
 import { injectable } from "inversify";
-import { DataSourceManager } from "../config/datasource.manager";
-import { getStaticInstitution } from "../institution/institution.service";
+import { AppDataSource, initializeDatabase } from "../config/database.config";
+import { getInstitution } from "../institution/institution.service";
 import { WhatsappSessionEntity } from "./whatsappSession.mDbSchema";
 import {
   WA_CONV_AWAITING_ID,
@@ -24,7 +24,15 @@ export class WaSessionService {
    * institution. The former defaultdb `wa_session_routing` lookup table is gone.
    */
   public async getRoutedInstitutionId(_waFrom: string): Promise<string | null> {
-    return getStaticInstitution().id;
+    return (await getInstitution()).id;
+  }
+
+  /** The single KA database. There is one institution, so no per-tenant routing. */
+  private async ds() {
+    if (!AppDataSource.isInitialized) {
+      await initializeDatabase();
+    }
+    return AppDataSource;
   }
 
   /** No-op in single-institution mode — there is only one tenant to route to. */
@@ -36,7 +44,7 @@ export class WaSessionService {
     institutionId: string,
     waFrom: string,
   ): Promise<WhatsappSessionEntity | null> {
-    const ds = await DataSourceManager.getInstance().getDataSource(institutionId);
+    const ds = await this.ds();
     return ds.getRepository(WhatsappSessionEntity).findOne({ where: { waFrom } });
   }
 
@@ -44,7 +52,7 @@ export class WaSessionService {
     institutionId: string,
     session: WhatsappSessionEntity,
   ): Promise<void> {
-    const ds = await DataSourceManager.getInstance().getDataSource(institutionId);
+    const ds = await this.ds();
     await ds.getRepository(WhatsappSessionEntity).save(session);
   }
 
@@ -55,7 +63,7 @@ export class WaSessionService {
     institutionId: string,
     waFrom: string,
   ): Promise<WhatsappSessionEntity> {
-    const ds = await DataSourceManager.getInstance().getDataSource(institutionId);
+    const ds = await this.ds();
     const repo = ds.getRepository(WhatsappSessionEntity);
     let row = await repo.findOne({ where: { waFrom } });
     if (!row) {

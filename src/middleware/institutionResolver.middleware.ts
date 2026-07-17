@@ -1,20 +1,24 @@
 import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
-import { DataSourceManager } from "../config/datasource.manager";
-import { getInstitutionById, getStaticInstitution } from "../institution/institution.service";
+import { AppDataSource, initializeDatabase } from "../config/database.config";
+import { getInstitution } from "../institution/institution.service";
 
-const NAMESPACE = "InstitutionResolver";
+const NAMESPACE = "InstitutionContext";
 
 /**
- * Institution Resolver Middleware
- * 
- * Resolves the institution context for each request:
- * 1. Extracts institutionId from JWT (primary) or header/query (fallback)
- * 2. Validates institution exists and is active
- * 3. Gets DataSource from connection pool
- * 4. Attaches to request for use in controllers/services
- * 
- * Middleware order: extractJWT → institutionResolver → authorize → rateLimit → handler
+ * Institution context middleware (single-institution KA spoke).
+ *
+ * Multi-tenancy is gone — there is nothing to "resolve". This simply attaches the one
+ * institution (loaded once from the DB and cached) and the single `AppDataSource` to the
+ * request, so the controller call sites that read `req.institutionDataSource` / `req.institution`
+ * keep working unchanged.
+ *
+ * `req.institutionId` / `req.institutionDepartment` are still populated (from the DB row) for
+ * backward compatibility, but they are now derived CONSTANTS — not a per-request routing key.
+ *
+ * (Formerly this extracted an institutionId from JWT/header/query, validated it, and picked a
+ * per-tenant DataSource via `DataSourceManager` — all deleted. The export name is kept so the
+ * ~30 routers that mount it need no change.)
  */
 export async function institutionResolver(
   req: Request,
@@ -22,98 +26,25 @@ export async function institutionResolver(
   next: NextFunction
 ): Promise<void> {
   try {
-    // Allow bypass for institution selection endpoint (public)
-    if (req.path === "/institutions" || req.path.startsWith("/institutions/")) {
-      return next();
+    if (!AppDataSource.isInitialized) {
+      await initializeDatabase();
     }
 
-    // Allow bypass for auth endpoints that handle institution selection during request
-    if (req.path.startsWith("/auth/")) {
-      const authEndpoints = ["/auth/login", "/auth/loginCand", "/auth/registerCand", "/auth/registerSupervisor"];
-      if (authEndpoints.some(endpoint => req.path === endpoint || req.path.startsWith(endpoint + "/"))) {
-        // Institution will be resolved during login/register
-        return next();
-      }
-    }
+    const institution = await getInstitution();
 
-    // Extract institutionId from multiple sources (priority order)
-    let institutionId: string | undefined;
-
-    // 1. Primary: From JWT token (after extractJWT middleware)
-    if (res.locals.jwt?.institutionId) {
-      institutionId = res.locals.jwt.institutionId;
-    }
-
-    // 2. Fallback: From header (for pre-login requests or API clients)
-    if (!institutionId) {
-      institutionId = req.get("X-Institution-Id") || undefined;
-    }
-
-    // 3. Fallback: From query parameter (for initial requests)
-    if (!institutionId && req.query.institutionId) {
-      institutionId = req.query.institutionId as string;
-    }
-
-    // Single-institution (KA spoke) mode: if no institutionId was supplied, default to the
-    // static pinned institution instead of rejecting the request. Any supplied id is accepted
-    // and ignored downstream (getInstitutionById / getDataSource resolve to the static row).
-    if (!institutionId) {
-      institutionId = getStaticInstitution().id;
-    }
-
-    // Validate institution exists
-    const institution = await getInstitutionById(institutionId);
-    if (!institution) {
-      res.status(StatusCodes.NOT_FOUND).json({
-        status: "error",
-        statusCode: StatusCodes.NOT_FOUND,
-        message: "Not Found",
-        error: `Institution with ID ${institutionId} not found`
-      });
-      return;
-    }
-
-    // Validate institution is active
-    if (!institution.isActive) {
-      res.status(StatusCodes.FORBIDDEN).json({
-        status: "error",
-        statusCode: StatusCodes.FORBIDDEN,
-        message: "Forbidden",
-        error: `Institution ${institution.name} is not active`
-      });
-      return;
-    }
-
-    // Get or create DataSource for this institution (connection pooling)
-    const dataSourceManager = DataSourceManager.getInstance();
-    let dataSource: any;
-    try {
-      dataSource = await dataSourceManager.getDataSource(institutionId);
-    } catch (error: any) {
-      console.error(`[${NAMESPACE}] Failed to get DataSource for institution ${institutionId}:`, error.message);
-      res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-        status: "error",
-        statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-        message: "Internal Server Error",
-        error: "Failed to connect to institution database. Please try again later."
-      });
-      return;
-    }
-
-    // Attach to request context
-    (req as any).institutionId = institutionId;
-    (req as any).institutionDataSource = dataSource;
     (req as any).institution = institution;
+    (req as any).institutionDataSource = AppDataSource;
+    (req as any).institutionId = institution.id;
     (req as any).institutionDepartment = institution.department;
 
     next();
   } catch (error: any) {
-    console.error(`[${NAMESPACE}] Unexpected error:`, error);
+    console.error(`[${NAMESPACE}] Failed to attach institution context:`, error?.message ?? error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       status: "error",
       statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
       message: "Internal Server Error",
-      error: "Failed to resolve institution database connection"
+      error: "Failed to load institution context",
     });
   }
 }

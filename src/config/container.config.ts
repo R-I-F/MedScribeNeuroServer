@@ -15,6 +15,7 @@ import { CalSurgRouter } from "../calSurg/calSurg.router";
 import { CalSurgService } from "../calSurg/calSurg.service";
 import { CalSurgProvider } from "../calSurg/calSurg.provider";
 import { ClerkProcService } from "../clerkProc/clerkProc.service";
+import { ProcPhraseService } from "../clerkProc/procPhrase.service";
 import { PatientNameService } from "../calSurg/patientName.service";
 
 import { CandController } from "../cand/cand.controller";
@@ -161,6 +162,7 @@ container.bind(CalSurgRouter).toSelf().inTransientScope();
 container.bind(CalSurgService).toSelf().inTransientScope();
 container.bind(CalSurgProvider).toSelf().inTransientScope();
 container.bind(ClerkProcService).toSelf().inTransientScope();
+container.bind(ProcPhraseService).toSelf().inTransientScope();
 container.bind(PatientNameService).toSelf().inTransientScope();
 
 container.bind(CandController).toSelf().inTransientScope();

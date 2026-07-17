@@ -75,7 +75,7 @@ export class SubService {
     try {
       const subRepository = dataSource.getRepository(SubmissionEntity);
       const allSubs = await subRepository.find({
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return allSubs as unknown as ISubDoc[];
@@ -89,7 +89,7 @@ export class SubService {
       const subRepository = dataSource.getRepository(SubmissionEntity);
       const subs = await subRepository.find({
         where: { candDocId: candidateId },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return subs as unknown as ISubDoc[];
@@ -111,7 +111,7 @@ export class SubService {
       const subRepository = dataSource.getRepository(SubmissionEntity);
       const subs = await subRepository.find({
         where: { candDocId: candidateId, subStatus: status, submissionType: "candidate" },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return subs as unknown as ISubDoc[];
@@ -151,7 +151,7 @@ export class SubService {
       const subRepository = dataSource.getRepository(SubmissionEntity);
       const subs = await subRepository.find({
         where: { supervisorDocId: supervisorId },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return subs as unknown as ISubDoc[];
@@ -177,7 +177,7 @@ export class SubService {
       }
       const subs = await subRepository.find({
         where,
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return subs as unknown as ISubDoc[];
@@ -199,7 +199,7 @@ export class SubService {
       const subRepository = dataSource.getRepository(SubmissionEntity);
       const subs = await subRepository.find({
         where: { supervisorDocId: supervisorId, subStatus: status, submissionType: "supervisor" },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return subs as unknown as ISubDoc[];
@@ -225,7 +225,7 @@ export class SubService {
       }
       const subs = await subRepository.find({
         where,
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return subs as unknown as ISubDoc[];
@@ -261,7 +261,7 @@ export class SubService {
       const subRepository = dataSource.getRepository(SubmissionEntity);
       const sub = await subRepository.findOne({
         where: { id: subId },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
       });
       if (sub) await this.attachAnswerFields(dataSource, sub as any);
       return sub as unknown as ISubDoc | null;
@@ -308,7 +308,7 @@ export class SubService {
       const subRepository = dataSource.getRepository(SubmissionEntity);
       const subs = await subRepository.find({
         where: { supervisorDocId: supervisorId, candDocId: candidateId },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
         order: { createdAt: "DESC" },
       });
       return subs as unknown as ISubDoc[];
@@ -351,7 +351,7 @@ export class SubService {
       await subRepository.update(submissionId, updateData);
       const updatedSub = await subRepository.findOne({
         where: { id: submissionId },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
       });
       return updatedSub as unknown as ISubDoc | null;
     } catch (error: any) {
@@ -367,7 +367,7 @@ export class SubService {
       }
       const sub = await subRepository.findOne({
         where: { subGoogleUid: subGoogleUid.trim() },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
       });
       return sub as unknown as ISubDoc | null;
     } catch (error: any) {
@@ -384,7 +384,7 @@ export class SubService {
       }
       const subs = await subRepository.find({
         where: { subGoogleUid: In(uniqueUids) },
-        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "supervisor", "mainDiag", "procCpts", "icds"],
+        relations: ["candidate", "calSurg", "calSurg.hospital", "calSurg.procCpt", "calSurg.clerkProc", "supervisor", "mainDiag", "procCpts", "icds"],
       });
       return subs as unknown as ISubDoc[];
     } catch (error: any) {

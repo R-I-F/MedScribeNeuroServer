@@ -43,6 +43,14 @@ export class CalSurgController {
       const jwt = (res as any).locals?.jwt;
       const clerkId: string | null = jwt?.role === "clerk" ? (jwt.id ?? jwt._id ?? null) : null;
 
+      // Department that scopes the semantic-search narrowing. Resolution order:
+      //   explicit body field (form's department picker for un-scoped clerks)
+      //   → the clerk's own assigned department (JWT claim)
+      //   → the REF_DEPT_CODE default (NS), applied in the provider.
+      // So a department-assigned clerk narrows to their department automatically; a clerk with
+      // no department must supply one via the form (see the frontend picker).
+      const departmentId: string | undefined = body.departmentId ?? jwt?.departmentId ?? undefined;
+
       const newCalSurg = await this.calSurgProvider.createCalSurgFromClerkInput(
         {
           hospital: body.hospital,
@@ -51,7 +59,7 @@ export class CalSurgController {
           procedureText: body.procedureText,
           surgeryDate: body.surgeryDate,
           patientDob: body.patientDob,
-          departmentId: body.departmentId,
+          departmentId,
           clerkId,
         },
         dataSource
@@ -68,7 +76,11 @@ export class CalSurgController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.calSurgProvider.getClerkProcs(dataSource);
+      // Typeahead follows the same department resolution as create: the caller's assigned
+      // department (JWT claim) → an explicit ?deptCode → the REF_DEPT_CODE default (NS).
+      const jwt = (res as any).locals?.jwt;
+      const deptCode = typeof req.query.deptCode === "string" ? req.query.deptCode : undefined;
+      return await this.calSurgProvider.getClerkProcs(dataSource, jwt?.departmentId, deptCode);
     } catch (err: any) {
       throw new Error(err);
     }

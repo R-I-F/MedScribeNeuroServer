@@ -43,6 +43,8 @@ function mapCalSurg(obj: unknown): PlainObject | undefined {
   const result: PlainObject = {};
   if (o.id != null) result.id = o.id;
   if (o.patientName != null) result.patientName = o.patientName;
+  if (o.patientNameAr != null) result.patientNameAr = o.patientNameAr;
+  if (o.patientNameEn != null) result.patientNameEn = o.patientNameEn;
   if (o.patientDob != null) result.patientDob = o.patientDob;
   if (o.gender != null) result.gender = o.gender;
   if (o.procDate != null) result.procDate = o.procDate;
@@ -137,6 +139,8 @@ function mapCalSurgForSupervisor(obj: unknown): PlainObject | undefined {
   if (o.id != null) result.id = o.id;
   if (o.timeStamp != null) result.timeStamp = o.timeStamp;
   if (o.patientName != null) result.patientName = o.patientName;
+  if (o.patientNameAr != null) result.patientNameAr = o.patientNameAr;
+  if (o.patientNameEn != null) result.patientNameEn = o.patientNameEn;
   if (o.patientDob != null) result.patientDob = o.patientDob;
   if (o.gender != null) result.gender = o.gender;
   if (o.procDate != null) result.procDate = o.procDate;

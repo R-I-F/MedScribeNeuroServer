@@ -11,8 +11,6 @@ import { ICandDoc } from "../cand/cand.interface";
 import { JwtPayload } from "../middleware/authorize.middleware";
 import IAuth, { IRegisterCandPayload, IRegisterSupervisorPayload } from "./auth.interface";
 import { UserRole } from "../types/role.types";
-import { DataSourceManager } from "../config/datasource.manager";
-import { getStaticInstitution } from "../institution/institution.service";
 import { CandidateEntity } from "../cand/cand.mDbSchema";
 import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
 import { ISupervisorDoc } from "../supervisor/supervisor.interface";
@@ -156,9 +154,6 @@ export class AuthController {
         throw new Error("Institution DataSource is required for login");
       }
 
-      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
-      // the token carries the static institution id.
-      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -198,13 +193,11 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
-      // Include institutionId in token (required - always included)
       const tokenPayload: any = {
         email: user.email,
         role: userRole,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId,  // Always included (required)
         // Department claim: lets reads default to the user's department without an extra lookup.
         ...(user.departmentId && { departmentId: user.departmentId })
       };
@@ -236,9 +229,6 @@ export class AuthController {
         throw new Error("Institution DataSource is required for super admin login");
       }
 
-      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
-      // the token carries the static institution id.
-      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -267,13 +257,11 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
-      // Include institutionId in token (required - always included)
       const tokenPayload: any = {
         email: user.email,
         role: UserRole.SUPER_ADMIN,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId  // Always included (required)
       };
 
       const accessToken = await this.authTokenService.sign(tokenPayload);
@@ -303,9 +291,6 @@ export class AuthController {
         throw new Error("Institution DataSource is required for institute admin login");
       }
 
-      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
-      // the token carries the static institution id.
-      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -334,13 +319,11 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
-      // Include institutionId in token (required - always included)
       const tokenPayload: any = {
         email: user.email,
         role: UserRole.INSTITUTE_ADMIN,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId,  // Always included (required)
         ...(user.departmentId && { departmentId: user.departmentId })
       };
 
@@ -373,9 +356,6 @@ export class AuthController {
         throw new Error("Institution DataSource is required for admin login");
       }
 
-      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
-      // the token carries the static institution id.
-      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -415,13 +395,11 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
-      // Include institutionId in token (required for admin login - always included)
       const tokenPayload: any = {
         email: user.email,
         role: userRole,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId  // Always included for admin login (required)
       };
 
       const accessToken = await this.authTokenService.sign(tokenPayload);
@@ -452,9 +430,6 @@ export class AuthController {
         throw new Error("Institution DataSource is required for clerk login");
       }
 
-      // Single-institution (KA spoke) mode: any inbound institutionId is accepted and ignored;
-      // the token carries the static institution id.
-      const institutionId = getStaticInstitution().id;
 
       // Use the provided DataSource (institution-specific)
       const targetDataSource = dataSource;
@@ -483,13 +458,11 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
-      // Include institutionId in token (required for clerk login - always included)
       const tokenPayload: any = {
         email: user.email,
         role: UserRole.CLERK,
         id: userId,  // Use 'id' for new tokens (UUID)
         _id: userId,  // Keep '_id' for backward compatibility with existing tokens
-        institutionId: institutionId,  // Always included for clerk login (required)
         ...(user.departmentId && { departmentId: user.departmentId })
       };
 
@@ -540,7 +513,7 @@ export class AuthController {
   public async refreshToken(refreshTokenPayload: any) {
     try {
       // Extract user info from refresh token payload (support both 'id' and '_id')
-      const { email, role, id, _id, institutionId, departmentId } = refreshTokenPayload;
+      const { email, role, id, _id, departmentId } = refreshTokenPayload;
       const userId = id || _id;
 
       if (!email || !role || !userId) {
@@ -554,12 +527,7 @@ export class AuthController {
         _id: userId  // Keep '_id' for backward compatibility
       };
 
-      // Preserve institutionId if present
-      if (institutionId) {
-        tokenPayload.institutionId = institutionId;
-      }
-
-      // Preserve departmentId if present
+      // Preserve departmentId if present (single-institution KA spoke: no institutionId claim)
       if (departmentId) {
         tokenPayload.departmentId = departmentId;
       }

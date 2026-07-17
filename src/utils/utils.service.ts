@@ -19,6 +19,22 @@ export class UtilService {
       throw new Error(err);
     }
   }
+
+  /**
+   * Patient-name privacy format (bilingual-titles plan Q8 — server-side port of the frontend
+   * formatPatientNameForStore): complete first name + single-letter initials of the remaining
+   * names ("أحمد محمود عبد الرحمن" → "أحمد م ع ا"). Idempotent on already-formatted names.
+   */
+  public formatPatientNameForStore(fullName: string): string {
+    const trimmed = (fullName ?? "").trim();
+    if (!trimmed) return "";
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    if (parts.length <= 1) return trimmed;
+    const firstName = parts[0];
+    const initials = parts.slice(1).map((p) => p.charAt(0)).join(" ");
+    return `${firstName} ${initials}`.trim();
+  }
+
   public yesNoToBoolean(item: string): boolean | never {
     if(typeof item !== "string") {
       throw new Error("Item must be a string");

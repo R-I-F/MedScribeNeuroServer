@@ -1,37 +1,29 @@
 /**
- * Static single-institution shim (KA spoke).
+ * Single-institution service (KA spoke) — DB-backed.
  *
- * The multi-tenant institutions registry (formerly loaded from defaultdb) is gone: this
- * API now serves exactly ONE institution — Kasr El Ainy — pinned from environment
- * variables. The public function signatures are preserved so the ~55 controllers and the
- * institutionResolver middleware that call these keep working untouched; they simply always
- * resolve to the single static institution regardless of the id/code passed in.
+ * The app serves exactly ONE institution (Kasr Al Ainy / Cairo University). Multi-tenancy is
+ * gone: there is no per-institution routing and no `DataSourceManager`. The institution is now a
+ * single documented row in the `institutions` table of the KA database (see
+ * `institution.mDbSchema.ts` + migration `...610150`), which is the source of truth for the
+ * feature flags (`isAcademic` / `isPractical` / `isClinical`) and the display name/code/department.
  *
- * Env (loaded via `.env.staging` in staging):
- *   INSTITUTION_ID          existing KA institution UUID (kept stable so in-flight JWTs stay valid)
- *   INSTITUTION_CODE        default "KA"
- *   INSTITUTION_NAME        default "Kasr El Ainy"
- *   INSTITUTION_DEPARTMENT  default "neurosurgery"
- *   INSTITUTION_IS_ACADEMIC / _PRACTICAL / _CLINICAL   booleans (default true)
- *   PSQL_HOST / PSQL_PORT / PSQL_DB_NAME / PSQL_USERNAME / PSQL_PASSWORD   KA database
+ * `getInstitution()` loads that row once from the single `AppDataSource` and caches it.
+ * The former `getStaticInstitution` / `getInstitutionById` / `getInstitutionByCode` /
+ * `getAllActiveInstitutions` names are kept as thin wrappers so existing callers keep working;
+ * any id/code argument is accepted and ignored (there is only one institution).
  */
 
+import { AppDataSource, initializeDatabase } from "../config/database.config";
+import { InstitutionEntity } from "./institution.mDbSchema";
+
 /**
- * Internal institution shape for auth flows and the (now single-source) DataSource resolution.
- * `database` is retained for interface stability; the single AppDataSource is the real source
- * of truth for connections.
+ * Institution shape used by auth flows and request context. Deliberately has NO per-tenant
+ * `database{}` block — connections come from the single `AppDataSource`.
  */
 export interface IInstitution {
   id: string;
   code: string;
   name: string;
-  database: {
-    host: string;
-    port: number;
-    database: string;
-    username: string;
-    password: string;
-  };
   isActive: boolean;
   isAcademic: boolean;
   isPractical: boolean;
@@ -39,76 +31,89 @@ export interface IInstitution {
   department: string;
 }
 
-function parseBool(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined || value === "") return fallback;
-  const v = value.trim().toLowerCase();
-  return v === "true" || v === "1" || v === "yes";
+let cached: IInstitution | null = null;
+
+function toIInstitution(row: InstitutionEntity): IInstitution {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    isActive: row.isActive,
+    isAcademic: row.isAcademic,
+    isPractical: row.isPractical,
+    isClinical: row.isClinical,
+    department: row.department ?? "",
+  };
 }
 
-let staticInstitution: IInstitution | null = null;
-
 /**
- * Build (once) and return the single pinned KA institution from env.
- * Throws at first use if INSTITUTION_ID is not configured (fail-fast on misconfig).
+ * Load (once) and return the single institution from the KA database, caching it.
+ * Initializes the DataSource on first use. Throws if the row is missing (seed migration
+ * `CreateInstitutionsTable...610150` not applied) — fail-fast on misconfig.
  */
-export function getStaticInstitution(): IInstitution {
-  if (staticInstitution) {
-    return staticInstitution;
+export async function getInstitution(): Promise<IInstitution> {
+  if (cached) return cached;
+
+  if (!AppDataSource.isInitialized) {
+    await initializeDatabase();
   }
 
-  const id = process.env.INSTITUTION_ID;
-  if (!id) {
+  const row = await AppDataSource.getRepository(InstitutionEntity)
+    .createQueryBuilder("i")
+    .orderBy("i.createdAt", "ASC")
+    .getOne();
+
+  if (!row) {
     throw new Error(
-      "INSTITUTION_ID is required in single-institution (KA spoke) mode but is not set"
+      "institutions table has no row — apply migration CreateInstitutionsTable1783782610150 (KA spoke seed)"
     );
   }
 
-  staticInstitution = {
-    id,
-    code: process.env.INSTITUTION_CODE || "KA",
-    name: process.env.INSTITUTION_NAME || "Kasr El Ainy",
-    database: {
-      host: process.env.PSQL_HOST!,
-      port: parseInt(process.env.PSQL_PORT || "5432", 10),
-      database: process.env.PSQL_DB_NAME || "ka-institute",
-      username: process.env.PSQL_USERNAME!,
-      password: process.env.PSQL_PASSWORD!,
-    },
-    isActive: true,
-    isAcademic: parseBool(process.env.INSTITUTION_IS_ACADEMIC, true),
-    isPractical: parseBool(process.env.INSTITUTION_IS_PRACTICAL, true),
-    isClinical: parseBool(process.env.INSTITUTION_IS_CLINICAL, true),
-    department: process.env.INSTITUTION_DEPARTMENT || "neurosurgery",
-  };
+  cached = toIInstitution(row);
+  return cached;
+}
 
-  return staticInstitution;
+/**
+ * Synchronous accessor for the few call sites that cannot await. Returns the warmed cache
+ * (populated by `getInstitution()` at boot). Throws if called before the cache is warm — boot
+ * warms it via `getAllActiveInstitutions()` before the server accepts requests.
+ */
+export function getStaticInstitution(): IInstitution {
+  if (!cached) {
+    throw new Error(
+      "getStaticInstitution() called before the institution cache was warmed — call getInstitution() during boot"
+    );
+  }
+  return cached;
 }
 
 /**
  * Get institution by ID — single-institution mode: the id is accepted and ignored,
- * always returning the static KA institution.
+ * always returning the one institution.
  */
 export async function getInstitutionById(_id: string): Promise<IInstitution | undefined> {
-  return getStaticInstitution();
+  return getInstitution();
 }
 
 /**
  * Get institution by code — single-institution mode: accepted and ignored.
  */
 export async function getInstitutionByCode(_code: string): Promise<IInstitution | undefined> {
-  return getStaticInstitution();
+  return getInstitution();
 }
 
 /**
- * Get all active institutions — single-institution mode: always the one static KA row.
+ * Get all active institutions — single-institution mode: always the one row.
+ * Also serves as the boot-time cache warmer.
  */
 export async function getAllActiveInstitutions(): Promise<IInstitution[]> {
-  return [getStaticInstitution()];
+  return [await getInstitution()];
 }
 
 /**
- * Clear cache — no-op in single-institution mode (the static row is rebuilt from env on next use).
+ * Clear the cache — the row is reloaded from the DB on next use. Used by tests / after an
+ * institution-settings update.
  */
 export function clearInstitutionCache(): void {
-  staticInstitution = null;
+  cached = null;
 }

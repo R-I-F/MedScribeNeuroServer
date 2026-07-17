@@ -21,6 +21,14 @@ export class ClerkProcEntity {
   @Column({ type: "text" })
   title!: string;
 
+  // The phrase in both languages (plan §2.1): typed-language slot = raw phrase verbatim,
+  // other slot = aiAgent TRANSLATION (meaning). NULL = pending/failed — retryable, never blocks.
+  @Column({ type: "text", nullable: true })
+  titleAr?: string | null;
+
+  @Column({ type: "text", nullable: true })
+  titleEn?: string | null;
+
   @Column({ type: "uuid" })
   departmentId!: string;
 

@@ -39,12 +39,6 @@ export const createCandValidator = [
     .isString()
     .withMessage("regDeg must be a string when provided"),
 
-  // Single-institution (KA spoke) mode: institutionId is accepted and ignored; optional.
-  body("institutionId")
-    .optional({ values: "falsy" })
-    .isUUID()
-    .withMessage("institutionId must be a valid UUID"),
-
   // Department (mirror `departments` UUID). REQUIRED: candidates.departmentId is NOT NULL.
   body("departmentId")
     .notEmpty()
