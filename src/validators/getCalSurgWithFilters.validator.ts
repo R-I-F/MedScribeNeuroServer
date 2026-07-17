@@ -135,4 +135,12 @@ export const getCalSurgWithFiltersValidator = checkSchema({
     },
     errorMessage: "day must be a valid ISO 8601 date string within the last 2 years and not in the future",
   },
+  // Recent-first mode (clerk work queue): latest-touched N rows by updatedAt DESC.
+  "recent": {
+    in: ["query"],
+    optional: true,
+    isInt: { options: { min: 1, max: 200 } },
+    toInt: true,
+    errorMessage: "recent must be an integer between 1 and 200",
+  },
 });

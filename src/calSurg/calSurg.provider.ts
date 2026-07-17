@@ -257,6 +257,11 @@ export class CalSurgProvider {
    * Gets all calSurg records with populated references
    * @returns Promise<ICalSurgDoc[]>
    */
+  /** Recent-first (clerk work queue): latest-touched N rows by updatedAt DESC. */
+  public async getRecentCalSurg(take: number, dataSource: DataSource): Promise<ICalSurgDoc[]> {
+    return this.calSurgService.getRecentCalSurg(take, dataSource);
+  }
+
   public async getAllCalSurg(dataSource: DataSource): Promise<ICalSurgDoc[]> {
     try {
       // Call service to get all calSurgs

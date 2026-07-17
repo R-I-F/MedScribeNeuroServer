@@ -118,6 +118,12 @@ export class CalSurgController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
+      // Recent-first mode (clerk work queue): latest-touched N rows, updatedAt DESC.
+      const recent = req.query.recent ? Number(req.query.recent) : undefined;
+      if (recent) {
+        return await this.calSurgProvider.getRecentCalSurg(recent, dataSource);
+      }
+
       // Extract query parameters for filtering
       const filters = {
         startDate: req.query.startDate as string,

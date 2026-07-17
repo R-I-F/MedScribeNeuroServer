@@ -101,6 +101,21 @@ export class CalSurgService {
     }
   }
 
+  /** Recent-first (clerk work queue): latest created/edited rows, updatedAt DESC, bounded. */
+  public async getRecentCalSurg(take: number, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+    try {
+      const calSurgRepository = dataSource.getRepository(CalSurgEntity);
+      const calSurgs = await calSurgRepository.find({
+        relations: ["hospital", "procCpt", "clerkProc"],
+        order: { updatedAt: "DESC" },
+        take,
+      });
+      return calSurgs as unknown as ICalSurgDoc[];
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
   public async getAllCalSurg(dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
