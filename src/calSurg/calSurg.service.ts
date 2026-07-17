@@ -32,7 +32,7 @@ export class CalSurgService {
       // Load with relations for return
       const result = await calSurgRepository.findOne({
         where: { id: savedCalSurg.id },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
       });
       
       return result as unknown as ICalSurgDoc;
@@ -68,7 +68,7 @@ export class CalSurgService {
       const ids = savedCalSurgs.map(cs => cs.id);
       const results = await calSurgRepository.find({
         where: { id: In(ids) },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
       });
       
       return results as unknown as ICalSurgDoc[];
@@ -88,7 +88,7 @@ export class CalSurgService {
       
       const calSurg = await calSurgRepository.findOne({
         where: { id: calSurgId },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
       });
       
       if (!calSurg) {
@@ -105,7 +105,7 @@ export class CalSurgService {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const calSurgs = await calSurgRepository.find({
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "DESC" },
       });
       
@@ -171,7 +171,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
       
@@ -191,7 +191,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
       
@@ -214,7 +214,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
       
@@ -234,7 +234,7 @@ export class CalSurgService {
         where: {
           procDate: Between(startDate, endDate),
         },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
       
@@ -282,7 +282,7 @@ export class CalSurgService {
 
       let calSurgs = await calSurgRepository.find({
         where: whereConditions,
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
 
@@ -379,7 +379,7 @@ export class CalSurgService {
       // Load with relations for return
       const updatedCalSurg = await calSurgRepository.findOne({
         where: { id },
-        relations: ["hospital", "procCpt"],
+        relations: ["hospital", "procCpt", "clerkProc"],
       });
 
       if (!updatedCalSurg) {
