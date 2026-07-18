@@ -33,6 +33,17 @@ export class EventService {
 
     const eventDoc = event as any;
 
+    // Legacy wire shape: consumers read `lecture.lectureTitle`/`lecture._id`, but the
+    // hub-conformed mirror renamed the column to `title` (lectureNumber/arTitle are their
+    // own columns now). Alias additively — raw fields stay for anyone reading them.
+    if (eventDoc.lecture) {
+      eventDoc.lecture = {
+        ...eventDoc.lecture,
+        _id: eventDoc.lecture.id ?? eventDoc.lecture._id,
+        lectureTitle: eventDoc.lecture.lectureTitle ?? eventDoc.lecture.title,
+      };
+    }
+
     if (event.presenterId) {
       try {
         if (event.type === "lecture" || event.type === "conf") {
@@ -227,7 +238,14 @@ export class EventService {
           const item: any = {
             ...rest,
             _id: rest.id ?? rest._id,
-            lecture: rest.lecture ? { _id: rest.lecture.id, lectureTitle: rest.lecture.title } : undefined,
+            lecture: rest.lecture
+              ? {
+                  _id: rest.lecture.id ?? rest.lecture._id,
+                  lectureTitle: rest.lecture.lectureTitle ?? rest.lecture.title,
+                  arTitle: rest.lecture.arTitle,
+                  lectureNumber: rest.lecture.lectureNumber,
+                }
+              : undefined,
             journal: rest.journal ? { _id: rest.journal.id, journalTitle: rest.journal.journalTitle } : undefined,
             conf: rest.conf ? { _id: rest.conf.id, confTitle: rest.conf.confTitle } : undefined,
             presenter: rest.presenter ? { _id: rest.presenter.id ?? rest.presenterId, fullName: rest.presenter.fullName ?? rest.presenter.name } : undefined,
@@ -285,7 +303,14 @@ export class EventService {
         const item: any = {
           ...rest,
           _id: rest.id ?? rest._id,
-          lecture: rest.lecture ? { _id: rest.lecture.id, lectureTitle: rest.lecture.title } : undefined,
+          lecture: rest.lecture
+            ? {
+                _id: rest.lecture.id ?? rest.lecture._id,
+                lectureTitle: rest.lecture.lectureTitle ?? rest.lecture.title,
+                arTitle: rest.lecture.arTitle,
+                lectureNumber: rest.lecture.lectureNumber,
+              }
+            : undefined,
           journal: rest.journal ? { _id: rest.journal.id, journalTitle: rest.journal.journalTitle } : undefined,
           conf: rest.conf ? { _id: rest.conf.id, confTitle: rest.conf.confTitle } : undefined,
           presenter: rest.presenter ? { _id: rest.presenter.id ?? rest.presenterId, fullName: rest.presenter.fullName ?? rest.presenter.name } : undefined,

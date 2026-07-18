@@ -3,6 +3,7 @@ import { inject, injectable } from "inversify";
 import { AppDataSource, initializeDatabase } from "../config/database.config";
 import { RefApiClient } from "./refApi.client";
 import { RefMirrorService } from "./refMirror.service";
+import { ClerkProcService } from "../clerkProc/clerkProc.service";
 
 /**
  * Reference data version tracker + poll-driven re-mirror (KA spoke).
@@ -21,7 +22,8 @@ export class RefDataService {
 
   constructor(
     @inject(RefApiClient) private client: RefApiClient,
-    @inject(RefMirrorService) private mirror: RefMirrorService
+    @inject(RefMirrorService) private mirror: RefMirrorService,
+    @inject(ClerkProcService) private clerkProcs: ClerkProcService
   ) {}
 
   public getCurrentVersion(): string | null {
@@ -67,6 +69,15 @@ export class RefDataService {
     // Don't keep the event loop alive solely for the poll.
     this.timer.unref?.();
     console.log(`[RefData] version poll started (every ${ms} ms)`);
+
+    // One early clerk-proc healing sweep after boot (restarts shouldn't have to wait
+    // a full poll interval to repair enrichments that failed before the restart).
+    const bootSweep = setTimeout(() => {
+      if (AppDataSource.isInitialized) {
+        this.clerkProcs.retryUnresolved(AppDataSource).catch(() => {});
+      }
+    }, 30_000);
+    bootSweep.unref?.();
   }
 
   public stopPolling(): void {
@@ -83,6 +94,12 @@ export class RefDataService {
         console.log(`[RefData] dataVersion changed ${this.lastKnownVersion} → ${dataVersion}; re-mirroring`);
         await this.mirror.sync();
         this.lastKnownVersion = dataVersion;
+      }
+      // Piggyback the clerk-proc healing sweep on the same cadence: re-enrich phrases
+      // whose background resolution/translation failed transiently (bounded, no-op when
+      // there's nothing to heal).
+      if (AppDataSource.isInitialized) {
+        await this.clerkProcs.retryUnresolved(AppDataSource);
       }
     } catch (err: any) {
       console.warn(`[RefData] version poll failed (stale-while-error): ${err?.message}`);

@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { DataSource } from "typeorm";
+import { DataSource, IsNull, LessThan } from "typeorm";
 import { ClerkProcEntity } from "./clerkProc.mDbSchema";
 import { RefApiClient } from "../refApi/refApi.client";
 import { IRefProcSearchHit } from "../refApi/refApi.types";
@@ -151,6 +151,41 @@ export class ClerkProcService {
       console.warn(
         `[ClerkProc] title translation failed for "${row.title}" (slot stays NULL, retryable): ${err?.message ?? err}`
       );
+    }
+  }
+
+  /**
+   * Self-healing sweep: re-attempt enrichment for rows a past background attempt left
+   * incomplete (hub blip/cold start → NULL procCptId; Gemini failure → NULL title slot).
+   * Without this, a phrase typed ONCE would stay unresolved until someone retyped it.
+   * Called from the reference-data poll tick (+ once shortly after boot). Bounded,
+   * sequential, overlap-guarded, never throws. Rows younger than 2 minutes are skipped —
+   * their create-time enrich may still be in flight.
+   */
+  private retrySweepRunning = false;
+  public async retryUnresolved(dataSource: DataSource, limit = 5): Promise<void> {
+    if (this.retrySweepRunning) return;
+    this.retrySweepRunning = true;
+    try {
+      const settledBefore = LessThan(new Date(Date.now() - 2 * 60 * 1000));
+      const rows = await dataSource.getRepository(ClerkProcEntity).find({
+        where: [
+          { procCptId: IsNull(), updatedAt: settledBefore },
+          { titleAr: IsNull(), updatedAt: settledBefore },
+          { titleEn: IsNull(), updatedAt: settledBefore },
+        ],
+        order: { updatedAt: "ASC" },
+        take: limit,
+      });
+      if (!rows.length) return;
+      console.log(`[ClerkProc] retry sweep: re-enriching ${rows.length} incomplete phrase(s)`);
+      for (const row of rows) {
+        await this.enrich(row, dataSource);
+      }
+    } catch (err: any) {
+      console.warn(`[ClerkProc] retry sweep failed (next tick retries): ${err?.message ?? err}`);
+    } finally {
+      this.retrySweepRunning = false;
     }
   }
 

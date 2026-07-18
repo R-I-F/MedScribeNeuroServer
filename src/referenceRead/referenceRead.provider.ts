@@ -82,11 +82,14 @@ export class ReferenceReadProvider {
    * Legacy /lecture list shape (id/lectureTitle/mainTopic/level), scoped via lecture_topics.
    * The mirror now carries the hub's column names (migration 1783782610090: `title`, no
    * `mainTopic`) — the legacy field names are restored here by aliasing: `lectureTitle` =
-   * lecture title, `mainTopic` = the parent topic's title.
+   * lecture title, `mainTopic` = the parent topic's title. Additive since the hub-scaled
+   * schema: `lectureNumber` (outline number, its own column now) + `arTitle` — the CM
+   * event form shows/searches both.
    */
   public async getLecturesByDepartment(ds: DataSource, departmentId: string) {
     return ds.query(
-      `SELECT l."id", l."title" AS "lectureTitle", t."title" AS "mainTopic", l."level"
+      `SELECT l."id", l."title" AS "lectureTitle", t."title" AS "mainTopic", l."level",
+              l."lectureNumber", l."arTitle"
          FROM "lectures" l
          JOIN "lecture_topics" t ON t."id" = l."topicId"
         WHERE t."departmentId" = $1
