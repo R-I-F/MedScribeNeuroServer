@@ -15,7 +15,7 @@ export class ConsumablesProvider {
   public async getAllByDepartment(departmentId: string, dataSource: DataSource): Promise<IConsumableDoc[]> | never {
     try {
       return await dataSource.query(
-        `SELECT c."id", c."consumables"
+        `SELECT c."id", c."consumables", c."arName"
            FROM "consumables" c
            JOIN "department_consumables" dc ON dc."consumableId" = c."id"
           WHERE dc."departmentId" = $1
@@ -33,7 +33,7 @@ export class ConsumablesProvider {
         throw new Error("Invalid consumable ID format");
       }
       const rows = await dataSource.query(
-        `SELECT "id", "consumables" FROM "consumables" WHERE "id" = $1`,
+        `SELECT "id", "consumables", "arName" FROM "consumables" WHERE "id" = $1`,
         [id]
       );
       return rows[0] ?? null;

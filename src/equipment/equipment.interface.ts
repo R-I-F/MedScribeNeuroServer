@@ -1,6 +1,8 @@
 export interface IEquipment {
   id: string;
   equipment: string;
+  /** Arabic display name (hub-mirrored; additive — legacy consumers ignore it). */
+  arName?: string | null;
 }
 
 export interface IEquipmentDoc extends IEquipment {}

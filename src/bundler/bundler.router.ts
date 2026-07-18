@@ -29,8 +29,10 @@ export class BundlerRouter {
       async (req: Request, res: Response) => {
         try {
           const resp = await this.bundlerController.handleGetAll(req, res);
-          // Data is cached per institution until server restart; allow browser to cache on F5/reload
-          res.setHeader("Cache-Control", "private, max-age=86400");
+          // no-cache = browser MUST revalidate (ETag 304 keeps it cheap). The old
+          // `max-age=86400` let browsers serve stale bodies for 24h WITHOUT contacting
+          // the server — deploys/restarts that changed the shape never reached clients.
+          res.setHeader("Cache-Control", "private, no-cache");
           res.status(StatusCodes.OK).json(resp);
         } catch (err: any) {
           res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });

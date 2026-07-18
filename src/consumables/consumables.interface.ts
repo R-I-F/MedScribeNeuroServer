@@ -1,6 +1,8 @@
 export interface IConsumable {
   id: string;
   consumables: string;
+  /** Arabic display name (hub-mirrored; additive — legacy consumers ignore it). */
+  arName?: string | null;
 }
 
 export interface IConsumableDoc extends IConsumable {}

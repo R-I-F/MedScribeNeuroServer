@@ -15,7 +15,7 @@ export class EquipmentProvider {
   public async getAllByDepartment(departmentId: string, dataSource: DataSource): Promise<IEquipmentDoc[]> | never {
     try {
       return await dataSource.query(
-        `SELECT e."id", e."equipment"
+        `SELECT e."id", e."equipment", e."arName"
            FROM "equipment" e
            JOIN "department_equipment" de ON de."equipmentId" = e."id"
           WHERE de."departmentId" = $1
@@ -33,7 +33,7 @@ export class EquipmentProvider {
         throw new Error("Invalid equipment ID format");
       }
       const rows = await dataSource.query(
-        `SELECT "id", "equipment" FROM "equipment" WHERE "id" = $1`,
+        `SELECT "id", "equipment", "arName" FROM "equipment" WHERE "id" = $1`,
         [id]
       );
       return rows[0] ?? null;
