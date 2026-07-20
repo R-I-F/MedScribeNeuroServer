@@ -118,10 +118,16 @@ export class CalSurgController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
+      // Department scoping (cal_surgs are dept-scoped, same resolution as the typeahead):
+      // the caller's JWT department claim → an explicit ?deptCode → the REF_DEPT_CODE default.
+      const jwt = (res as any).locals?.jwt;
+      const deptCode = typeof req.query.deptCode === "string" ? req.query.deptCode : undefined;
+      const departmentId = await this.calSurgProvider.resolveDepartmentId(dataSource, jwt?.departmentId, deptCode);
+
       // Recent-first mode (clerk work queue): latest-touched N rows, updatedAt DESC.
       const recent = req.query.recent ? Number(req.query.recent) : undefined;
       if (recent) {
-        return await this.calSurgProvider.getRecentCalSurg(recent, dataSource);
+        return await this.calSurgProvider.getRecentCalSurg(recent, dataSource, departmentId);
       }
 
       // Extract query parameters for filtering
@@ -135,12 +141,12 @@ export class CalSurgController {
 
       // Check if any filters are provided
       const hasFilters = Object.values(filters).some(value => value !== undefined);
-      
+
       if (hasFilters) {
-        const calSurgs = await this.calSurgProvider.getCalSurgWithFilters(filters, dataSource);
+        const calSurgs = await this.calSurgProvider.getCalSurgWithFilters(filters, dataSource, departmentId);
         return calSurgs;
       } else {
-        const calSurgs = await this.calSurgProvider.getAllCalSurg(dataSource);
+        const calSurgs = await this.calSurgProvider.getAllCalSurg(dataSource, departmentId);
         return calSurgs;
       }
     } catch (err: any) {

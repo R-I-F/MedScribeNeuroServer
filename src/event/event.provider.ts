@@ -42,7 +42,29 @@ export class EventProvider {
     @inject(ExternalService) private externalService: ExternalService
   ) {}
 
-  public async createEvent(validatedReq: IEventInput, dataSource: DataSource): Promise<IEventDoc> | never {
+  /**
+   * Department resolution for event surfaces (same order as the calSurg family):
+   * the caller's JWT department claim → an explicit deptCode → the REF_DEPT_CODE (NS) default.
+   */
+  public async resolveDepartmentId(
+    dataSource: DataSource,
+    jwtDepartmentId?: string,
+    deptCode?: string
+  ): Promise<string | null> {
+    let departmentId = jwtDepartmentId ?? null;
+    if (!departmentId && deptCode) {
+      const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [deptCode]);
+      departmentId = rows[0]?.id ?? null;
+    }
+    if (!departmentId) {
+      const code = process.env.REF_DEPT_CODE || "NS";
+      const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [code]);
+      departmentId = rows[0]?.id ?? null;
+    }
+    return departmentId;
+  }
+
+  public async createEvent(validatedReq: IEventInput, dataSource: DataSource, departmentId?: string | null): Promise<IEventDoc> | never {
     try {
       // Validate type and referenced document
       this.validateTypeAndRefs(validatedReq);
@@ -96,6 +118,8 @@ export class EventProvider {
         location: this.utilService.stringToLowerCaseTrim(validatedReq.location),
         presenterId: presenterId,
         status: validatedReq.status || "booked", // Default to "booked" when created
+        // Events are department-scoped: stamped at creation (caller's dept resolution).
+        departmentId: departmentId ?? undefined,
       };
 
       // Add attendance as separate property for service to handle
@@ -110,9 +134,9 @@ export class EventProvider {
     }
   }
 
-  public async getAllEvents(dataSource: DataSource): Promise<IEventDoc[]> | never {
+  public async getAllEvents(dataSource: DataSource, departmentId?: string | null): Promise<IEventDoc[]> | never {
     try {
-      return await this.eventService.getAllEvents(dataSource);
+      return await this.eventService.getAllEvents(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -121,9 +145,9 @@ export class EventProvider {
   /**
    * Dashboard: events from last 30 days through all future, stripped of createdAt and updatedAt
    */
-  public async getEventsDashboard(dataSource: DataSource): Promise<any[]> | never {
+  public async getEventsDashboard(dataSource: DataSource, departmentId?: string | null): Promise<any[]> | never {
     try {
-      return await this.eventService.getEventsDashboard(dataSource);
+      return await this.eventService.getEventsDashboard(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }

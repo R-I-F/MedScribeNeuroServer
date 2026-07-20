@@ -182,10 +182,11 @@ export class EventService {
     }
   }
 
-  public async getAllEvents(dataSource: DataSource): Promise<IEventDoc[]> | never {
+  public async getAllEvents(dataSource: DataSource, departmentId?: string | null): Promise<IEventDoc[]> | never {
     try {
       const eventRepository = dataSource.getRepository(EventEntity);
       const events = await eventRepository.find({
+        where: { ...(departmentId ? { departmentId } : {}) },
         relations: ["lecture", "journal", "conf"],
         order: { createdAt: "DESC" },
       });
@@ -269,9 +270,9 @@ export class EventService {
   /**
    * Dashboard: events from last 30 days through all future, stripped of createdAt and updatedAt.
    */
-  public async getEventsDashboard(dataSource: DataSource): Promise<any[]> | never {
+  public async getEventsDashboard(dataSource: DataSource, departmentId?: string | null): Promise<any[]> | never {
     try {
-      return await this.computeEventsDashboard(dataSource);
+      return await this.computeEventsDashboard(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -280,14 +281,14 @@ export class EventService {
   /**
    * Fetches and shapes events for dashboard. Used by getEventsDashboard.
    */
-  private async computeEventsDashboard(dataSource: DataSource): Promise<any[]> {
+  private async computeEventsDashboard(dataSource: DataSource, departmentId?: string | null): Promise<any[]> {
     const eventRepository = dataSource.getRepository(EventEntity);
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
     cutoff.setHours(0, 0, 0, 0);
 
     const events = await eventRepository.find({
-      where: { dateTime: MoreThanOrEqual(cutoff) },
+      where: { dateTime: MoreThanOrEqual(cutoff), ...(departmentId ? { departmentId } : {}) },
       relations: ["lecture", "journal", "conf"],
       order: { dateTime: "ASC" },
     });

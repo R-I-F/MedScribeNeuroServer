@@ -102,10 +102,11 @@ export class CalSurgService {
   }
 
   /** Recent-first (clerk work queue): latest created/edited rows, updatedAt DESC, bounded. */
-  public async getRecentCalSurg(take: number, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  public async getRecentCalSurg(take: number, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const calSurgs = await calSurgRepository.find({
+        where: { ...(departmentId ? { departmentId } : {}) },
         relations: ["hospital", "procCpt", "clerkProc"],
         order: { updatedAt: "DESC" },
         take,
@@ -116,14 +117,15 @@ export class CalSurgService {
     }
   }
 
-  public async getAllCalSurg(dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  public async getAllCalSurg(dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const calSurgs = await calSurgRepository.find({
+        where: { ...(departmentId ? { departmentId } : {}) },
         relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "DESC" },
       });
-      
+
       return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
@@ -179,80 +181,84 @@ export class CalSurgService {
     });
   }
 
-  public async getCalSurgByDateRange(startDate: Date, endDate: Date, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  public async getCalSurgByDateRange(startDate: Date, endDate: Date, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
+          ...(departmentId ? { departmentId } : {}),
         },
         relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
-      
+
       return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgByMonth(year: number, month: number, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  public async getCalSurgByMonth(year: number, month: number, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const startDate = new Date(year, month - 1, 1); // month is 0-indexed
       const endDate = new Date(year, month, 0, 23, 59, 59, 999); // Last day of month
-      
+
       const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
+          ...(departmentId ? { departmentId } : {}),
         },
         relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
-      
+
       return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgByDay(date: Date, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  public async getCalSurgByDay(date: Date, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const startDate = new Date(date);
       startDate.setHours(0, 0, 0, 0);
-      
+
       const endDate = new Date(date);
       endDate.setHours(23, 59, 59, 999);
-      
+
       const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
+          ...(departmentId ? { departmentId } : {}),
         },
         relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
-      
+
       return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCalSurgByYear(year: number, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  public async getCalSurgByYear(year: number, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const startDate = new Date(year, 0, 1); // January 1st
       const endDate = new Date(year, 11, 31, 23, 59, 59, 999); // December 31st
-      
+
       const calSurgs = await calSurgRepository.find({
         where: {
           procDate: Between(startDate, endDate),
+          ...(departmentId ? { departmentId } : {}),
         },
         relations: ["hospital", "procCpt", "clerkProc"],
         order: { procDate: "ASC" },
       });
-      
+
       return calSurgs as unknown as ICalSurgDoc[];
     } catch (err: any) {
       throw new Error(err);

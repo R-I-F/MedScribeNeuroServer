@@ -123,16 +123,29 @@ export class CalSurgProvider {
   }
 
   /**
-   * Learned clerk phrases for the create-form typeahead. Department resolution mirrors the
-   * create path: the caller's JWT department claim → an explicit deptCode → the NS default.
+   * Department resolution shared by the calSurg read/typeahead surfaces (mirrors the
+   * create path): the caller's JWT department claim → an explicit deptCode → the NS default.
    */
-  public async getClerkProcs(dataSource: DataSource, jwtDepartmentId?: string, deptCode?: string) {
+  public async resolveDepartmentId(
+    dataSource: DataSource,
+    jwtDepartmentId?: string,
+    deptCode?: string
+  ): Promise<string | null> {
     let departmentId = jwtDepartmentId ?? null;
     if (!departmentId && deptCode) {
       const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [deptCode]);
       departmentId = rows[0]?.id ?? null;
     }
     if (!departmentId) departmentId = await this.getDefaultDepartmentId(dataSource);
+    return departmentId;
+  }
+
+  /**
+   * Learned clerk phrases for the create-form typeahead. Department resolution mirrors the
+   * create path: the caller's JWT department claim → an explicit deptCode → the NS default.
+   */
+  public async getClerkProcs(dataSource: DataSource, jwtDepartmentId?: string, deptCode?: string) {
+    const departmentId = await this.resolveDepartmentId(dataSource, jwtDepartmentId, deptCode);
     if (!departmentId) return [];
     return this.clerkProcService.listByDepartment(departmentId, dataSource);
   }
@@ -258,15 +271,15 @@ export class CalSurgProvider {
    * @returns Promise<ICalSurgDoc[]>
    */
   /** Recent-first (clerk work queue): latest-touched N rows by updatedAt DESC. */
-  public async getRecentCalSurg(take: number, dataSource: DataSource): Promise<ICalSurgDoc[]> {
-    return this.calSurgService.getRecentCalSurg(take, dataSource);
+  public async getRecentCalSurg(take: number, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> {
+    return this.calSurgService.getRecentCalSurg(take, dataSource, departmentId);
   }
 
-  public async getAllCalSurg(dataSource: DataSource): Promise<ICalSurgDoc[]> {
+  public async getAllCalSurg(dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> {
     try {
       // Call service to get all calSurgs
-      const calSurgs = await this.calSurgService.getAllCalSurg(dataSource);
-      
+      const calSurgs = await this.calSurgService.getAllCalSurg(dataSource, departmentId);
+
       return calSurgs;
     } catch (error: any) {
       // Handle business logic errors
@@ -297,36 +310,36 @@ export class CalSurgProvider {
     month?: string;
     year?: string;
     day?: string;
-  }, dataSource: DataSource): Promise<ICalSurgDoc[]> {
+  }, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> {
     try {
       // Business logic: Determine which filtering method to use
       if (filters.startDate && filters.endDate) {
         // Date range filtering
         const startDate = new Date(filters.startDate);
         const endDate = new Date(filters.endDate);
-        return await this.calSurgService.getCalSurgByDateRange(startDate, endDate, dataSource);
+        return await this.calSurgService.getCalSurgByDateRange(startDate, endDate, dataSource, departmentId);
       }
-      
+
       if (filters.month) {
         // Month filtering (YYYY-MM format)
         const [year, month] = filters.month.split('-').map(Number);
-        return await this.calSurgService.getCalSurgByMonth(year, month, dataSource);
+        return await this.calSurgService.getCalSurgByMonth(year, month, dataSource, departmentId);
       }
-      
+
       if (filters.year) {
         // Year filtering - get entire year (January to December)
         const year = parseInt(filters.year);
-        return await this.calSurgService.getCalSurgByYear(year, dataSource);
+        return await this.calSurgService.getCalSurgByYear(year, dataSource, departmentId);
       }
-      
+
       if (filters.day) {
         // Day filtering
         const day = new Date(filters.day);
-        return await this.calSurgService.getCalSurgByDay(day, dataSource);
+        return await this.calSurgService.getCalSurgByDay(day, dataSource, departmentId);
       }
-      
+
       // No filters provided, return all
-      return await this.calSurgService.getAllCalSurg(dataSource);
+      return await this.calSurgService.getAllCalSurg(dataSource, departmentId);
     } catch (error: any) {
       // Handle business logic errors
       throw new Error(`Failed to get calSurg with filters: ${error.message}`);

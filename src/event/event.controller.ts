@@ -15,6 +15,13 @@ import {
 export class EventController {
   constructor(@inject(EventProvider) private eventProvider: EventProvider) {}
 
+  /** Department resolution for event surfaces: JWT claim → ?deptCode → NS default. */
+  private async resolveDept(req: Request, res: Response, dataSource: any): Promise<string | null> {
+    const jwt = (res as any).locals?.jwt;
+    const deptCode = typeof req.query.deptCode === "string" ? req.query.deptCode : undefined;
+    return this.eventProvider.resolveDepartmentId(dataSource, jwt?.departmentId, deptCode);
+  }
+
   public async handlePostEvent(req: Request, res: Response) {
     const validatedReq = matchedData(req) as IEventInput;
     try {
@@ -22,7 +29,9 @@ export class EventController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.eventProvider.createEvent(validatedReq, dataSource);
+      // Events are department-scoped: stamp from the creating user's department.
+      const departmentId = await this.resolveDept(req, res, dataSource);
+      return await this.eventProvider.createEvent(validatedReq, dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -34,7 +43,8 @@ export class EventController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.eventProvider.getAllEvents(dataSource);
+      const departmentId = await this.resolveDept(req, res, dataSource);
+      return await this.eventProvider.getAllEvents(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -46,7 +56,8 @@ export class EventController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.eventProvider.getEventsDashboard(dataSource);
+      const departmentId = await this.resolveDept(req, res, dataSource);
+      return await this.eventProvider.getEventsDashboard(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }

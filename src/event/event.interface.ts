@@ -41,6 +41,9 @@ export interface IEvent {
   // - "held": Event was held (has attendees)
   // - "canceled": Event was canceled (no attendees after event date)
   status: TEventStatus;
+
+  /** Department the event belongs to (stamped at creation; dept-scoped reads). */
+  departmentId?: string;
 }
 
 export interface IEventDoc extends IEvent {
