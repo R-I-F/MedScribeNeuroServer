@@ -16,9 +16,9 @@ export class SupervisorService {
     }
   }
 
-  public async getAllSupervisors(dataSource: DataSource): Promise<ISupervisorDoc[]> | never {
+  public async getAllSupervisors(dataSource: DataSource, departmentId?: string | null): Promise<ISupervisorDoc[]> | never {
     try {
-      return await this.supervisorProvider.getAllSupervisors(dataSource);
+      return await this.supervisorProvider.getAllSupervisors(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }

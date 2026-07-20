@@ -27,6 +27,23 @@ export class SupervisorController {
     }
   }
 
+  /** Department resolution for the /supervisor pickers: JWT claim → ?deptCode → NS default. */
+  private async resolveDepartmentId(req: Request, res: Response, dataSource: DataSource): Promise<string | null> {
+    const jwt = res.locals.jwt as JwtPayload | undefined;
+    let departmentId = (jwt as { departmentId?: string } | undefined)?.departmentId ?? null;
+    const deptCode = typeof req.query.deptCode === "string" ? req.query.deptCode : undefined;
+    if (!departmentId && deptCode) {
+      const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [deptCode]);
+      departmentId = rows[0]?.id ?? null;
+    }
+    if (!departmentId) {
+      const code = process.env.REF_DEPT_CODE || "NS";
+      const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [code]);
+      departmentId = rows[0]?.id ?? null;
+    }
+    return departmentId;
+  }
+
   public async handlePostSupervisor(
     req: Request, 
     res: Response
@@ -53,7 +70,10 @@ export class SupervisorController {
     const role = jwtPayload?.role;
     const censored = role === UserRole.CLERK || role === UserRole.SUPERVISOR || role === UserRole.CANDIDATE;
     try {
-      const list = await this.supervisorService.getAllSupervisors(dataSource);
+      // Dept-scoped: the supervisor pickers (candidate submission form, CM event
+      // presenter) should only offer the caller's department's supervisors.
+      const departmentId = await this.resolveDepartmentId(req, res, dataSource);
+      const list = await this.supervisorService.getAllSupervisors(dataSource, departmentId);
       if (censored) {
         return list.map(toCensoredSupervisor);
       }

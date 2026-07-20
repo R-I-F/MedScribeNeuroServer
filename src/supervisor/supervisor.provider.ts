@@ -25,10 +25,13 @@ export class SupervisorProvider {
     }
   }
 
-  public async getAllSupervisors(dataSource: DataSource): Promise<ISupervisorDoc[]> | never {
+  public async getAllSupervisors(dataSource: DataSource, departmentId?: string | null): Promise<ISupervisorDoc[]> | never {
     try {
       const supervisorRepository = dataSource.getRepository(SupervisorEntity);
       const supervisors = await supervisorRepository.find({
+        // Optional department scope (the /supervisor pickers); admin/report callers
+        // pass nothing and stay institution-wide.
+        where: { ...(departmentId ? { departmentId } : {}) },
         order: { createdAt: "DESC" },
       });
       return supervisors as unknown as ISupervisorDoc[];
