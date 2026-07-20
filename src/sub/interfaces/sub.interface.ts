@@ -170,6 +170,8 @@ export interface ISubBase {
   reviewedBy?: string;
   procCptDocId: string[]; // UUID[] (replaces Types.ObjectId[])
   icdDocId: string[]; // UUID[] (replaces Types.ObjectId[])
+  /** Department the submission belongs to (stamped from the submitting user's row). */
+  departmentId?: string | null;
 }
 
 export interface ISubCongAnom extends ISubBase, ICongAnom {}

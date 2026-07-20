@@ -223,6 +223,11 @@ export class SubProvider {
           }
           return undefined as any;
         })(),
+        // Department stamp from the resolved candidate (submissions are dept-scoped).
+        departmentId: (() => {
+          const cand = candsMap.get(rawItemArr[indexes.candEmail]);
+          return (cand as { departmentId?: string | null } | undefined)?.departmentId ?? null;
+        })(),
         // Use UUID directly for MariaDB
         procDocId: (() => {
           const calSurg = calSurgsMap.get(rawItemArr[indexes.procUid]);
@@ -478,10 +483,18 @@ export class SubProvider {
     const toArr = (arr: string[] | undefined) =>
       (arr || []).map((s) => (typeof s === "string" ? toReq(String(s)) : ""));
 
+    // Submissions are department-scoped: stamp from the submitting candidate's row
+    // (the ETL backfilled historical rows the same way — entity comment).
+    const candDeptRows = await dataSource.query(
+      `SELECT "departmentId" FROM "candidates" WHERE "id" = $1`,
+      [candidateId]
+    );
+
     const subBase: ISubBase = {
       timeStamp: new Date(),
       submissionType: "candidate",
       candDocId: candidateId,
+      departmentId: candDeptRows[0]?.departmentId ?? null,
       procDocId: body.procDocId,
       supervisorDocId: body.supervisorDocId,
       roleInSurg: toReq(body.roleInSurg) as TRoleInSurg,
@@ -594,10 +607,17 @@ export class SubProvider {
     const toArr = (arr: string[] | undefined) =>
       (arr || []).map((s) => (typeof s === "string" ? toReq(String(s)) : ""));
 
+    // Supervisor-type submissions are scoped by the supervisor's own department.
+    const supDeptRows = await dataSource.query(
+      `SELECT "departmentId" FROM "supervisors" WHERE "id" = $1`,
+      [supervisorId]
+    );
+
     const subBase: ISubBase = {
       timeStamp: new Date(),
       submissionType: "supervisor",
       candDocId: null,
+      departmentId: supDeptRows[0]?.departmentId ?? null,
       procDocId: body.procDocId,
       supervisorDocId: supervisorId,
       roleInSurg: toReq(body.roleInSurg) as TRoleInSurg,
