@@ -8,6 +8,8 @@ export interface ISupervisor extends User {
   canValClin?: boolean; // true = can validate clinical submissions (clinical sub), false = cannot
   position?: TSupervisorPosition; // Supervisor's academic position
   termsAcceptedAt?: Date;
+  /** Department (mirror `departments` UUID) — drives dept-scoped reads and stamping. */
+  departmentId?: string;
 }
 
 export interface ISupervisorDoc extends ISupervisor {

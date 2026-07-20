@@ -30,6 +30,8 @@ export interface ICand extends User {
   google_uid?: string;
   role?: TUserRole;
   termsAcceptedAt?: Date;
+  /** Department (mirror `departments` UUID) — drives dept-scoped reads and stamping. */
+  departmentId?: string;
 }
 
 export interface ICandDoc extends ICand {

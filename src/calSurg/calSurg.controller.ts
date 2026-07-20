@@ -106,7 +106,12 @@ export class CalSurgController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.calSurgProvider.getCalSurgDashboard(dataSource);
+      // THE calendar feed for candidate dashboards + supervisor logbooks — dept-scoped
+      // like the getAll family (JWT claim → ?deptCode → NS default).
+      const jwt = (res as any).locals?.jwt;
+      const deptCode = typeof req.query.deptCode === "string" ? req.query.deptCode : undefined;
+      const departmentId = await this.calSurgProvider.resolveDepartmentId(dataSource, jwt?.departmentId, deptCode);
+      return await this.calSurgProvider.getCalSurgDashboard(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }

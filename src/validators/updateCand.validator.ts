@@ -101,4 +101,12 @@ export const updateCandValidator = checkSchema({
       errorMessage: "approved must be a boolean value",
     },
   },
+  departmentId: {
+    in: ["body"],
+    optional: true,
+    isUUID: {
+      errorMessage: "departmentId must be a valid UUID",
+    },
+    trim: true,
+  },
 });

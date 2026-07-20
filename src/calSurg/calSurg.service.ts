@@ -139,9 +139,9 @@ export class CalSurgService {
    * Dashboard: calSurg within last 60 days, stripped of formLink and google_uid.
    * Bounded by DASHBOARD_TAKE; ensure idx_cal_surgs_proc_date exists for performance.
    */
-  public async getCalSurgDashboard(dataSource: DataSource): Promise<any[]> | never {
+  public async getCalSurgDashboard(dataSource: DataSource, departmentId?: string | null): Promise<any[]> | never {
     try {
-      return await this.computeCalSurgDashboard(dataSource);
+      return await this.computeCalSurgDashboard(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -151,14 +151,14 @@ export class CalSurgService {
    * Fetches and shapes CalSurg dashboard. Used by getCalSurgDashboard.
    * Bounded by DASHBOARD_TAKE; ensure idx_cal_surgs_proc_date exists for performance.
    */
-  private async computeCalSurgDashboard(dataSource: DataSource): Promise<any[]> {
+  private async computeCalSurgDashboard(dataSource: DataSource, departmentId?: string | null): Promise<any[]> {
     const calSurgRepository = dataSource.getRepository(CalSurgEntity);
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 60);
     cutoff.setHours(0, 0, 0, 0);
 
     const calSurgs = await calSurgRepository.find({
-      where: { procDate: MoreThanOrEqual(cutoff) },
+      where: { procDate: MoreThanOrEqual(cutoff), ...(departmentId ? { departmentId } : {}) },
       relations: ["hospital", "procCpt", "clerkProc"],
       order: { procDate: "DESC" },
       take: CalSurgService.DASHBOARD_TAKE,

@@ -291,9 +291,9 @@ export class CalSurgProvider {
    * Dashboard: calSurg within last 60 days, stripped of formLink and google_uid
    * @returns Promise<CalendarProcedure[]>
    */
-  public async getCalSurgDashboard(dataSource: DataSource): Promise<any[]> {
+  public async getCalSurgDashboard(dataSource: DataSource, departmentId?: string | null): Promise<any[]> {
     try {
-      return await this.calSurgService.getCalSurgDashboard(dataSource);
+      return await this.calSurgService.getCalSurgDashboard(dataSource, departmentId);
     } catch (error: any) {
       throw new Error(`Failed to get calSurg dashboard: ${error.message}`);
     }

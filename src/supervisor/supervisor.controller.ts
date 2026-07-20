@@ -9,12 +9,23 @@ import { AppDataSource } from "../config/database.config";
 import { toCensoredSupervisor } from "../utils/censored.mapper";
 import { UserRole } from "../types/role.types";
 import { JwtPayload } from "../middleware/authorize.middleware";
+import { AuthTokenService } from "../auth/authToken.service";
+import { setAuthCookies } from "../utils/cookie.utils";
 
 @injectable()
 export class SupervisorController {
   constructor(
-    @inject(SupervisorService) private supervisorService: SupervisorService
+    @inject(SupervisorService) private supervisorService: SupervisorService,
+    @inject(AuthTokenService) private authTokenService: AuthTokenService
   ) {}
+
+  /** Reject department ids that don't exist in the mirror `departments` table. */
+  private async assertDepartmentExists(departmentId: string, dataSource: DataSource): Promise<void> {
+    const rows = await dataSource.query(`SELECT 1 FROM "departments" WHERE "id" = $1`, [departmentId]);
+    if (!rows.length) {
+      throw new Error(`Unknown departmentId: ${departmentId}`);
+    }
+  }
 
   public async handlePostSupervisor(
     req: Request, 
@@ -108,20 +119,46 @@ export class SupervisorController {
     const targetId = req.params.id || validatedReq.id;
 
     try {
-      // Supervisors may only update their own profile, and only phoneNum and position
+      // Supervisors may only update their own profile, and only phoneNum, position,
+      // and their department (self-service department switch).
       if (callerRole === UserRole.SUPERVISOR) {
         if (callerId !== targetId) {
           throw new Error("Forbidden: Supervisors can only update their own profile");
+        }
+        const switchingDept = validatedReq.departmentId !== undefined;
+        if (switchingDept) {
+          await this.assertDepartmentExists(validatedReq.departmentId as string, dataSource);
         }
         const restrictedPayload: Partial<ISupervisor> & { id: string } = {
           id: targetId,
           ...(validatedReq.phoneNum !== undefined && { phoneNum: validatedReq.phoneNum }),
           ...(validatedReq.position !== undefined && { position: validatedReq.position }),
+          ...(switchingDept && { departmentId: validatedReq.departmentId }),
         };
-        return await this.supervisorService.updateSupervisor(restrictedPayload, dataSource);
+        const updated = await this.supervisorService.updateSupervisor(restrictedPayload, dataSource);
+        // The departmentId JWT claim drives dept-scoped reads — re-issue BOTH tokens so the
+        // switch takes effect immediately. extractJWT prefers the auth_token COOKIE over the
+        // Authorization header, and the refresh flow re-signs from the refresh token's claims,
+        // so both cookies must be replaced or the old department would keep winning/resurface.
+        if (updated && switchingDept) {
+          const signPayload = {
+            email: updated.email,
+            role: UserRole.SUPERVISOR,
+            id: targetId,
+            departmentId: updated.departmentId,
+          };
+          const token = await this.authTokenService.sign(signPayload);
+          const refreshToken = await this.authTokenService.signRefreshToken(signPayload);
+          setAuthCookies(res, token, refreshToken);
+          return { ...(updated as object), token } as unknown as ISupervisorDoc;
+        }
+        return updated;
       }
 
       // Institute admin and super admin: allow all fields
+      if (validatedReq.departmentId !== undefined) {
+        await this.assertDepartmentExists(validatedReq.departmentId as string, dataSource);
+      }
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
