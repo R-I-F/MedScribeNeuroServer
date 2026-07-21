@@ -11,6 +11,7 @@ import { requestLogger } from "./middleware/requestLogger.middleware";
 import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware";
 import { globalIpRateLimiter } from "./middleware/rateLimiter.middleware";
 import { initializeDatabase, validateDatabaseConfig, closeDatabase, AppDataSource } from "./config/database.config";
+import { validateSecurityConfig } from "./config/server.config";
 import { getAllActiveInstitutions } from "./institution/institution.service";
 import { container } from "./config/container.config";
 import { RefDataService } from "./refApi/refData.service";
@@ -115,6 +116,7 @@ process.on("SIGINT", () => {
 async function bootstrap() {
   try {
     console.log("[App] Bootstrap starting...");
+    validateSecurityConfig();
     validateDatabaseConfig();
     console.log("[App] Database config OK, connecting...");
     await initializeDatabase();

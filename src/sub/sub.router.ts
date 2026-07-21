@@ -15,6 +15,7 @@ import { authorize, requireCandidate, requireSuperAdmin, requireSupervisor, requ
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
+import { requireMigrationKey } from "../middleware/requireMigrationKey";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -34,9 +35,10 @@ export class SubRouter {
     this.initRoutes();
   }
   private async initRoutes(){
-    // Import submissions from external (no auth; X-Institution-Id).
+    // Import submissions from external (operator migration script; X-Migration-Key secret).
     this.router.post(
       "/postAllFromExternal",
+      requireMigrationKey,
       institutionResolver,
       strictRateLimiter,
       createFromExternalValidator,
@@ -54,9 +56,10 @@ export class SubRouter {
         }
       }
     );
-    // Update submission status from external (no auth; X-Institution-Id).
+    // Update submission status from external (operator migration script; X-Migration-Key secret).
     this.router.patch(
       "/updateStatusFromExternal",
+      requireMigrationKey,
       institutionResolver,
       strictRateLimiter,
       createFromExternalValidator,

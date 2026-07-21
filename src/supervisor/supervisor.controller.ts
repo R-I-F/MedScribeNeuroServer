@@ -7,6 +7,7 @@ import { ISupervisor, ISupervisorDoc, ISupervisorCensoredDoc } from "./superviso
 import bcryptjs from "bcryptjs";
 import { AppDataSource } from "../config/database.config";
 import { toCensoredSupervisor } from "../utils/censored.mapper";
+import { stripPassword } from "../utils/stripPassword";
 import { UserRole } from "../types/role.types";
 import { JwtPayload } from "../middleware/authorize.middleware";
 import { AuthTokenService } from "../auth/authToken.service";
@@ -55,7 +56,7 @@ export class SupervisorController {
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.supervisorService.createSupervisor(validatedReq, dataSource);
+      return stripPassword(await this.supervisorService.createSupervisor(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -121,7 +122,7 @@ export class SupervisorController {
         { id, approved: validatedReq.approved },
         dataSource
       );
-      return updated;
+      return stripPassword(updated);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -170,9 +171,9 @@ export class SupervisorController {
           const token = await this.authTokenService.sign(signPayload);
           const refreshToken = await this.authTokenService.signRefreshToken(signPayload);
           setAuthCookies(res, token, refreshToken);
-          return { ...(updated as object), token } as unknown as ISupervisorDoc;
+          return { ...stripPassword(updated as object), token } as unknown as ISupervisorDoc;
         }
-        return updated;
+        return stripPassword(updated);
       }
 
       // Institute admin and super admin: allow all fields
@@ -182,7 +183,7 @@ export class SupervisorController {
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.supervisorService.updateSupervisor(validatedReq, dataSource);
+      return stripPassword(await this.supervisorService.updateSupervisor(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }

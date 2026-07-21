@@ -3,12 +3,31 @@ import { inject, injectable } from "inversify";
 import { CalSurgProvider } from "./calSurg.provider";
 import { matchedData } from "express-validator";
 import { ICalSurg, ICalSurgDoc } from "./calSurg.interface";
+import { UserRole } from "../types/role.types";
 
 @injectable()
 export class CalSurgController {
   constructor(
     @inject(CalSurgProvider) private calSurgProvider: CalSurgProvider
   ) {}
+
+  /**
+   * A clerk may only edit/delete procedures in THEIR OWN department. Institute/super admins
+   * are institution-wide. Prevents a clerk from mutating another department's calSurg by id
+   * (compatible with the multi-department clerk: after switching, their claim is that dept).
+   */
+  private async assertCalSurgDeptAccess(id: string, req: Request, res: Response, dataSource: any): Promise<void> {
+    const jwt = res.locals.jwt as { role?: string; departmentId?: string } | undefined;
+    const role = jwt?.role;
+    if (role === UserRole.SUPER_ADMIN || role === UserRole.INSTITUTE_ADMIN) return;
+    const deptCode = (req.query?.deptCode as string) || undefined;
+    const callerDept = await this.calSurgProvider.resolveDepartmentId(dataSource, jwt?.departmentId, deptCode);
+    const row = await this.calSurgProvider.getCalSurgById(id, dataSource);
+    const rowDept = (row as any)?.departmentId;
+    if (callerDept && rowDept && rowDept !== callerDept) {
+      throw new Error("Forbidden: This procedure belongs to another department");
+    }
+  }
 
   public async handlePostCalSurgFromExternal(req: Request, res: Response): Promise<ICalSurgDoc[] | any> | never {
     try {
@@ -166,6 +185,7 @@ export class CalSurgController {
         throw new Error("Institution DataSource not resolved");
       }
       const id = req.params.id;
+      await this.assertCalSurgDeptAccess(id, req, res, dataSource);
       const validatedReq = matchedData(req) as Partial<ICalSurg>;
       const updatedCalSurg = await this.calSurgProvider.updateCalSurg(id, validatedReq, dataSource);
       return updatedCalSurg;
@@ -184,6 +204,7 @@ export class CalSurgController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
+      await this.assertCalSurgDeptAccess(id, req, res, dataSource);
       const deleted = await this.calSurgProvider.deleteCalSurg(id, dataSource);
       if (!deleted) {
         throw new Error("CalSurg not found");

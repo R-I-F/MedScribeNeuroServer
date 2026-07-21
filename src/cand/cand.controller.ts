@@ -7,6 +7,7 @@ import { CandService } from "./cand.service";
 import { ICand, ICandDoc, ICandCensoredDoc } from "./cand.interface";
 import { AppDataSource } from "../config/database.config";
 import { toCensoredCand } from "../utils/censored.mapper";
+import { stripPassword } from "../utils/stripPassword";
 import { UserRole } from "../types/role.types";
 import { JwtPayload } from "../middleware/authorize.middleware";
 import { AuthTokenService } from "../auth/authToken.service";
@@ -76,7 +77,7 @@ export class CandController {
       if (censored) {
         return candidates.map(toCensoredCand);
       }
-      return candidates;
+      return stripPassword(candidates);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -98,7 +99,7 @@ export class CandController {
         { id, approved: validatedReq.approved },
         dataSource
       );
-      return updated;
+      return stripPassword(updated);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -148,11 +149,18 @@ export class CandController {
           const token = await this.authTokenService.sign(signPayload);
           const refreshToken = await this.authTokenService.signRefreshToken(signPayload);
           setAuthCookies(res, token, refreshToken);
-          return { ...(updated as object), token } as unknown as ICandDoc;
+          return { ...stripPassword(updated as object), token } as unknown as ICandDoc;
         }
-        return updated;
+        return stripPassword(updated);
       }
 
+      // Only institute admins and super admins may edit an arbitrary candidate with full
+      // field access. The route's role gate admits clerk/supervisor too (hierarchical
+      // authorize), so reject them here — otherwise a clerk or supervisor could overwrite
+      // any candidate's password/email/approved and take over the account.
+      if (callerRole !== UserRole.INSTITUTE_ADMIN && callerRole !== UserRole.SUPER_ADMIN) {
+        throw new Error("Forbidden: You are not allowed to update candidate accounts");
+      }
       // Institute admin and super admin: allow all fields
       if (validatedReq.departmentId !== undefined) {
         await this.assertDepartmentExists(validatedReq.departmentId as string, dataSource);
@@ -160,7 +168,7 @@ export class CandController {
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.candService.updateCand(validatedReq, dataSource);
+      return stripPassword(await this.candService.updateCand(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -183,7 +191,7 @@ export class CandController {
       if (censored) {
         return toCensoredCand(candidate);
       }
-      return candidate;
+      return stripPassword(candidate);
     } catch (err: any) {
       throw new Error(err);
     }

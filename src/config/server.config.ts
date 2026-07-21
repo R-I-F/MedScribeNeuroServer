@@ -7,8 +7,26 @@ const SERVER_PORT = process.env.PORT || 3001;
 const SERVER_TOKEN_EXPIRETIME = process.env.SERVER_TOKEN_EXPIRETIME || 3600;
 const SERVER_REFRESH_TOKEN_EXPIRETIME = process.env.SERVER_REFRESH_TOKEN_EXPIRETIME || 604800; // 7 days in seconds
 const SERVER_TOKEN_ISSUER = process.env.SERVER_TOKEN_ISSUER || "medscribe.neuro.qasrelainy";
-const SERVER_TOKEN_SECRET = process.env.SERVER_TOKEN_SECRET || "supersecretkey";
+const DEFAULT_TOKEN_SECRET = "supersecretkey";
+const SERVER_TOKEN_SECRET = process.env.SERVER_TOKEN_SECRET || DEFAULT_TOKEN_SECRET;
 const SERVER_REFRESH_TOKEN_SECRET = process.env.SERVER_REFRESH_TOKEN_SECRET || SERVER_TOKEN_SECRET + "_refresh";
+
+/**
+ * Fail hard if the JWT signing secret is missing or left at the built-in default in a
+ * real environment. Without this, an unset SERVER_TOKEN_SECRET silently signs every
+ * token with the publicly-known default → anyone could forge a valid JWT for any
+ * user/role. Called at boot (index.ts). Dev/test may run on the default.
+ */
+export function validateSecurityConfig(): void {
+  const env = (process.env.NODE_ENV || "").toLowerCase();
+  const enforced = env === "production" || env === "staging";
+  if (enforced && (!process.env.SERVER_TOKEN_SECRET || process.env.SERVER_TOKEN_SECRET === DEFAULT_TOKEN_SECRET)) {
+    throw new Error(
+      "SERVER_TOKEN_SECRET must be set to a strong, non-default value in production/staging " +
+        "(tokens are otherwise forgeable with the built-in default secret)."
+    );
+  }
+}
 
 // Helper function to format seconds into human-readable time
 function formatTime(seconds: number): string {

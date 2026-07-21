@@ -14,6 +14,7 @@ import { requireCandidate, authorize } from "../middleware/authorize.middleware"
 import { UserRole } from "../types/role.types";
 import { userBasedRateLimiter, userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
 import institutionResolver from "../middleware/institutionResolver.middleware";
+import { requireMigrationKey } from "../middleware/requireMigrationKey";
 
 @injectable()
 export class CalSurgRouter {
@@ -67,9 +68,10 @@ export class CalSurgRouter {
       }
     );
 
-    // Create calSurg from external (no auth; X-Institution-Id).
+    // Create calSurg from external (operator migration script; X-Migration-Key secret).
     this.router.post(
       "/postAllFromExternal",
+      requireMigrationKey,
       institutionResolver,
       strictRateLimiter,
       createFromExternalValidator,

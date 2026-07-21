@@ -4,6 +4,7 @@ import { inject, injectable } from "inversify";
 import { ClerkService } from "./clerk.service";
 import { IClerk } from "./clerk.interface";
 import bcryptjs from "bcryptjs";
+import { stripPassword } from "../utils/stripPassword";
 
 @injectable()
 export class ClerkController {
@@ -36,7 +37,7 @@ export class ClerkController {
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.clerkService.createClerk(validatedReq, dataSource);
+      return stripPassword(await this.clerkService.createClerk(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -51,7 +52,7 @@ export class ClerkController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.clerkService.getAllClerks(dataSource);
+      return stripPassword(await this.clerkService.getAllClerks(dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -67,7 +68,7 @@ export class ClerkController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.clerkService.getClerkById(validatedReq, dataSource);
+      return stripPassword(await this.clerkService.getClerkById(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -87,7 +88,7 @@ export class ClerkController {
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.clerkService.updateClerk(validatedReq, dataSource);
+      return stripPassword(await this.clerkService.updateClerk(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }

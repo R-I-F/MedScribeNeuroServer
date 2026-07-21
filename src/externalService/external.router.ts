@@ -4,6 +4,8 @@ import { inject, injectable } from "inversify";
 import { getSheetDataValidator } from "../validators/getSheetData.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
+import { requireMigrationKey } from "../middleware/requireMigrationKey";
+import { strictRateLimiter } from "../middleware/rateLimiter.middleware";
 
 @injectable()
 export class ExternalRouter {
@@ -19,6 +21,8 @@ export class ExternalRouter {
     // GET external sheet data (generic Google-sheet proxy: ?spreadsheetName=&sheetName=[&row=])
     this.router.get(
       "",
+      requireMigrationKey,
+      strictRateLimiter,
       getSheetDataValidator,
       async (req: Request, res: Response) => {
         const result = validationResult(req);

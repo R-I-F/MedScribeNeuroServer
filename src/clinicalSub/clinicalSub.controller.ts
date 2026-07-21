@@ -72,16 +72,41 @@ export class ClinicalSubController {
       throw new Error("Institution DataSource not resolved");
     }
     const institutionId = (req as any).institutionId as string | undefined;
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const callerRole = jwtPayload?.role as UserRole | undefined;
+    const callerId = jwtPayload?.id ?? (jwtPayload as any)?._id;
     const validated = matchedData(req) as IClinicalSubInput;
+    // A candidate may only create submissions for THEMSELVES — never attribute one to
+    // another candidate. Force candDocId from the JWT (ignore whatever the body claims).
+    if (callerRole === UserRole.CANDIDATE) {
+      if (!callerId) throw new Error("Unauthorized: No candidate ID found in token");
+      validated.candDocId = callerId;
+    }
     return await this.clinicalSubProvider.create(validated, dataSource, institutionId);
   }
 
+  /**
+   * GET /clinicalSub/ — admins see all; a candidate/supervisor is transparently scoped to
+   * their own rows (so the generic list can't dump every candidate's activity to a student).
+   */
   public async handleGetAll(req: Request, res: Response) {
     const dataSource = (req as any).institutionDataSource;
     if (!dataSource) {
       throw new Error("Institution DataSource not resolved");
     }
-    return await this.clinicalSubProvider.getAll(dataSource);
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const callerRole = jwtPayload?.role as UserRole | undefined;
+    const callerId = jwtPayload?.id ?? (jwtPayload as any)?._id;
+    if (callerRole === UserRole.INSTITUTE_ADMIN || callerRole === UserRole.SUPER_ADMIN) {
+      return await this.clinicalSubProvider.getAll(dataSource);
+    }
+    if (callerRole === UserRole.CANDIDATE) {
+      return await this.clinicalSubProvider.getMineOrAll(dataSource, { callerCandidateId: callerId });
+    }
+    if (callerRole === UserRole.SUPERVISOR) {
+      return await this.clinicalSubProvider.getAssignedToSupervisorOrAll(dataSource, { callerSupervisorId: callerId });
+    }
+    return [];
   }
 
   public async handleGetById(req: Request, res: Response) {
@@ -90,7 +115,18 @@ export class ClinicalSubController {
       throw new Error("Institution DataSource not resolved");
     }
     const id = req.params.id;
-    return await this.clinicalSubProvider.getById(id, dataSource);
+    const existing = await this.clinicalSubProvider.getById(id, dataSource);
+    if (!existing) return null;
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const callerRole = jwtPayload?.role as UserRole | undefined;
+    const callerId = jwtPayload?.id ?? (jwtPayload as any)?._id;
+    const isAdmin = callerRole === UserRole.INSTITUTE_ADMIN || callerRole === UserRole.SUPER_ADMIN;
+    const isOwnerCand = callerRole === UserRole.CANDIDATE && !!callerId && (existing as any).candDocId === callerId;
+    const isAssignedSup = callerRole === UserRole.SUPERVISOR && !!callerId && (existing as any).supervisorDocId === callerId;
+    if (!isAdmin && !isOwnerCand && !isAssignedSup) {
+      throw new Error("Forbidden: You are not allowed to view this clinical submission");
+    }
+    return existing;
   }
 
   public async handleUpdate(req: Request, res: Response) {
@@ -98,8 +134,26 @@ export class ClinicalSubController {
     if (!dataSource) {
       throw new Error("Institution DataSource not resolved");
     }
+    const id = req.params.id;
+    const existing = await this.clinicalSubProvider.getById(id, dataSource);
+    if (!existing) return null;
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const callerRole = jwtPayload?.role as UserRole | undefined;
+    const callerId = jwtPayload?.id ?? (jwtPayload as any)?._id;
+    const isAdmin = callerRole === UserRole.INSTITUTE_ADMIN || callerRole === UserRole.SUPER_ADMIN;
+    const isAssignedSup = callerRole === UserRole.SUPERVISOR && !!callerId && (existing as any).supervisorDocId === callerId;
+    // Only the ASSIGNED supervisor (or an admin) may review/edit a clinical submission —
+    // not the candidate (who would otherwise self-approve) and not any other supervisor.
+    if (!isAdmin && !isAssignedSup) {
+      throw new Error("Forbidden: Only the assigned supervisor can review this clinical submission");
+    }
     const matched = matchedData(req) as IClinicalSubUpdateInput;
-    matched.id = req.params.id;
+    matched.id = id;
+    // A supervisor may not reassign ownership (candDocId/supervisorDocId) — admins only.
+    if (!isAdmin) {
+      delete (matched as any).candDocId;
+      delete (matched as any).supervisorDocId;
+    }
     return await this.clinicalSubProvider.update(matched, dataSource);
   }
 }

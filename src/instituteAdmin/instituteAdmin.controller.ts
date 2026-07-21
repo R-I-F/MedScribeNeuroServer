@@ -6,6 +6,7 @@ import { InstituteAdminService } from "./instituteAdmin.service";
 import { IInstituteAdmin } from "./instituteAdmin.interface";
 import { AuthTokenService } from "../auth/authToken.service";
 import { UserRole } from "../types/role.types";
+import { stripPassword } from "../utils/stripPassword";
 import { JwtPayload } from "../middleware/authorize.middleware";
 import { setAuthCookies } from "../utils/cookie.utils";
 
@@ -41,7 +42,7 @@ export class InstituteAdminController {
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);
       }
-      return await this.instituteAdminService.createInstituteAdmin(validatedReq, dataSource);
+      return stripPassword(await this.instituteAdminService.createInstituteAdmin(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -56,7 +57,7 @@ export class InstituteAdminController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.instituteAdminService.getAllInstituteAdmins(dataSource);
+      return stripPassword(await this.instituteAdminService.getAllInstituteAdmins(dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -91,6 +92,15 @@ export class InstituteAdminController {
       const dataSource = (req as any).institutionDataSource;
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
+      }
+      // An institute admin may only update THEIR OWN record. Editing another admin
+      // (email/password/approved/department) is a superAdmin-only power — otherwise any
+      // institute admin could take over a peer admin's account (lateral escalation).
+      const caller = res.locals.jwt as JwtPayload | undefined;
+      const callerRole = caller?.role as UserRole | undefined;
+      const callerUserId = caller?.id ?? caller?._id;
+      if (callerRole !== UserRole.SUPER_ADMIN && callerUserId !== validatedReq.id) {
+        throw new Error("Forbidden: You can only update your own institute-admin account");
       }
       const switchingDept = validatedReq.departmentId !== undefined;
       if (switchingDept) {

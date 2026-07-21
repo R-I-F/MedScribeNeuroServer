@@ -4,6 +4,7 @@ import { matchedData } from "express-validator";
 import { inject, injectable } from "inversify";
 import { SuperAdminService } from "./superAdmin.service";
 import { ISuperAdmin } from "./superAdmin.interface";
+import { stripPassword } from "../utils/stripPassword";
 
 @injectable()
 export class SuperAdminController {
@@ -40,7 +41,7 @@ export class SuperAdminController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.superAdminService.getAllSuperAdmins(dataSource);
+      return stripPassword(await this.superAdminService.getAllSuperAdmins(dataSource));
     } catch (err: any) {
       throw new Error(err);
     }
@@ -56,7 +57,7 @@ export class SuperAdminController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      return await this.superAdminService.getSuperAdminById(validatedReq, dataSource);
+      return stripPassword(await this.superAdminService.getSuperAdminById(validatedReq, dataSource));
     } catch (err: any) {
       throw new Error(err);
     }

@@ -254,6 +254,7 @@ export class AuthRouter {
     // Requires institutionId since each institution has its own candidates and supervisors
     this.router.post(
       "/login",
+      strictRateLimiter,
       loginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -312,6 +313,7 @@ export class AuthRouter {
     // Requires institutionId since each institution has its own super admins
     this.router.post(
       "/superAdmin/login",
+      strictRateLimiter,
       superAdminLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         // Super Admin login is a pre-production tool: allowed ONLY in development and
@@ -369,6 +371,7 @@ export class AuthRouter {
     // Requires institutionId since each institution has its own institute admins
     this.router.post(
       "/instituteAdmin/login",
+      strictRateLimiter,
       instituteAdminLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -416,6 +419,7 @@ export class AuthRouter {
     // Requires institutionId since each institution has its own clerks
     this.router.post(
       "/clerk/login",
+      strictRateLimiter,
       clerkLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);

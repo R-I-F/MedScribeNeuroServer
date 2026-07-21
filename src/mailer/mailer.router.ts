@@ -21,44 +21,23 @@ export class MailerRouter {
   }
 
   private initRoutes() {
+    // DISABLED (2026-07-21, security audit): the generic "send arbitrary email" endpoint is
+    // not used anywhere in the app — system emails (OTP, password reset) call MailerService
+    // directly. Left mounted it was an authenticated phishing vector (caller-controlled
+    // from/to/html). Returns 410; restore only with `from` pinned to the verified domain.
     this.router.post(
       "/send",
       userBasedStrictRateLimiter,
       extractJWT,
       requireInstituteAdmin,
-      sendMailValidator,
-      async (req: Request, res: Response) => {
-        const result = validationResult(req);
-        if (!result.isEmpty()) {
-          return res.status(StatusCodes.BAD_REQUEST).json({
-            status: "error",
-            statusCode: StatusCodes.BAD_REQUEST,
-            message: "Bad Request",
-            error: result.array(),
-          });
-        }
-
-        try {
-          const validatedPayload = matchedData(req, {
-            locations: ["body"],
-            includeOptionals: true,
-          }) as SendMailPayload;
-          const { to } = await this.mailerController.handleSendMail(validatedPayload);
-          return res.status(StatusCodes.OK).json({
-            status: "success",
-            statusCode: StatusCodes.OK,
-            message: `Email sent successfully to ${to}`,
-            data: { to },
-          });
-        } catch (error: any) {
-          console.error("[MailerRouter] Failed to send email", error);
-          return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-            status: "error",
-            statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-            message: "Internal Server Error",
-            error: error?.message ?? "Failed to send email",
-          });
-        }
+      async (_req: Request, res: Response) => {
+        return res.status(StatusCodes.GONE).json({
+          status: "error",
+          statusCode: StatusCodes.GONE,
+          message: "Gone",
+          error: "This endpoint is disabled.",
+          code: "ENDPOINT_DISABLED",
+        });
       }
     );
   }
