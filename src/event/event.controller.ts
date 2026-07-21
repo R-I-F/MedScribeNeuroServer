@@ -223,10 +223,10 @@ export class EventController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
-      const jwt = res.locals.jwt as { id?: string; _id?: string; role?: string } | undefined;
+      const jwt = res.locals.jwt as { id?: string; _id?: string; role?: string; departmentId?: string } | undefined;
       const userId = jwt?.id ?? jwt?._id;
       const role = jwt?.role;
-      return await this.eventProvider.getAcademicRanking(dataSource, userId, role);
+      return await this.eventProvider.getAcademicRanking(dataSource, userId, role, jwt?.departmentId);
     } catch (err: any) {
       throw new Error(err);
     }

@@ -568,16 +568,28 @@ export class EventProvider {
    * Uses shared event-points rules (attendance +1, flagged −2, journal presenter +2, presenter+attendee +3).
    * Fetches candidate details only for returned ids (≤11).
    */
+  /**
+   * Department-scoped: candidates are ranked only among their own department
+   * (JWT departmentId claim → REF_DEPT_CODE default, like the other event reads).
+   */
   public async getAcademicRanking(
     dataSource: DataSource,
     loggedInUserId?: string,
-    loggedInUserRole?: string
+    loggedInUserRole?: string,
+    jwtDepartmentId?: string
   ): Promise<
     { candidateId: string; candidateName: string; rank: number; academicPoints: number; regDeg: string }[]
   > | never {
     try {
       const pointsMap = await this.eventService.getAcademicPointsPerCandidate(dataSource);
+      const departmentId = await this.resolveDepartmentId(dataSource, jwtDepartmentId);
+      let departmentCandidateIds: Set<string> | null = null;
+      if (departmentId) {
+        const rows = await dataSource.query(`SELECT "id" FROM "candidates" WHERE "departmentId" = $1`, [departmentId]);
+        departmentCandidateIds = new Set<string>(rows.map((r: any) => r.id));
+      }
       const sorted = Array.from(pointsMap.entries())
+        .filter(([candidateId]) => !departmentCandidateIds || departmentCandidateIds.has(candidateId))
         .map(([candidateId, academicPoints]) => ({ candidateId, academicPoints }))
         .sort((a, b) => {
           if (b.academicPoints !== a.academicPoints) return b.academicPoints - a.academicPoints;

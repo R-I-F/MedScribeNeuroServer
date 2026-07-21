@@ -1252,16 +1252,23 @@ export class SubProvider {
    * Submission (surgical experience) ranking: top 10 by approved count + logged-in candidate if not in top 10.
    * Fetches candidate details only for returned ids (≤11).
    */
+  /**
+   * Department-scoped: candidates are ranked only among their own department
+   * (JWT departmentId claim → REF_DEPT_CODE default, like the calSurg/event reads).
+   */
   public async getSubmissionRanking(
     dataSource: DataSource,
     loggedInUserId?: string,
-    loggedInUserRole?: string
+    loggedInUserRole?: string,
+    jwtDepartmentId?: string
   ): Promise<
     { candidateId: string; candidateName: string; rank: number; approvedCount: number; regDeg: string }[]
   > | never {
     try {
       const countMap = await this.subService.getApprovedCountsPerCandidate(dataSource);
+      const departmentCandidateIds = await this.getDepartmentCandidateIds(dataSource, jwtDepartmentId);
       const sorted = Array.from(countMap.entries())
+        .filter(([candidateId]) => !departmentCandidateIds || departmentCandidateIds.has(candidateId))
         .map(([candidateId, approvedCount]) => ({ candidateId, approvedCount }))
         .sort((a, b) => {
           if (b.approvedCount !== a.approvedCount) return b.approvedCount - a.approvedCount;
@@ -1336,6 +1343,25 @@ export class SubProvider {
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * Candidate ids of the ranking's department (JWT claim → REF_DEPT_CODE default).
+   * Returns null (no filtering) only if the department can't be resolved at all.
+   */
+  private async getDepartmentCandidateIds(
+    dataSource: DataSource,
+    jwtDepartmentId?: string
+  ): Promise<Set<string> | null> {
+    let departmentId = jwtDepartmentId ?? null;
+    if (!departmentId) {
+      const code = process.env.REF_DEPT_CODE || "NS";
+      const rows = await dataSource.query(`SELECT "id" FROM "departments" WHERE "code" = $1`, [code]);
+      departmentId = rows[0]?.id ?? null;
+    }
+    if (!departmentId) return null;
+    const rows = await dataSource.query(`SELECT "id" FROM "candidates" WHERE "departmentId" = $1`, [departmentId]);
+    return new Set<string>(rows.map((r: any) => r.id));
   }
 
   public async getCandidateSubmissions(candidateId: string, dataSource: DataSource): Promise<ISubDoc[]> | never {
