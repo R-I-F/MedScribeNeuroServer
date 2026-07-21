@@ -4,6 +4,8 @@ import { TUserRole } from "../types/role.types";
 export interface IInstituteAdmin extends User {
   role: TUserRole;
   termsAcceptedAt?: Date;
+  /** Department scope (mirror departments UUID); null/absent = institution-wide admin. */
+  departmentId?: string;
   // InstituteAdmin can have additional fields if needed in the future
   // e.g., instituteId, permissions, etc.
 }

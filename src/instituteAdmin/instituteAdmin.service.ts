@@ -55,18 +55,27 @@ export class InstituteAdminService {
     }
   }
 
-  // Dashboard endpoints
-  public async getAllSupervisors(dataSource: DataSource) {
+  /** Department scope of the calling admin (DB row, not JWT claim); null = institution-wide. */
+  public async getAdminDepartmentScope(adminId: string | undefined, dataSource: DataSource): Promise<string | null> {
     try {
-      return await this.instituteAdminProvider.getAllSupervisors(dataSource);
+      return await this.instituteAdminProvider.getAdminDepartmentScope(adminId, dataSource);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getSupervisorSubmissions(supervisorId: string, status: "approved" | "pending" | "rejected" | undefined, dataSource: DataSource) {
+  // Dashboard endpoints
+  public async getAllSupervisors(dataSource: DataSource, departmentId?: string | null) {
     try {
-      return await this.instituteAdminProvider.getSupervisorSubmissions(supervisorId, status, dataSource);
+      return await this.instituteAdminProvider.getAllSupervisors(dataSource, departmentId);
+    } catch (err: any) {
+      throw new Error(err);
+    }
+  }
+
+  public async getSupervisorSubmissions(supervisorId: string, status: "approved" | "pending" | "rejected" | undefined, dataSource: DataSource, departmentId?: string | null) {
+    try {
+      return await this.instituteAdminProvider.getSupervisorSubmissions(supervisorId, status, dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -75,10 +84,11 @@ export class InstituteAdminService {
   public async generateSupervisorReportPdf(
     supervisorId: string,
     dataSource: DataSource,
-    institution: import("../institution/institution.service").IInstitution
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     try {
-      return await this.instituteAdminProvider.generateSupervisorReportPdf(supervisorId, dataSource, institution);
+      return await this.instituteAdminProvider.generateSupervisorReportPdf(supervisorId, dataSource, institution, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -86,34 +96,35 @@ export class InstituteAdminService {
 
   public async generateSupervisorsReportPdf(
     dataSource: DataSource,
-    institution: import("../institution/institution.service").IInstitution
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     try {
-      return await this.instituteAdminProvider.generateSupervisorsReportPdf(dataSource, institution);
+      return await this.instituteAdminProvider.generateSupervisorsReportPdf(dataSource, institution, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getAllCandidates(dataSource: DataSource) {
+  public async getAllCandidates(dataSource: DataSource, departmentId?: string | null) {
     try {
-      return await this.instituteAdminProvider.getAllCandidates(dataSource);
+      return await this.instituteAdminProvider.getAllCandidates(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCandidateSubmissions(candidateId: string, dataSource: DataSource) {
+  public async getCandidateSubmissions(candidateId: string, dataSource: DataSource, departmentId?: string | null) {
     try {
-      return await this.instituteAdminProvider.getCandidateSubmissions(candidateId, dataSource);
+      return await this.instituteAdminProvider.getCandidateSubmissions(candidateId, dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCandidateSubmissionById(candidateId: string, submissionId: string, dataSource: DataSource) {
+  public async getCandidateSubmissionById(candidateId: string, submissionId: string, dataSource: DataSource, departmentId?: string | null) {
     try {
-      return await this.instituteAdminProvider.getCandidateSubmissionById(candidateId, submissionId, dataSource);
+      return await this.instituteAdminProvider.getCandidateSubmissionById(candidateId, submissionId, dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -127,9 +138,9 @@ export class InstituteAdminService {
     year?: number;
     startDate?: Date;
     endDate?: Date;
-  }, dataSource: DataSource) {
+  }, dataSource: DataSource, departmentId?: string | null) {
     try {
-      return await this.instituteAdminProvider.getCalendarProcedures(filters, dataSource);
+      return await this.instituteAdminProvider.getCalendarProcedures(filters, dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -150,9 +161,9 @@ export class InstituteAdminService {
     startDate?: Date;
     endDate?: Date;
     groupBy?: "title" | "alphaCode";
-  }, dataSource: DataSource) {
+  }, dataSource: DataSource, departmentId?: string | null) {
     try {
-      return await this.instituteAdminProvider.getHospitalAnalysis(filters, dataSource);
+      return await this.instituteAdminProvider.getHospitalAnalysis(filters, dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -161,10 +172,11 @@ export class InstituteAdminService {
   public async getCandidateDashboards(
     params: { page: number; pageSize: number },
     dataSource: DataSource,
-    institution: import("../institution/institution.service").IInstitution
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
   ) {
     try {
-      return await this.instituteAdminProvider.getCandidateDashboards(params, dataSource, institution);
+      return await this.instituteAdminProvider.getCandidateDashboards(params, dataSource, institution, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -173,10 +185,11 @@ export class InstituteAdminService {
   public async getCandidateSummaryList(
     params: { search?: string },
     dataSource: DataSource,
-    institution: import("../institution/institution.service").IInstitution
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
   ) {
     try {
-      return await this.instituteAdminProvider.getCandidateSummaryList(params, dataSource, institution);
+      return await this.instituteAdminProvider.getCandidateSummaryList(params, dataSource, institution, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -185,13 +198,15 @@ export class InstituteAdminService {
   public async getCandidateDashboardByCandidateId(
     candidateId: string,
     dataSource: DataSource,
-    institution: import("../institution/institution.service").IInstitution
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
   ) {
     try {
       return await this.instituteAdminProvider.getCandidateDashboardByCandidateId(
         candidateId,
         dataSource,
-        institution
+        institution,
+        departmentId
       );
     } catch (err: any) {
       throw new Error(err);
@@ -201,13 +216,15 @@ export class InstituteAdminService {
   public async generateCandidateReportPdf(
     candidateId: string,
     dataSource: DataSource,
-    institution: import("../institution/institution.service").IInstitution
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     try {
       return await this.instituteAdminProvider.generateCandidateReportPdf(
         candidateId,
         dataSource,
-        institution
+        institution,
+        departmentId
       );
     } catch (err: any) {
       throw new Error(err);
@@ -217,13 +234,15 @@ export class InstituteAdminService {
   public async generateSubmissionReportPdf(
     submissionId: string,
     dataSource: DataSource,
-    institution: import("../institution/institution.service").IInstitution
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     try {
       return await this.instituteAdminProvider.generateSubmissionReportPdf(
         submissionId,
         dataSource,
-        institution
+        institution,
+        departmentId
       );
     } catch (err: any) {
       throw new Error(err);

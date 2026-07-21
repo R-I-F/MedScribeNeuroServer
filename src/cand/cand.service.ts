@@ -155,10 +155,12 @@ export class CandService {
     }
   }
 
-  public async getAllCandidates(dataSource: DataSource): Promise<ICandDoc[]> | never {
+  public async getAllCandidates(dataSource: DataSource, departmentId?: string | null): Promise<ICandDoc[]> | never {
     try {
       const candRepository = dataSource.getRepository(CandidateEntity);
       const allCandidates = await candRepository.find({
+        // Optional department scope (dept-scoped institute admins); null = institution-wide
+        where: { ...(departmentId ? { departmentId } : {}) },
         order: { createdAt: "DESC" },
       });
       return allCandidates as unknown as ICandDoc[];

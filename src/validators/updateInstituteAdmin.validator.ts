@@ -57,5 +57,15 @@ export const updateInstituteAdminValidator = checkSchema({
       errorMessage: "institute admin approval status must be a boolean value",
     },
   },
+  // Self-service department switch. UUID only — an admin cannot null their own scope
+  // (going institution-wide is a DB-level/super-admin decision, not self-service).
+  departmentId: {
+    in: ["body"],
+    optional: true,
+    isUUID: {
+      errorMessage: "departmentId must be a valid UUID",
+    },
+    trim: true,
+  },
 });
 

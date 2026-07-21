@@ -174,6 +174,21 @@ export class InstituteAdminProvider {
     }
   }
 
+  /**
+   * Department scope of the calling admin, from their institute_admins DB row — never the
+   * JWT claim (tokens outlive department changes). Returns null (= institution-wide) when
+   * the row has no departmentId or when the caller has no admin row (e.g. a super admin,
+   * whom requireInstituteAdmin also lets through).
+   */
+  public async getAdminDepartmentScope(adminId: string | undefined, dataSource: DataSource): Promise<string | null> {
+    if (!adminId || !this.uuidRegex.test(adminId)) {
+      return null;
+    }
+    const instituteAdminRepository = dataSource.getRepository(InstituteAdminEntity);
+    const admin = await instituteAdminRepository.findOne({ where: { id: adminId } });
+    return (admin as any)?.departmentId ?? null;
+  }
+
   /** Canonical email: lowercase, trim, dots removed from local part (Gmail-style equivalence). */
   private static canonicalEmail(email: string): string {
     const n = (email || "").trim().toLowerCase();
@@ -238,9 +253,9 @@ export class InstituteAdminProvider {
   }
 
   // Dashboard endpoints business logic
-  public async getAllSupervisors(dataSource: DataSource): Promise<ISupervisorDoc[]> | never {
+  public async getAllSupervisors(dataSource: DataSource, departmentId?: string | null): Promise<ISupervisorDoc[]> | never {
     try {
-      return await this.supervisorService.getAllSupervisors(dataSource);
+      return await this.supervisorService.getAllSupervisors(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -249,7 +264,8 @@ export class InstituteAdminProvider {
   public async getSupervisorSubmissions(
     supervisorId: string,
     status: "approved" | "pending" | "rejected" | undefined,
-    dataSource: DataSource
+    dataSource: DataSource,
+    departmentId?: string | null
   ): Promise<ISubDoc[]> | never {
     try {
       // Validate UUID format (supervisor now uses MariaDB UUID)
@@ -257,9 +273,9 @@ export class InstituteAdminProvider {
         throw new Error("Invalid supervisor ID format");
       }
 
-      // Verify supervisor exists
+      // Verify supervisor exists (and, for dept-scoped admins, belongs to the admin's department)
       const supervisor = await this.supervisorService.getSupervisorById({ id: supervisorId }, dataSource);
-      if (!supervisor) {
+      if (!supervisor || (departmentId && (supervisor as any).departmentId !== departmentId)) {
         throw new Error("Supervisor not found");
       }
 
@@ -280,32 +296,33 @@ export class InstituteAdminProvider {
    */
   public async generateSupervisorsReportPdf(
     dataSource: DataSource,
-    institution: IInstitution
+    institution: IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
-    const supervisors = await this.supervisorService.getAllSupervisors(dataSource);
+    const supervisors = await this.supervisorService.getAllSupervisors(dataSource, departmentId);
     const buffer = await this.buildSupervisorsReportPdfBuffer(supervisors as any[], institution);
     const suggestedFilename = `Supervisors - Ecertificate - ${toPascalCaseForFilename(institution.name)} - ${toPascalCaseForFilename(institution.department)}.pdf`;
     return { buffer, suggestedFilename };
   }
 
-  public async getAllCandidates(dataSource: DataSource): Promise<ICandDoc[]> | never {
+  public async getAllCandidates(dataSource: DataSource, departmentId?: string | null): Promise<ICandDoc[]> | never {
     try {
-      return await this.candService.getAllCandidates(dataSource);
+      return await this.candService.getAllCandidates(dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
   }
 
-  public async getCandidateSubmissions(candidateId: string, dataSource: DataSource): Promise<ISubDoc[]> | never {
+  public async getCandidateSubmissions(candidateId: string, dataSource: DataSource, departmentId?: string | null): Promise<ISubDoc[]> | never {
     try {
       // Validate UUID format (candidate now uses MariaDB UUID)
       if (!this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
       }
 
-      // Verify candidate exists
+      // Verify candidate exists (and, for dept-scoped admins, belongs to the admin's department)
       const candidate = await this.candService.getCandById(candidateId, dataSource);
-      if (!candidate) {
+      if (!candidate || (departmentId && (candidate as any).departmentId !== departmentId)) {
         throw new Error("Candidate not found");
       }
 
@@ -318,7 +335,8 @@ export class InstituteAdminProvider {
   public async getCandidateSubmissionById(
     candidateId: string,
     submissionId: string,
-    dataSource: DataSource
+    dataSource: DataSource,
+    departmentId?: string | null
   ): Promise<ISubDoc | null> | never {
     try {
       // Validate UUID formats
@@ -327,6 +345,14 @@ export class InstituteAdminProvider {
       }
       if (!this.uuidRegex.test(candidateId)) {
         throw new Error("Invalid candidate ID format");
+      }
+
+      // Dept-scoped admins may only reach submissions of candidates in their department
+      if (departmentId) {
+        const candidate = await this.candService.getCandById(candidateId, dataSource);
+        if (!candidate || (candidate as any).departmentId !== departmentId) {
+          throw new Error("Submission not found or does not belong to the specified candidate");
+        }
       }
 
       // Get populated submission
@@ -397,9 +423,9 @@ export class InstituteAdminProvider {
     year?: number;
     startDate?: Date;
     endDate?: Date;
-  }, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  }, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
-      return await this.calSurgService.getCalSurgWithFilters(filters, dataSource);
+      return await this.calSurgService.getCalSurgWithFilters(filters, dataSource, departmentId);
     } catch (err: any) {
       throw new Error(err);
     }
@@ -420,7 +446,7 @@ export class InstituteAdminProvider {
     startDate?: Date;
     endDate?: Date;
     groupBy?: "title" | "alphaCode";
-  }, dataSource: DataSource): Promise<any[]> | never {
+  }, dataSource: DataSource, departmentId?: string | null): Promise<any[]> | never {
     try {
       // Get calendar procedures with filters
       const calSurgs = await this.calSurgService.getCalSurgWithFilters({
@@ -429,7 +455,7 @@ export class InstituteAdminProvider {
         year: filters.year,
         startDate: filters.startDate,
         endDate: filters.endDate
-      }, dataSource);
+      }, dataSource, departmentId);
 
       // Group by hospital
       const hospitalMap = new Map<string, {
@@ -530,7 +556,8 @@ export class InstituteAdminProvider {
   public async getCandidateSummaryList(
     params: { search?: string },
     dataSource: DataSource,
-    institution: IInstitution
+    institution: IInstitution,
+    departmentId?: string | null
   ): Promise<{ items: any[] }> {
     try {
       const search = params.search != null ? String(params.search).trim() : "";
@@ -539,18 +566,22 @@ export class InstituteAdminProvider {
       let candidates: any[];
       if (search === "") {
         candidates = await candRepo.find({
+          // Optional department scope (dept-scoped institute admins); null = institution-wide
+          where: { ...(departmentId ? { departmentId } : {}) },
           order: { createdAt: "DESC" },
         });
       } else {
         const term = `%${search}%`;
-        candidates = await candRepo
+        const qb = candRepo
           .createQueryBuilder("c")
           .where(
             "(c.fullName LIKE :term OR c.regNum LIKE :term OR c.rank LIKE :term OR c.regDeg LIKE :term OR c.email LIKE :term)",
             { term }
-          )
-          .orderBy("c.createdAt", "DESC")
-          .getMany();
+          );
+        if (departmentId) {
+          qb.andWhere("c.departmentId = :departmentId", { departmentId });
+        }
+        candidates = await qb.orderBy("c.createdAt", "DESC").getMany();
       }
 
       const candidateIds = candidates.map((c: any) => c.id).filter((id: string) => this.uuidRegex.test(id));
@@ -624,7 +655,8 @@ export class InstituteAdminProvider {
   public async getCandidateDashboardByCandidateId(
     candidateId: string,
     dataSource: DataSource,
-    institution: IInstitution
+    institution: IInstitution,
+    departmentId?: string | null
   ): Promise<any> {
     try {
       if (!this.uuidRegex.test(candidateId)) {
@@ -632,7 +664,7 @@ export class InstituteAdminProvider {
       }
       const candRepo = dataSource.getRepository(CandidateEntity);
       const cand = await candRepo.findOne({ where: { id: candidateId } });
-      if (!cand) {
+      if (!cand || (departmentId && (cand as any).departmentId !== departmentId)) {
         throw new Error("Candidate not found or does not belong to the requested institution");
       }
 
@@ -669,7 +701,8 @@ export class InstituteAdminProvider {
   public async getCandidateDashboards(
     params: { page: number; pageSize: number },
     dataSource: DataSource,
-    institution: IInstitution
+    institution: IInstitution,
+    departmentId?: string | null
   ): Promise<{
     items: any[];
     page: number;
@@ -681,7 +714,8 @@ export class InstituteAdminProvider {
 
       const candRepo: Repository<any> = dataSource.getRepository(CandidateEntity);
       const [candidates, totalItems] = await candRepo.findAndCount({
-        where: { approved: true },
+        // Optional department scope (dept-scoped institute admins); null = institution-wide
+        where: { approved: true, ...(departmentId ? { departmentId } : {}) },
         order: { createdAt: "DESC" },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -747,14 +781,15 @@ export class InstituteAdminProvider {
   public async generateCandidateReportPdf(
     candidateId: string,
     dataSource: DataSource,
-    institution: IInstitution
+    institution: IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     if (!this.uuidRegex.test(candidateId)) {
       throw new Error("Invalid candidate ID");
     }
     const candRepo = dataSource.getRepository(CandidateEntity);
     const cand = await candRepo.findOne({ where: { id: candidateId } });
-    if (!cand) {
+    if (!cand || (departmentId && (cand as any).departmentId !== departmentId)) {
       throw new Error("Candidate not found or does not belong to the requested institution");
     }
 
@@ -922,10 +957,22 @@ export class InstituteAdminProvider {
   public async generateSubmissionReportPdf(
     submissionId: string,
     dataSource: DataSource,
-    institution: IInstitution
+    institution: IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     if (!this.uuidRegex.test(submissionId)) {
       throw new Error("Invalid submission ID");
+    }
+    // Dept-scoped admins may only reach submissions of their department. Raw lookup:
+    // the mapped submission shape (sub.mapper) does not carry departmentId.
+    if (departmentId) {
+      const rows = await dataSource.query(
+        `SELECT "departmentId" FROM "submissions" WHERE "id" = $1`,
+        [submissionId]
+      );
+      if (!rows[0] || rows[0].departmentId !== departmentId) {
+        throw new Error("Submission not found");
+      }
     }
     const { mapSubmissionToViewModel } = await import("../pdf/submissionReport/mapSubmissionToViewModel");
     const { renderSubmissionReportPdfKit } = await import("../pdf/submissionReport/renderSubmissionReportPdfKit");
@@ -951,14 +998,15 @@ export class InstituteAdminProvider {
   public async generateSupervisorReportPdf(
     supervisorId: string,
     dataSource: DataSource,
-    institution: IInstitution
+    institution: IInstitution,
+    departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     if (!this.uuidRegex.test(supervisorId)) {
       throw new Error("Invalid supervisor ID");
     }
 
     const supervisor = await this.supervisorService.getSupervisorById({ id: supervisorId }, dataSource);
-    if (!supervisor) {
+    if (!supervisor || (departmentId && (supervisor as any).departmentId !== departmentId)) {
       throw new Error("Supervisor not found or does not belong to the requested institution");
     }
 

@@ -273,10 +273,15 @@ export class CalSurgService {
     year?: number;
     startDate?: Date;
     endDate?: Date;
-  }, dataSource: DataSource): Promise<ICalSurgDoc[]> | never {
+  }, dataSource: DataSource, departmentId?: string | null): Promise<ICalSurgDoc[]> | never {
     try {
       const calSurgRepository = dataSource.getRepository(CalSurgEntity);
       const whereConditions: any = {};
+
+      // Optional department scope (dept-scoped institute admins); null = institution-wide
+      if (departmentId) {
+        whereConditions.departmentId = departmentId;
+      }
 
       // Hospital filtering
       if (filters.hospitalId) {
