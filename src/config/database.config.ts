@@ -31,6 +31,7 @@ import { WhatsappSessionEntity } from "../waBot/whatsappSession.mDbSchema";
 import { DepartmentEntity } from "../departments/department.mDbSchema";
 import { LectureTopicEntity } from "../lecture/lectureTopic.mDbSchema";
 import { InstitutionEntity } from "../institution/institution.mDbSchema";
+import { PendingSignupEntity } from "../pendingSignup/pendingSignup.mDbSchema";
 
 dotenv.config();
 
@@ -88,13 +89,19 @@ function getDbConfig(): DataSourceOptions {
       DepartmentEntity,
       LectureTopicEntity,
       InstitutionEntity,
+      PendingSignupEntity,
     ],
     migrations: [
       __dirname + "/../migrations-ka/*.ts",
     ],
     subscribers: [],
     extra: {
-      max: 20,
+      // Pool cap must fit the SERVER's limit: the staging Aiven plan has
+      // max_connections=15 (~12 usable after reserved slots), shared with DBeaver,
+      // Aiven's management agent and pg_cron. max 20 legally over-opened the pool and
+      // Postgres refused with "sorry, too many clients already" under fan-out load.
+      // Excess requests queue in the pool instead of over-connecting.
+      max: parseInt(process.env.PSQL_POOL_MAX || "8", 10),
     },
     ...sslOpts,
   };

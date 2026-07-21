@@ -5,6 +5,7 @@ import { DataSource } from "typeorm";
 import { AuthController } from "./auth.controller";
 import { createCandValidator } from "../validators/createCand.validator";
 import { registerSupervisorValidator } from "../validators/registerSupervisor.validator";
+import { verifySignupOtpValidator, resendSignupOtpValidator } from "../validators/signupOtp.validator";
 import { matchedData, validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import { loginValidator } from "../validators/login.validator";
@@ -71,6 +72,7 @@ export class AuthRouter {
     );
     this.router.post(
       "/registerCand",
+      strictRateLimiter,
       createCandValidator,
       async (req: Request, res: Response, next: NextFunction) => {
         const result = validationResult(req);
@@ -79,7 +81,7 @@ export class AuthRouter {
             const payload = matchedData(req, {
               locations: ["body"],
             }) as IRegisterCandPayload;
-            
+
             // Institution ID is required; default DB is for other configurations only
             const dataSource = await this.getDataSourceFromRequest(req);
             if (!dataSource) {
@@ -87,8 +89,14 @@ export class AuthRouter {
                 error: "Database connection unavailable. Please try again later.",
               });
             }
-            
+
+            // OTP-verified signup: stages the registration + emails a 6-digit code.
             const resp = await this.authController.registerCand(payload, dataSource);
+            if (resp.status === "email_exists") {
+              return res.status(StatusCodes.CONFLICT).json({
+                error: "An account with this email already exists. Try signing in instead.",
+              });
+            }
             res.status(StatusCodes.CREATED).json(resp);
           } catch(err: any){
             res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
@@ -118,7 +126,13 @@ export class AuthRouter {
               });
             }
 
+            // OTP-verified signup: stages the registration + emails a 6-digit code.
             const resp = await this.authController.registerSupervisor(payload, dataSource);
+            if (resp.status === "email_exists") {
+              return res.status(StatusCodes.CONFLICT).json({
+                error: "An account with this email already exists. Try signing in instead.",
+              });
+            }
             res.status(StatusCodes.CREATED).json(resp);
           } catch (err: any) {
             res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
@@ -128,6 +142,114 @@ export class AuthRouter {
         }
       }
     );
+
+    // Verify the emailed 6-digit signup code. On success the REAL account row is created
+    // (unapproved, as before) and returned; on expiry/rejection the client re-registers.
+    this.router.post(
+      "/verifySignupOtp",
+      strictRateLimiter,
+      verifySignupOtpValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        try {
+          const { signupId, code } = matchedData(req, { locations: ["body"] }) as {
+            signupId: string;
+            code: string;
+          };
+          const dataSource = await this.getDataSourceFromRequest(req);
+          if (!dataSource) {
+            return res.status(StatusCodes.BAD_REQUEST).json({
+              error: "Database connection unavailable. Please try again later.",
+            });
+          }
+          const resp = await this.authController.verifySignupOtp(signupId, code, dataSource);
+          switch (resp.status) {
+            case "verified":
+              return res.status(StatusCodes.CREATED).json({ user: resp.user });
+            case "wrong":
+              return res.status(StatusCodes.BAD_REQUEST).json({
+                error: "Incorrect code.",
+                attemptsRemaining: resp.attemptsRemaining,
+              });
+            case "expired":
+              return res.status(StatusCodes.GONE).json({
+                error: "This code has expired. Please register again.",
+                reason: "expired",
+              });
+            case "rejected":
+              return res.status(StatusCodes.GONE).json({
+                error: "Too many incorrect attempts. Please register again.",
+                reason: "rejected",
+              });
+            case "not_found":
+            default:
+              return res.status(StatusCodes.NOT_FOUND).json({
+                error: "Signup not found. Please register again.",
+                reason: "not_found",
+              });
+          }
+        } catch (err: any) {
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
+    // Resend the signup code: 60s cooldown, max 3 sends; the 15-min expiry is NOT extended.
+    this.router.post(
+      "/resendSignupOtp",
+      strictRateLimiter,
+      resendSignupOtpValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        try {
+          const { signupId } = matchedData(req, { locations: ["body"] }) as { signupId: string };
+          const dataSource = await this.getDataSourceFromRequest(req);
+          if (!dataSource) {
+            return res.status(StatusCodes.BAD_REQUEST).json({
+              error: "Database connection unavailable. Please try again later.",
+            });
+          }
+          const resp = await this.authController.resendSignupOtp(signupId, dataSource);
+          switch (resp.status) {
+            case "sent":
+              return res.status(StatusCodes.OK).json({
+                sendsRemaining: resp.sendsRemaining,
+                expiresAt: resp.expiresAt,
+              });
+            case "cooldown":
+              return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+                error: `Please wait ${resp.retryInSeconds}s before requesting another code.`,
+                retryInSeconds: resp.retryInSeconds,
+              });
+            case "exhausted":
+              return res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+                error: "No resends left for this signup.",
+                reason: "exhausted",
+              });
+            case "expired":
+              return res.status(StatusCodes.GONE).json({
+                error: "This code has expired. Please register again.",
+                reason: "expired",
+              });
+            case "not_found":
+            default:
+              return res.status(StatusCodes.NOT_FOUND).json({
+                error: "Signup not found. Please register again.",
+                reason: "not_found",
+              });
+          }
+        } catch (err: any) {
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+        }
+      }
+    );
+
     // Shared login endpoint for candidates and supervisors
     // Requires institutionId since each institution has its own candidates and supervisors
     this.router.post(

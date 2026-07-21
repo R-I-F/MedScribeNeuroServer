@@ -10,10 +10,11 @@ import { responseFormatter } from "./middleware/responseFormatter";
 import { requestLogger } from "./middleware/requestLogger.middleware";
 import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware";
 import { globalIpRateLimiter } from "./middleware/rateLimiter.middleware";
-import { initializeDatabase, validateDatabaseConfig, closeDatabase } from "./config/database.config";
+import { initializeDatabase, validateDatabaseConfig, closeDatabase, AppDataSource } from "./config/database.config";
 import { getAllActiveInstitutions } from "./institution/institution.service";
 import { container } from "./config/container.config";
 import { RefDataService } from "./refApi/refData.service";
+import { PendingSignupProvider } from "./pendingSignup/pendingSignup.provider";
 import { Server } from "http";
 
 dotenv.config();
@@ -125,6 +126,10 @@ async function bootstrap() {
     refData = container.get(RefDataService);
     await refData.bootstrapSync();
     refData.startPolling();
+
+    // OTP-verified signup: purge expired pending signups periodically (+30s boot sweep).
+    // Expiry is also enforced at read time — this is hygiene, not correctness.
+    container.get(PendingSignupProvider).startPurgeSweep(AppDataSource);
 
     console.log("[App] Database connected, binding port...");
     server = app.listen(port, () => {

@@ -31,6 +31,7 @@ import { WhatsappSessionEntity } from "../waBot/whatsappSession.mDbSchema";
 import { DepartmentEntity } from "../departments/department.mDbSchema";
 import { LectureTopicEntity } from "../lecture/lectureTopic.mDbSchema";
 import { InstitutionEntity } from "../institution/institution.mDbSchema";
+import { PendingSignupEntity } from "../pendingSignup/pendingSignup.mDbSchema";
 
 dotenv.config();
 
@@ -96,6 +97,7 @@ function getKaMigrationsConfig(): DataSourceOptions {
       DepartmentEntity,
       LectureTopicEntity,
       InstitutionEntity,
+      PendingSignupEntity,
     ],
     migrations: [__dirname + "/../migrations-ka/*.ts"],
     subscribers: [],

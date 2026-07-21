@@ -17,6 +17,12 @@ import { ISupervisorDoc } from "../supervisor/supervisor.interface";
 import { SuperAdminEntity } from "../superAdmin/superAdmin.mDbSchema";
 import { InstituteAdminEntity } from "../instituteAdmin/instituteAdmin.mDbSchema";
 import { ClerkEntity } from "../clerk/clerk.mDbSchema";
+import {
+  PendingSignupProvider,
+  StartSignupResult,
+  VerifyOtpResult,
+  ResendOtpResult,
+} from "../pendingSignup/pendingSignup.provider";
 
 @injectable()
 export class AuthController {
@@ -26,7 +32,8 @@ export class AuthController {
     @inject(SuperAdminService) private superAdminService: SuperAdminService,
     @inject(InstituteAdminService) private instituteAdminService: InstituteAdminService,
     @inject(ClerkService) private clerkService: ClerkService,
-    @inject(AuthTokenService) private authTokenService: AuthTokenService
+    @inject(AuthTokenService) private authTokenService: AuthTokenService,
+    @inject(PendingSignupProvider) private pendingSignupProvider: PendingSignupProvider
   ){}
 
   public validationToken(tokenPayload: JwtPayload | string | undefined) {
@@ -57,48 +64,18 @@ export class AuthController {
     return rows[0].id;
   }
 
-  public async registerCand(payload: IRegisterCandPayload, dataSource: DataSource) {
-    const {
-      email,
-      password,
-      fullName,
-      phoneNum,
-      regNum,
-      nationality,
-      rank,
-      regDeg,
-      departmentId,
-    } = payload;
-
+  /**
+   * OTP-verified signup (docs/OTP_SIGNUP_VERIFICATION_PLAN.md): registration is STAGED in
+   * pending_signups and a 6-digit code is emailed; the real candidates row is created only
+   * by verifySignupOtp. Single-institution mode: institutionId accepted and ignored.
+   */
+  public async registerCand(payload: IRegisterCandPayload, dataSource: DataSource): Promise<StartSignupResult> {
     try {
-      // Single-institution (KA spoke) mode: institutionId is accepted and ignored; the candidate
-      // is written to the single static institution database (the provided dataSource).
-      const encPass = await bcryptjs.hash(password, 10);
-      const validDepartmentId = await this.resolveDepartmentId(dataSource, departmentId);
-      // candidates.departmentId is NOT NULL: every candidate must belong to a department.
-      if (!validDepartmentId) {
-        throw new Error("departmentId is required to register a candidate");
-      }
-
-      // Use institution DataSource only (never fall back to default DB)
-      const candRepository = dataSource.getRepository(CandidateEntity);
-      const newCand = candRepository.create({
-        email,
-        password: encPass,
-        fullName,
-        phoneNum,
-        approved: false, // Default: unapproved until institution approves
-        role: UserRole.CANDIDATE, // Default role for registration
-        regNum,
-        nationality,
-        rank,
-        regDeg: regDeg != null && String(regDeg).trim() !== "" ? regDeg : null, // Optional for non-academic institutions
-        departmentId: validDepartmentId,
-      });
-      newCand.termsAcceptedAt = new Date(); // Terms accepted at signup via frontend
-      const savedCand = await candRepository.save(newCand);
-
-      return this.sanitizeCandidate(savedCand as unknown as ICandDoc);
+      return await this.pendingSignupProvider.startSignup(
+        "candidate",
+        payload as unknown as Record<string, unknown> & { email: string; password: string; departmentId?: string },
+        dataSource
+      );
     } catch (err: any) {
       throw new Error(err?.message ?? "Failed to register candidate");
     }
@@ -108,38 +85,30 @@ export class AuthController {
    * Register a new supervisor in the institution's database.
    * Supervisor is created with approved: false. Institution ID is required.
    */
-  public async registerSupervisor(payload: IRegisterSupervisorPayload, dataSource: DataSource) {
-    const { email, password, fullName, phoneNum, position, departmentId } = payload;
-
+  /**
+   * OTP-verified signup: staged in pending_signups; the real supervisors row is created only
+   * by verifySignupOtp. Single-institution mode: institutionId accepted and ignored.
+   */
+  public async registerSupervisor(payload: IRegisterSupervisorPayload, dataSource: DataSource): Promise<StartSignupResult> {
     try {
-      // Single-institution (KA spoke) mode: institutionId is accepted and ignored; the supervisor
-      // is written to the single static institution database (the provided dataSource).
-      const encPass = await bcryptjs.hash(password, 10);
-      const validDepartmentId = await this.resolveDepartmentId(dataSource, departmentId);
-      // supervisors.departmentId is NOT NULL: every supervisor must belong to a department.
-      if (!validDepartmentId) {
-        throw new Error("departmentId is required to register a supervisor");
-      }
-
-      const supervisorRepository = dataSource.getRepository(SupervisorEntity);
-      const newSupervisor = supervisorRepository.create({
-        email,
-        password: encPass,
-        fullName,
-        phoneNum,
-        approved: false, // Default: unapproved until institution approves
-        role: UserRole.SUPERVISOR, // Default role for registration
-        canValidate: false, // Default: no validation rights until granted by admin
-        departmentId: validDepartmentId,
-        ...(position != null && String(position).trim() !== "" && { position: position as any }),
-      });
-      newSupervisor.termsAcceptedAt = new Date(); // Terms accepted at signup via frontend
-      const savedSupervisor = await supervisorRepository.save(newSupervisor);
-
-      return this.sanitizeSupervisor(savedSupervisor as unknown as ISupervisorDoc);
+      return await this.pendingSignupProvider.startSignup(
+        "supervisor",
+        payload as unknown as Record<string, unknown> & { email: string; password: string; departmentId?: string },
+        dataSource
+      );
     } catch (err: any) {
       throw new Error(err?.message ?? "Failed to register supervisor");
     }
+  }
+
+  /** Verify the emailed 6-digit code; on success the REAL account row is created. */
+  public async verifySignupOtp(signupId: string, code: string, dataSource: DataSource): Promise<VerifyOtpResult> {
+    return this.pendingSignupProvider.verifyOtp(signupId, code, dataSource);
+  }
+
+  /** Resend the code (60s cooldown, max 3 sends; expiry unchanged). */
+  public async resendSignupOtp(signupId: string, dataSource: DataSource): Promise<ResendOtpResult> {
+    return this.pendingSignupProvider.resendOtp(signupId, dataSource);
   }
   
   /**

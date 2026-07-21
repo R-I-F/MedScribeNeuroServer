@@ -47,6 +47,8 @@ import { MailerService } from "../mailer/mailer.service";
 
 import { PasswordResetService } from "../passwordReset/passwordReset.service";
 import { PasswordResetProvider } from "../passwordReset/passwordReset.provider";
+import { PendingSignupService } from "../pendingSignup/pendingSignup.service";
+import { PendingSignupProvider } from "../pendingSignup/pendingSignup.provider";
 import { PasswordResetController } from "../passwordReset/passwordReset.controller";
 
 import { AuthController } from "../auth/auth.controller";
@@ -209,6 +211,8 @@ container.bind(InstituteAdminProvider).toSelf().inTransientScope();
 
 container.bind(PasswordResetService).toSelf().inTransientScope();
 container.bind(PasswordResetProvider).toSelf().inTransientScope();
+container.bind(PendingSignupService).toSelf().inTransientScope();
+container.bind(PendingSignupProvider).toSelf().inTransientScope();
 container.bind(PasswordResetController).toSelf().inTransientScope();
 
 container.bind(ReportsController).toSelf().inTransientScope();
