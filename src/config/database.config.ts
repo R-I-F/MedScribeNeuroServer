@@ -39,23 +39,50 @@ dotenv.config();
 // (env PSQL_*). This is the ONE and ONLY application datasource — the former multi-tenant
 // per-institution pool and the defaultdb registry are gone. Migrations live in
 // src/migrations-ka/ (git-tracked) and are run via `npm run db:ka:*`.
-function getDbConfig(): DataSourceOptions {
-  // SSL CA resolution — env var FIRST (robust on PaaS where the gitignored .pem is not in the
-  // build), then a file path fallback for local dev:
-  //   1) PSQL_CA_CERT_B64  — base64 of the Aiven ca.pem (recommended on Railway/Heroku)
-  //   2) PSQL_CA_CERT      — the raw PEM text
-  //   3) SSL_CA_PATH       — a file path resolved against cwd (local dev)
-  // Verification stays ON (rejectUnauthorized: true) whenever a CA is available.
+const PEM_MARKER = "BEGIN CERTIFICATE";
+
+/**
+ * Resolve the Postgres CA, tolerant of how it was provided (PaaS env-var setups are fiddly):
+ *   - PSQL_CA_CERT_B64 — base64 of the ca.pem; if someone pasted the raw PEM here instead,
+ *     we detect the marker and use it as-is rather than base64-decoding garbage.
+ *   - PSQL_CA_CERT     — raw PEM text.
+ *   - SSL_CA_PATH      — file path (local dev; the .pem is gitignored so absent on Railway).
+ * Whitespace is trimmed. Returns undefined if nothing decodes to a real certificate.
+ */
+function resolvePgCa(): string | undefined {
+  const b64 = process.env.PSQL_CA_CERT_B64?.trim();
+  const raw = process.env.PSQL_CA_CERT?.trim();
   let ca: string | undefined;
-  if (process.env.PSQL_CA_CERT_B64) {
-    ca = Buffer.from(process.env.PSQL_CA_CERT_B64, "base64").toString("utf8");
-  } else if (process.env.PSQL_CA_CERT) {
-    ca = process.env.PSQL_CA_CERT;
+  if (b64) {
+    ca = b64.includes(PEM_MARKER) ? b64 : Buffer.from(b64, "base64").toString("utf8");
+  } else if (raw) {
+    ca = raw.includes(PEM_MARKER) ? raw : Buffer.from(raw, "base64").toString("utf8");
   } else if (process.env.SSL_CA_PATH) {
     const resolved = path.resolve(process.cwd(), process.env.SSL_CA_PATH);
     if (fs.existsSync(resolved)) ca = fs.readFileSync(resolved, "utf8");
   }
-  const sslOpts = ca ? { ssl: { ca, rejectUnauthorized: true } } : {};
+  if (ca && !ca.includes(PEM_MARKER)) {
+    console.warn(`[DB] PSQL CA is set but the decoded value is not a PEM certificate (len ${ca.length}) — ignoring.`);
+    return undefined;
+  }
+  return ca;
+}
+
+function getDbConfig(): DataSourceOptions {
+  const ca = resolvePgCa();
+  // Escape hatch: PSQL_SSL_NO_VERIFY=true keeps the connection ENCRYPTED but skips CA
+  // verification (last resort if a PaaS keeps mangling the cert). Prefer a valid CA.
+  const noVerify = process.env.PSQL_SSL_NO_VERIFY === "true";
+  const sslOpts = ca
+    ? { ssl: { ca, rejectUnauthorized: !noVerify } }
+    : noVerify
+      ? { ssl: { rejectUnauthorized: false } }
+      : {};
+  console.log(
+    ca
+      ? `[DB] Postgres CA loaded (${ca.length} bytes); rejectUnauthorized=${!noVerify}`
+      : `[DB] Postgres CA NOT loaded; ssl=${noVerify ? "encrypted-no-verify" : "none"}`
+  );
 
   return {
     type: "postgres",
