@@ -960,12 +960,13 @@ export class SubProvider {
       cptCode: string;
       alphaCode: string;
       title: string;
+      arTitle: string;
       total: { count: number; percentage: number };
       byRole: { role: string; count: number; percentage: number }[];
     }[];
   } {
     const totalApproved = approvedSubs.length;
-    const map = new Map<string, { alphaCode: string; title: string; byRole: Record<string, number> }>();
+    const map = new Map<string, { alphaCode: string; title: string; arTitle: string; byRole: Record<string, number> }>();
     for (const sub of approvedSubs) {
       const procs = (sub as any).procCpts ?? [];
       const roleLabel = getRoleLabel((sub as any).roleInSurg);
@@ -976,7 +977,7 @@ export class SubProvider {
         seen.add(code);
         let cur = map.get(code);
         if (!cur) {
-          cur = { alphaCode: p?.alphaCode ?? "", title: p?.title ?? "", byRole: {} };
+          cur = { alphaCode: p?.alphaCode ?? "", title: p?.title ?? "", arTitle: p?.arTitle ?? "", byRole: {} };
           map.set(code, cur);
         }
         cur.byRole[roleLabel] = (cur.byRole[roleLabel] ?? 0) + 1;
@@ -1001,6 +1002,7 @@ export class SubProvider {
           cptCode,
           alphaCode: v.alphaCode,
           title: v.title,
+          arTitle: v.arTitle,
           total: { count: totalCount, percentage: totalPct },
           byRole,
         };
@@ -1089,12 +1091,13 @@ export class SubProvider {
     items: {
       icdCode: string;
       icdName: string;
+      icdArName: string;
       total: { count: number; percentage: number };
       byRole: { role: string; count: number; percentage: number }[];
     }[];
   } {
     const totalApproved = approvedSubs.length;
-    const map = new Map<string, { icdName: string; byRole: Record<string, number> }>();
+    const map = new Map<string, { icdName: string; icdArName: string; byRole: Record<string, number> }>();
     for (const sub of approvedSubs) {
       const icds = (sub as any).icds ?? [];
       const roleLabel = getRoleLabel((sub as any).roleInSurg);
@@ -1105,7 +1108,7 @@ export class SubProvider {
         seen.add(code);
         let cur = map.get(code);
         if (!cur) {
-          cur = { icdName: d?.icdName ?? "", byRole: {} };
+          cur = { icdName: d?.icdName ?? "", icdArName: d?.icdArName ?? "", byRole: {} };
           map.set(code, cur);
         }
         cur.byRole[roleLabel] = (cur.byRole[roleLabel] ?? 0) + 1;
@@ -1129,6 +1132,7 @@ export class SubProvider {
         return {
           icdCode,
           icdName: v.icdName,
+          icdArName: v.icdArName,
           total: { count: totalCount, percentage: totalPct },
           byRole,
         };
