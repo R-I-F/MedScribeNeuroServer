@@ -11,8 +11,16 @@ export class ClerkController {
     @inject(ClerkService) private clerkService: ClerkService
   ) {}
 
+  /** Reject department ids that don't exist in the mirror `departments` table. */
+  private async assertDepartmentExists(departmentId: string, dataSource: any): Promise<void> {
+    const rows = await dataSource.query(`SELECT 1 FROM "departments" WHERE "id" = $1`, [departmentId]);
+    if (!rows.length) {
+      throw new Error(`Unknown departmentId: ${departmentId}`);
+    }
+  }
+
   public async handlePostClerk(
-    req: Request, 
+    req: Request,
     res: Response
   ) {
     const validatedReq = matchedData(req) as Partial<IClerk>;
@@ -20,6 +28,9 @@ export class ClerkController {
       const dataSource = (req as any).institutionDataSource;
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
+      }
+      if (validatedReq.departmentId) {
+        await this.assertDepartmentExists(validatedReq.departmentId, dataSource);
       }
       // Hash password before saving
       if (validatedReq.password) {

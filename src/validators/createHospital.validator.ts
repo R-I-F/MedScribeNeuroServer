@@ -29,6 +29,7 @@ export const createHospitalValidator = checkSchema({
   },
   "location.long": {
     in: ["body"],
+    optional: true, // location is optional; validated only when provided
     isFloat: {
       options: { min: -180, max: 180 }, // valid longitude range
       errorMessage: "Longitude must be a valid number between -180 and 180",
@@ -37,6 +38,7 @@ export const createHospitalValidator = checkSchema({
   },
   "location.lat": {
     in: ["body"],
+    optional: true,
     isFloat: {
       options: { min: -90, max: 90 }, // valid latitude range
       errorMessage: "Latitude must be a valid number between -90 and 90",

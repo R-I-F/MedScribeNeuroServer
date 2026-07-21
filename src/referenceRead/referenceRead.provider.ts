@@ -52,7 +52,7 @@ export class ReferenceReadProvider {
   /** Legacy /diagnosis list shape, scoped via department_diagnoses. */
   public async getDiagnosesByDepartment(ds: DataSource, departmentId: string) {
     return ds.query(
-      `SELECT dx."id", dx."icdCode", dx."icdName", dx."neuroLogName", dx."createdAt", dx."updatedAt"
+      `SELECT dx."id", dx."icdCode", dx."icdName", dx."icdArName", dx."neuroLogName", dx."createdAt", dx."updatedAt"
          FROM "diagnoses" dx
          JOIN "department_diagnoses" dd ON dd."diagnosisId" = dx."id"
         WHERE dd."departmentId" = $1

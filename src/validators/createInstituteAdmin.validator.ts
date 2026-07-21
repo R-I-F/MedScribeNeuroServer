@@ -53,5 +53,14 @@ export const createInstituteAdminValidator = checkSchema({
       errorMessage: "institute admin approval status must be a boolean value",
     },
   },
+  // Department scope (mirror departments UUID); omitted = institution-wide admin.
+  departmentId: {
+    in: ["body"],
+    optional: { options: { values: "falsy" } },
+    isUUID: {
+      errorMessage: "departmentId must be a valid UUID",
+    },
+    trim: true,
+  },
 });
 

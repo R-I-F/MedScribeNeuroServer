@@ -34,6 +34,9 @@ export class InstituteAdminController {
       if (!dataSource) {
         throw new Error("Institution DataSource not resolved");
       }
+      if (validatedReq.departmentId) {
+        await this.assertDepartmentExists(validatedReq.departmentId, dataSource);
+      }
       // Hash password before saving
       if (validatedReq.password) {
         validatedReq.password = await bcryptjs.hash(validatedReq.password, 10);

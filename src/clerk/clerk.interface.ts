@@ -4,6 +4,8 @@ import { TUserRole } from "../types/role.types";
 export interface IClerk extends User {
   role?: TUserRole;
   termsAcceptedAt?: Date;
+  /** Department scope (mirror departments UUID); null/absent = institution-wide clerk. */
+  departmentId?: string;
 }
 
 export interface IClerkDoc extends IClerk {

@@ -5,7 +5,6 @@ import express, { Request, Response, NextFunction, Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import { createHospitalValidator } from "../validators/createHospital.validator";
 import { updateHospitalValidator } from "../validators/updateHospital.validator";
-import { deleteHospitalValidator } from "../validators/deleteHospital.validator";
 import { getHospitalByIdValidator } from "../validators/getHospitalById.validator";
 import extractJWT from "../middleware/extractJWT";
 import { requireCandidate, requireSuperAdmin, authorize } from "../middleware/authorize.middleware";
@@ -124,42 +123,8 @@ export class HospitalRouter {
       }
     );
 
-    // Delete hospital
-    // Accessible to: superAdmin only
-    this.router.delete(
-      "/:id",
-      extractJWT,
-      institutionResolver,
-      userBasedStrictRateLimiter,
-      requireSuperAdmin,
-      deleteHospitalValidator,
-      async (req: Request, res: Response) => {
-        const result = validationResult(req);
-        if (result.isEmpty()) {
-          try {
-            const resp = await this.hospitalController.handleDeleteHospital(req, res);
-            res.status(StatusCodes.OK).json(resp);
-          } catch (err: any) {
-            if (err.message.includes("not found")) {
-              res.status(StatusCodes.NOT_FOUND).json({
-                status: "error",
-                statusCode: StatusCodes.NOT_FOUND,
-                message: "Not Found",
-                error: err.message
-              });
-            } else {
-              res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-                status: "error",
-                statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
-                message: "Internal Server Error",
-                error: err.message
-              });
-            }
-          }
-        } else {
-          res.status(StatusCodes.BAD_REQUEST).json(result.array());
-        }
-      }
-    );
+    // NOTE: hospital DELETE was deliberately removed (2026-07-21, user decision):
+    // hospitals are add/edit only — they are referenced by cal_surgs history and
+    // must never be deleted through the API.
   }
 }
