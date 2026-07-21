@@ -40,16 +40,22 @@ dotenv.config();
 // per-institution pool and the defaultdb registry are gone. Migrations live in
 // src/migrations-ka/ (git-tracked) and are run via `npm run db:ka:*`.
 function getDbConfig(): DataSourceOptions {
-  const sslCaPath = process.env.SSL_CA_PATH;
-  const sslOpts =
-    sslCaPath && fs.existsSync(path.resolve(process.cwd(), sslCaPath))
-      ? {
-          ssl: {
-            ca: fs.readFileSync(path.resolve(process.cwd(), sslCaPath), "utf8"),
-            rejectUnauthorized: true,
-          },
-        }
-      : {};
+  // SSL CA resolution — env var FIRST (robust on PaaS where the gitignored .pem is not in the
+  // build), then a file path fallback for local dev:
+  //   1) PSQL_CA_CERT_B64  — base64 of the Aiven ca.pem (recommended on Railway/Heroku)
+  //   2) PSQL_CA_CERT      — the raw PEM text
+  //   3) SSL_CA_PATH       — a file path resolved against cwd (local dev)
+  // Verification stays ON (rejectUnauthorized: true) whenever a CA is available.
+  let ca: string | undefined;
+  if (process.env.PSQL_CA_CERT_B64) {
+    ca = Buffer.from(process.env.PSQL_CA_CERT_B64, "base64").toString("utf8");
+  } else if (process.env.PSQL_CA_CERT) {
+    ca = process.env.PSQL_CA_CERT;
+  } else if (process.env.SSL_CA_PATH) {
+    const resolved = path.resolve(process.cwd(), process.env.SSL_CA_PATH);
+    if (fs.existsSync(resolved)) ca = fs.readFileSync(resolved, "utf8");
+  }
+  const sslOpts = ca ? { ssl: { ca, rejectUnauthorized: true } } : {};
 
   return {
     type: "postgres",
