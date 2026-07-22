@@ -9,7 +9,7 @@ import {
 /**
  * Landing-page "Book a demo" request (docs/BOOK_A_DEMO_PLAN.md).
  * Rows are sales leads and are kept forever (no purge sweep). `emailedAt` NULL
- * means the notification email was skipped (global daily budget) or failed —
+ * means the notification email was skipped (global daily budget) or failed;
  * the lead itself is never lost.
  */
 @Entity("demo_requests")

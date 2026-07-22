@@ -17,6 +17,12 @@
 | E | Docs (API_DOCUMENTATION.md + CLAUDE.md + finalize this doc) | ✅ done (2026-07-22) | API doc: new Demo Requests section + TOC + auth-summary row |
 | F | E2E verification | ✅ done (2026-07-22) | alt-port :3014/:3015 curl matrix ALL GREEN: happy 201+row+**3 real Mailgun emails delivered to contact@medscribe.health**; honeypot/fast/per-email/per-IP discards → identical 201 + no row (log-confirmed reasons); oversize message 400; limiter 5×201→6th 429. Test rows (demo-test-*) deleted; table left at 0 rows |
 
+### 🎨 Follow-up polish (2026-07-22, branch `feat/demo-modal-mobile`, uncommitted)
+Mobile UX rework + em-dash purge (user directive: NO em-dashes anywhere, now a hard rule in CLAUDE.md + memory `no-em-dashes`).
+- **Mobile modal**: on `max-width: 640px` the modal becomes a **bottom sheet** (slides up, full-width, rounded top, drag-handle, safe-area-inset padding so the submit clears the iOS home bar). Inputs go to **16px on mobile** to stop iOS Safari focus-zoom. Pinned header with a scrollable body (Close always reachable), bigger 44px touch targets, full-width 48-50px submit, and a success check-circle. Desktop still a centered card. RTL-safe (logical margins). New `.demo-modal-body`/`.demo-grabber`/`.demo-modal-close`/`.demo-success-check` markup + CSS.
+- **Em-dashes removed** from all demo copy + comments (backend module, email subject/footer/placeholders, generic 201 message, frontend successBody EN+AR). Verified 0 remaining in the feature. Reworded: "Thanks! We'll be in touch soon.", email subject "New demo request from <name>".
+- tsc clean both repos; vite build clean; alt-port boot confirms new message text + healthy endpoint. NOT committed (awaiting user ask).
+
 ### ⬜ Remaining
 - [ ] **User browser click-test**: EN + AR (RTL), open/close (Escape + overlay click), submit → success panel, real email arrives
 - [ ] Commit both repos (`feat/book-a-demo`) on user ask; merge/push to `main` = production deploy (user-gated)

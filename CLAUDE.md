@@ -3,6 +3,7 @@
 Guidance for Claude Code working in this repository.
 
 ## ⚠️ Critical constraints (read first)
+- **NEVER use em-dashes (—) anywhere.** Not in user-facing copy (UI text, emails, announcements), not in code comments, not in commit messages, not in docs. This is a hard, standing user rule. Use a period, comma, colon, or parentheses instead. Applies to Arabic copy too (no — in AR strings).
 - **NEVER commit or push to `main` without the user's explicit ask.** `main` is the live **production** app (Railway auto-deploys it). Work only on side branches (currently `dev`; `migration/mysql-to-postgres` was merged into main and deleted 2026-07-22 — same for the frontend's `design-integration`, now `dev`). Commit only when the user explicitly asks.
 - **ONE env file since 2026-07-22: `.env` is the single source of truth** (`.env.staging` was merged into it and deleted; backups `.env.bak-20260722`/`.env.staging.bak-20260722`). All npm scripts load it via `dotenv -e .env`; local `NODE_ENV` is `staging`. Production (Railway) uses dashboard env vars, never this file. ⚠️ `.env` `PSQL_*` points at **`ka-institute` — which IS production** since the cutover; DB writes only with the user's explicit go-ahead. Legacy MySQL was decommissioned 2026-07-22 (final backup `F:\DB_BACKUPS\kasr-el-ainy-FINAL-20260722195325.sql.gz`).
 - Secrets `.env*`, `*.pem` are gitignored. **`src/migrations/` and `scripts/` are also gitignored** — see the handoff note below.

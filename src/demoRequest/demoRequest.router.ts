@@ -14,10 +14,10 @@ import { IDemoRequestInput } from "./demoRequest.provider";
  *
  * ANTI-ORACLE RULE: whether the request was stored+emailed, stored without
  * email, or silently discarded (honeypot / timing / caps / internal error),
- * the response is the IDENTICAL generic 201 — bots learn nothing. Only
+ * the response is the IDENTICAL generic 201 - bots learn nothing. Only
  * validator format errors return 400 and the rate limiter returns 429.
  */
-const GENERIC_SUCCESS = { message: "Thanks — we'll be in touch soon." };
+const GENERIC_SUCCESS = { message: "Thanks! We'll be in touch soon." };
 
 @injectable()
 export class DemoRequestRouter {
@@ -64,7 +64,7 @@ export class DemoRequestRouter {
               ds
             );
           } else {
-            // DB unavailable: still no oracle — log and return the generic success.
+            // DB unavailable: still no oracle - log and return the generic success.
             console.error("[DemoRequestRouter] DataSource unavailable; request dropped");
           }
         } catch (err: any) {

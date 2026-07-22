@@ -8,7 +8,7 @@ import { MailerService } from "../mailer/mailer.service";
  * Business logic for the public landing-page "Book a demo" form
  * (docs/BOOK_A_DEMO_PLAN.md).
  *
- * ANTI-ORACLE RULE: every discard path below returns normally — the router
+ * ANTI-ORACLE RULE: every discard path below returns normally - the router
  * always answers the identical generic 201, so a bot can never learn which
  * defense (honeypot, timing, per-email cap, per-IP cap) caught it. This
  * method must NEVER throw for a business reason.
@@ -45,9 +45,9 @@ export interface IDemoRequestInput {
   organization?: string;
   phoneNum?: string;
   message?: string;
-  /** Honeypot — humans never see this field; any content = bot. */
+  /** Honeypot - humans never see this field; any content = bot. */
   website?: string;
-  /** ms between form render and submit (client-supplied heuristic — forgeable). */
+  /** ms between form render and submit (client-supplied heuristic - forgeable). */
   elapsedMs?: number;
 }
 
@@ -78,7 +78,7 @@ export class DemoRequestProvider {
     }
 
     // 2) Timing heuristic: real users need a few seconds to fill the form.
-    //    Client-supplied and forgeable — the caps below are the real enforcement.
+    //    Client-supplied and forgeable - the caps below are the real enforcement.
     const elapsedMs = Number(input.elapsedMs);
     if (!Number.isFinite(elapsedMs) || elapsedMs < getMinFillMs()) {
       console.warn(`[DemoRequest] discarded (too-fast ${input.elapsedMs}ms) email=${email} ip=${ip}`);
@@ -101,7 +101,7 @@ export class DemoRequestProvider {
       return;
     }
 
-    // 5) Store the lead FIRST — it is never lost even if the email fails.
+    // 5) Store the lead FIRST - it is never lost even if the email fails.
     const row = await this.demoRequestService.create(
       {
         fullName: String(input.fullName).trim(),
@@ -122,11 +122,11 @@ export class DemoRequestProvider {
     startOfUtcDay.setUTCHours(0, 0, 0, 0);
     const emailedToday = await this.demoRequestService.countEmailedSince(startOfUtcDay, dataSource);
     if (emailedToday >= getEmailBudgetPerDay()) {
-      console.warn(`[DemoRequest] email budget exhausted (${emailedToday} today) — stored ${row.id} without email`);
+      console.warn(`[DemoRequest] email budget exhausted (${emailedToday} today) - stored ${row.id} without email`);
       return;
     }
 
-    // 7) Notify. Failure keeps the row with emailedAt NULL — still a success to the caller.
+    // 7) Notify. Failure keeps the row with emailedAt NULL - still a success to the caller.
     try {
       const text = this.getDemoEmailText(row);
       if (process.env.DEMO_REQUEST_DEV_LOG === "true") {
@@ -134,7 +134,7 @@ export class DemoRequestProvider {
       }
       await this.mailerService.sendMail({
         to: getNotifyEmail(),
-        subject: `New demo request — ${String(input.fullName).trim()}`,
+        subject: `New demo request from ${String(input.fullName).trim()}`,
         html: this.getDemoEmailHtml(row),
         text,
       });
@@ -149,9 +149,9 @@ export class DemoRequestProvider {
     return s === "" ? null : s.slice(0, maxLen);
   }
 
-  /** All user-supplied text lands in a trusted inbox — escape everything. */
+  /** All user-supplied text lands in a trusted inbox - escape everything. */
   private escapeHtml(value: string | null): string {
-    return String(value ?? "—")
+    return String(value ?? "-")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
@@ -207,7 +207,7 @@ ${field("User agent", row.userAgent)}
       </td>
     </tr>
     <tr>
-      <td style="padding: 16px 0 0; font-size: 12px; color: #6b7280; text-align: center;">LibelusPro — landing-page demo request. Reply directly to the requester's email above.</td>
+      <td style="padding: 16px 0 0; font-size: 12px; color: #6b7280; text-align: center;">LibelusPro landing-page demo request. Reply directly to the requester's email above.</td>
     </tr>
   </table>
 </body>
@@ -230,13 +230,13 @@ ${field("User agent", row.userAgent)}
       ``,
       `Name:         ${row.fullName}`,
       `Email:        ${row.email}`,
-      `Organization: ${row.organization ?? "—"}`,
-      `Phone:        ${row.phoneNum ?? "—"}`,
-      `Message:      ${row.message ?? "—"}`,
+      `Organization: ${row.organization ?? "-"}`,
+      `Phone:        ${row.phoneNum ?? "-"}`,
+      `Message:      ${row.message ?? "-"}`,
       ``,
       `Submitted:    ${row.createdAt.toISOString()}`,
       `IP:           ${row.ip}`,
-      `User agent:   ${row.userAgent ?? "—"}`,
+      `User agent:   ${row.userAgent ?? "-"}`,
     ].join("\n");
   }
 }

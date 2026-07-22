@@ -1,10 +1,10 @@
 import { checkSchema } from "express-validator";
 
 /**
- * POST /demoRequest — public landing-page "Book a demo" form
+ * POST /demoRequest - public landing-page "Book a demo" form
  * (docs/BOOK_A_DEMO_PLAN.md).
  *
- * NB: `website` is the HONEYPOT — it must PASS validation (bots that fill it
+ * NB: `website` is the HONEYPOT - it must PASS validation (bots that fill it
  * still get a clean 400-free run) so the provider can silently discard it.
  * `elapsedMs` is the min-fill-time heuristic input.
  */
