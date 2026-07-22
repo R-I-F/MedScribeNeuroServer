@@ -380,7 +380,8 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 19. [References](#references-references)
 20. [Candidate Dashboard](#candidate-dashboard-candidate-dashboard)
 21. [Hospitals](#hospitals-hospital)
-22. [Mailer — disabled](#mailer-mailer)
+22. [Demo Requests](#demo-requests-demorequest)
+23. [Mailer — disabled](#mailer-mailer)
 23. [External Service](#external-service-external)
 24. [Lectures — read-only](#lectures-lecture)
 25. [Journals](#journals-journal)
@@ -7094,6 +7095,49 @@ Tenant data (not hub-mirrored): hospitals/units, each scoped to one department. 
 
 ---
 
+## Demo Requests (`/demoRequest`)
+
+### Submit a Demo Request
+**POST** `/demoRequest`
+
+**Status:** ✅ **PUBLIC ENDPOINT** (no authentication) — powers the landing page's "Book a demo" form.
+
+**Rate Limit:** dedicated limiter — **5 requests per 15 minutes per IP** (429 beyond), plus the global IP limiter.
+
+**Request Body:**
+```json
+{
+  "fullName": "Dr. Jane Smith",
+  "email": "jane@hospital.org",
+  "organization": "Cairo University Hospital",
+  "phoneNum": "+201000000000",
+  "message": "We'd like to see the logbook workflow.",
+  "website": "",
+  "elapsedMs": 8400
+}
+```
+
+- `fullName` (required, 2–120) · `email` (required, valid email, ≤255)
+- `organization` (optional ≤160) · `phoneNum` (optional ≤32) · `message` (optional ≤2000)
+- `website`: **honeypot** — the frontend renders it invisibly and always sends `""`; any non-empty value marks the request as a bot.
+- `elapsedMs`: milliseconds between form render and submit (minimum-fill-time heuristic).
+
+**Response (201 Created)** — ⚠️ **intentionally identical on every non-validation path** (anti-bot: no oracle reveals whether the request was stored, emailed, or silently discarded):
+```json
+{
+  "status": "success",
+  "statusCode": 201,
+  "message": "Created",
+  "data": { "message": "Thanks — we'll be in touch soon." }
+}
+```
+
+**Other responses:** **400** validator format errors · **429** rate limited.
+
+**Behavior (server-side, opaque to callers):** accepted requests are stored in the `demo_requests` table first (leads are never lost), then a notification email is sent to `DEMO_REQUEST_NOTIFY_EMAIL` (default `contact@medscribe.health`) via Mailgun. Silent-discard layers: honeypot, fill-time < 3 s, per-email cap (1/24 h), per-IP cap (3/24 h). A **global budget of 20 notification emails per UTC day** stores further leads without emailing (inbox + Mailgun reputation protection). No auto-reply is ever sent to the requester. Env knobs: `DEMO_REQUEST_MIN_FILL_MS`, `DEMO_REQUEST_PER_EMAIL_PER_DAY`, `DEMO_REQUEST_PER_IP_PER_DAY`, `DEMO_REQUEST_EMAIL_BUDGET_PER_DAY`, `DEMO_REQUEST_DEV_LOG` (dev only). See `docs/BOOK_A_DEMO_PLAN.md`.
+
+---
+
 ## Mailer (`/mailer`)
 
 ### Send Email
@@ -9761,6 +9805,7 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /candidate/dashboard` | Yes | Candidate only; institution must have `isPractical` |
 | `GET /hospital`, `GET /hospital/:id` | Yes | All roles |
 | `POST /hospital/create`, `PUT /hospital/:id` | Yes | Super Admin (DELETE **removed**) |
+| `POST /demoRequest` | No | Public "Book a demo" form; dedicated 5/15min/IP limiter; anti-bot layers respond with an opaque generic 201 |
 | `POST /mailer/send` | — | **DISABLED (410)** |
 | `GET /lecture`, `GET /lecture/:id` | Yes | Supervisor, Clerk, Institute Admin, Super Admin; **dept-scoped**; read-only |
 | `/journal` | Yes | Reads: Candidate+; writes (POST, PATCH, DELETE, postBulk): Super Admin |

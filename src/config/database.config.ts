@@ -32,6 +32,7 @@ import { DepartmentEntity } from "../departments/department.mDbSchema";
 import { LectureTopicEntity } from "../lecture/lectureTopic.mDbSchema";
 import { InstitutionEntity } from "../institution/institution.mDbSchema";
 import { PendingSignupEntity } from "../pendingSignup/pendingSignup.mDbSchema";
+import { DemoRequestEntity } from "../demoRequest/demoRequest.mDbSchema";
 
 dotenv.config();
 
@@ -123,6 +124,7 @@ function getDbConfig(): DataSourceOptions {
       LectureTopicEntity,
       InstitutionEntity,
       PendingSignupEntity,
+      DemoRequestEntity,
     ],
     migrations: [
       __dirname + "/../migrations-ka/*.ts",

@@ -127,6 +127,11 @@ export function addRoutes(app: Application) {
   app.use("/candidate", bundlerRouter.router);
   app.use("/waBot", waBotRouter.router);
 
+  // Public landing-page "Book a demo" form (docs/BOOK_A_DEMO_PLAN.md).
+  const { DemoRequestRouter } = require("../demoRequest/demoRequest.router");
+  const demoRequestRouter = container.get(DemoRequestRouter) as any;
+  app.use("/demoRequest", demoRequestRouter.router);
+
   // Reference reads (mirror-backed) mounted at the ORIGINAL paths: /mainDiag, /mainDiag/:id,
   // /diagnosis, /procCpt, /lecture, /lecture/:id. Writes on these paths are gone (404).
   app.use("/", referenceReadRouter.router);

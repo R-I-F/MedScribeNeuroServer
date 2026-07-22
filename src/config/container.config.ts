@@ -51,6 +51,11 @@ import { PendingSignupService } from "../pendingSignup/pendingSignup.service";
 import { PendingSignupProvider } from "../pendingSignup/pendingSignup.provider";
 import { PasswordResetController } from "../passwordReset/passwordReset.controller";
 
+import { DemoRequestService } from "../demoRequest/demoRequest.service";
+import { DemoRequestProvider } from "../demoRequest/demoRequest.provider";
+import { DemoRequestController } from "../demoRequest/demoRequest.controller";
+import { DemoRequestRouter } from "../demoRequest/demoRequest.router";
+
 import { AuthController } from "../auth/auth.controller";
 import { AuthRouter } from "../auth/auth.router";
 import { AuthTokenService } from "../auth/authToken.service";
@@ -213,6 +218,12 @@ container.bind(PasswordResetService).toSelf().inTransientScope();
 container.bind(PasswordResetProvider).toSelf().inTransientScope();
 container.bind(PendingSignupService).toSelf().inTransientScope();
 container.bind(PendingSignupProvider).toSelf().inTransientScope();
+
+// Landing-page "Book a demo" (docs/BOOK_A_DEMO_PLAN.md)
+container.bind(DemoRequestService).toSelf().inTransientScope();
+container.bind(DemoRequestProvider).toSelf().inTransientScope();
+container.bind(DemoRequestController).toSelf().inTransientScope();
+container.bind(DemoRequestRouter).toSelf().inTransientScope();
 container.bind(PasswordResetController).toSelf().inTransientScope();
 
 container.bind(ReportsController).toSelf().inTransientScope();

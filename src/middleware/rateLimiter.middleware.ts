@@ -130,6 +130,35 @@ export const strictRateLimiter = rateLimit({
 });
 
 /**
+ * Demo-request rate limiter (IP-based) — POST /demoRequest only.
+ * Tighter than strictRateLimiter (5 per 15 minutes per IP): the endpoint is
+ * public and unauthenticated, and a legitimate visitor books a demo once.
+ * Further abuse layers (honeypot, timing, per-email/per-IP caps, daily email
+ * budget) live in src/demoRequest/ — see docs/BOOK_A_DEMO_PLAN.md.
+ */
+export const demoRequestRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 demo requests per windowMs
+  skip: skipRateLimit,
+  message: {
+    status: "error",
+    statusCode: StatusCodes.TOO_MANY_REQUESTS,
+    message: "Too Many Requests",
+    error: "Too many requests from this IP, please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+      status: "error",
+      statusCode: StatusCodes.TOO_MANY_REQUESTS,
+      message: "Too Many Requests",
+      error: "Too many requests from this IP, please try again later.",
+    });
+  },
+});
+
+/**
  * User-based API rate limiter (for authenticated endpoints)
  * Limits requests to 200 requests per 15 minutes per user
  * Uses JWT token to identify user, falls back to IP if no token
