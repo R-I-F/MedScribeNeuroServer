@@ -336,7 +336,8 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 
 | Method | Path | Gate |
 |--------|------|------|
-| POST | `/auth/superAdmin/login` | Allowed only when `NODE_ENV` is `development` or `staging`; production or unknown env → `403`. |
+| POST | `/auth/superAdmin/login` | Allowed when `NODE_ENV` is `development`/`staging`, and in production only when `SUPERADMIN_LOGIN_ENABLED=true`; otherwise `403`. Dedicated limiter 10/15min per IP. |
+| POST | `/supervisor/resetPasswords` | Allowed only when `NODE_ENV` is `development`/`staging`; production → `410` (mass supervisor password reset). |
 
 ### Removed routes (no longer registered — plain 404)
 
@@ -6654,7 +6655,9 @@ Deletes a supervisor from the system. Only Super Admins can delete supervisors.
 ### Reset All Supervisor Passwords
 **POST** `/supervisor/resetPasswords`
 
-**Requires:** Super Admin authentication
+**⚠️ DISABLED IN PRODUCTION:** returns **410 Gone** (`{ "error": "This endpoint is disabled in production.", "code": "ENDPOINT_DISABLED" }`) whenever `NODE_ENV` is not `development` or `staging`. This is the highest-blast-radius operation (it resets EVERY supervisor's password at once), disabled in production alongside enabling super-admin there. See `docs/SUPERADMIN_PRODUCTION_ENABLEMENT_PLAN.md`.
+
+**Requires (dev/staging only):** Super Admin authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
@@ -9791,7 +9794,8 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /supervisor/:id` / `GET /supervisor/candidates` | Yes | All roles (censored) / Supervisor |
 | `PUT /supervisor/:id/approved` | Yes | Super Admin or Institute Admin |
 | `PUT /supervisor/:id` | Yes | Admins full control; supervisor self-restricted (phoneNum/position + dept switch) |
-| `POST /supervisor`, `POST /supervisor/resetPasswords`, `DELETE /supervisor/:id` | Yes | Super Admin |
+| `POST /supervisor`, `DELETE /supervisor/:id` | Yes | Super Admin |
+| `POST /supervisor/resetPasswords` | Yes | Super Admin (dev/staging only; **410 in production**) |
 | `POST /calSurg` | Yes | Clerk, Institute Admin, Super Admin (`procedureText` learning pipeline) |
 | `GET /calSurg/getAll`, `GET /calSurg/dashboard` | Yes | All roles; **dept-scoped** |
 | `GET /calSurg/getById` | Yes | All roles (unscoped by-id) |
