@@ -45,7 +45,7 @@ dotenv.config();
  * seeds. The legacy MySQL-flavored 1735* migrations do NOT run on Postgres and are
  * not referenced here.
  *
- * ⚠️ Staging only — run via `npm run db:ka:*` (wired through dotenv -e .env.staging).
+ * ⚠️ Never run against production — run via `npm run db:ka:*` (wired through dotenv -e .env).
  */
 function getKaMigrationsConfig(): DataSourceOptions {
   const sslCaPath = process.env.SSL_CA_PATH;

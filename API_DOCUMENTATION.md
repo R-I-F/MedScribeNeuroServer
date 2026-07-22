@@ -404,7 +404,7 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 
 Returns the single institution's identity and feature flags. The frontend fetches this once at bootstrap to gate academic/practical/clinical UI. Replaces the retired multi-tenant `GET /institutions`.
 
-**Response (200 OK)** — raw JSON (not wrapped):
+**Response (200 OK)** — standard wrapper; `data` contains:
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -9791,7 +9791,7 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 
 6. **External/import endpoints** (`*FromExternal`, `GET /external`): operator migration tooling gated by the `X-Migration-Key` header; they fail closed (503) when `MIGRATION_API_KEY` is unset — which is the deliberate production state.
 
-7. **Response Format**: all endpoints wrap responses in `{status, statusCode, message, data|error}` except the documented special cases (`/auth/validate`, refresh/logout, `GET /institution`, the candidate dashboard bundle, PDF endpoints, and the Meta/hub webhooks).
+7. **Response Format**: all endpoints wrap responses in `{status, statusCode, message, data|error}` except the documented special cases (`/auth/validate`, refresh/logout, the candidate dashboard bundle, PDF endpoints, and the Meta/hub webhooks).
 
 8. **Reference data is a read-only mirror** synced from the central reference hub; all reference write routes were removed. Content updates arrive via the hub broadcast (`POST /admin/ref-resync`) and a periodic poll.
 
