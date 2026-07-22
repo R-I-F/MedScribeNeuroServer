@@ -3,7 +3,7 @@
 Guidance for Claude Code working in this repository.
 
 ## ⚠️ Critical constraints (read first)
-- **NEVER commit or push to `main`.** `main` is the live **production** app. Work only on side branches (currently `migration/mysql-to-postgres`). Commit only when the user explicitly asks.
+- **NEVER commit or push to `main` without the user's explicit ask.** `main` is the live **production** app (Railway auto-deploys it). Work only on side branches (currently `dev`; `migration/mysql-to-postgres` was merged into main and deleted 2026-07-22 — same for the frontend's `design-integration`, now `dev`). Commit only when the user explicitly asks.
 - **All database work is on STAGING**, via `.env.staging` (Aiven Postgres host `pg-288cac9e-logbooknative.g.aivencloud.com`, DB `defaultdb`). Never point scripts at production.
 - Secrets `.env`, `.env.staging`, `*.pem` are gitignored. **`src/migrations/` and `scripts/` are also gitignored** — see the handoff note below.
 
