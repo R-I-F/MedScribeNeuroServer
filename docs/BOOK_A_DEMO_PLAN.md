@@ -2,7 +2,7 @@
 
 > **⚠️ LIVING DOCUMENT — user-mandated convention.** Update the checkpoint table below **after every stage** (and mid-stage on interruption). Future sessions: READ THIS FIRST before touching the feature.
 
-**Status: ✅ IMPLEMENTED + E2E VERIFIED (2026-07-22) — only the user browser click-test and the commit/merge/deploy remain. Branches: `feat/book-a-demo` in BOTH repos (uncommitted).**
+**Status: ✅ SHIPPED TO PRODUCTION (2026-07-22). Backend `7e8d1dd` + frontend `4d601e4` on `main` (Railway auto-deploy). User browser click-tested. `demo_requests` migration already applied to prod ka-institute.**
 
 ---
 
