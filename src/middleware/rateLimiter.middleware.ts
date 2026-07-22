@@ -130,7 +130,35 @@ export const strictRateLimiter = rateLimit({
 });
 
 /**
- * Demo-request rate limiter (IP-based) — POST /demoRequest only.
+ * Super-admin login rate limiter (IP-based) for POST /auth/superAdmin/login.
+ * Tighter than strictRateLimiter (10 per 15 min per IP): super-admin is the
+ * highest-value account and has no per-account lockout, so the login door is
+ * throttled harder. See docs/SUPERADMIN_PRODUCTION_ENABLEMENT_PLAN.md (P3).
+ */
+export const superAdminLoginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 super-admin login attempts per windowMs
+  skip: skipRateLimit,
+  message: {
+    status: "error",
+    statusCode: StatusCodes.TOO_MANY_REQUESTS,
+    message: "Too Many Requests",
+    error: "Too many requests from this IP, please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+      status: "error",
+      statusCode: StatusCodes.TOO_MANY_REQUESTS,
+      message: "Too Many Requests",
+      error: "Too many requests from this IP, please try again later.",
+    });
+  },
+});
+
+/**
+ * Demo-request rate limiter (IP-based) for POST /demoRequest only.
  * Tighter than strictRateLimiter (5 per 15 minutes per IP): the endpoint is
  * public and unauthenticated, and a legitimate visitor books a demo once.
  * Further abuse layers (honeypot, timing, per-email/per-IP caps, daily email

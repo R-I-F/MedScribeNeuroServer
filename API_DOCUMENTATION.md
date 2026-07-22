@@ -603,7 +603,7 @@ Shared login endpoint for candidates and supervisors. The system automatically d
 #### Super Admin Login
 **POST** `/auth/superAdmin/login`
 
-**⚠️ ENVIRONMENT-GATED (fail-closed):** available only when `NODE_ENV` is `development` or `staging`. In production (or when the environment is missing/unknown) the route returns **403** `"Super Admin login is disabled in this environment"`. The super-admin surface is an owner/dev tool, never a production login.
+**⚠️ ENVIRONMENT-GATED (fail-closed):** allowed when `NODE_ENV` is `development` or `staging`, and in production ONLY when `SUPERADMIN_LOGIN_ENABLED=true`. Otherwise (production without the flag, or a missing/unknown environment without the flag) the route returns **403** `"Super Admin login is disabled in this environment"`. The flag can be unset to disable instantly without a redeploy. Rate limit: dedicated `superAdminLoginRateLimiter` (10 requests / 15 min per IP). See `docs/SUPERADMIN_PRODUCTION_ENABLEMENT_PLAN.md`.
 
 **Request Body:** `{ "email", "password" }`
 

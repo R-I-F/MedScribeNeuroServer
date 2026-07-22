@@ -222,8 +222,10 @@ export class SupervisorRouter {
       }
     );
 
-    // Reset all supervisor passwords
-    // Accessible to: superAdmin only
+    // Reset ALL supervisor passwords (superAdmin only).
+    // Highest-blast-radius op: DISABLED in production (410) because super-admin is
+    // now reachable there. Stays usable in development/staging for setup. A weak
+    // fallback remains DB-direct. See docs/SUPERADMIN_PRODUCTION_ENABLEMENT_PLAN.md.
     this.router.post(
       "/resetPasswords",
       extractJWT,
@@ -231,6 +233,13 @@ export class SupervisorRouter {
       userBasedStrictRateLimiter,
       requireSuperAdmin,
       async (req: Request, res: Response) => {
+        const nodeEnv = (process.env.NODE_ENV || "").toLowerCase();
+        if (nodeEnv !== "development" && nodeEnv !== "staging") {
+          return res.status(StatusCodes.GONE).json({
+            error: "This endpoint is disabled in production.",
+            code: "ENDPOINT_DISABLED",
+          });
+        }
         try {
           const resp = await this.supervisorController.handleResetAllSupervisorPasswords(req, res);
           res.status(StatusCodes.OK).json(resp);

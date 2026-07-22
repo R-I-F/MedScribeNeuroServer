@@ -21,7 +21,7 @@ import { setAuthCookies, clearAuthCookies } from "../utils/cookie.utils";
 import { AuthTokenService } from "./authToken.service";
 import { UserRole } from "../types/role.types";
 import { PasswordResetController } from "../passwordReset/passwordReset.controller";
-import { userBasedStrictRateLimiter, strictRateLimiter } from "../middleware/rateLimiter.middleware";
+import { userBasedStrictRateLimiter, strictRateLimiter, superAdminLoginRateLimiter } from "../middleware/rateLimiter.middleware";
 import { AppDataSource, initializeDatabase } from "../config/database.config";
 import institutionResolver from "../middleware/institutionResolver.middleware";
 
@@ -313,14 +313,18 @@ export class AuthRouter {
     // Requires institutionId since each institution has its own super admins
     this.router.post(
       "/superAdmin/login",
-      strictRateLimiter,
+      superAdminLoginRateLimiter,
       superAdminLoginValidator,
       async (req: Request, res: Response, next: NextFunction) => {
-        // Super Admin login is a pre-production tool: allowed ONLY in development and
-        // staging. Explicit allowlist (fail-closed) — production, or any missing/unknown
-        // NODE_ENV, stays blocked.
+        // Super Admin login is allowed in development and staging always, and in any
+        // other environment (production) ONLY when SUPERADMIN_LOGIN_ENABLED=true.
+        // Fail-closed: production without the flag, or any missing/unknown NODE_ENV
+        // without the flag, stays blocked. The flag can be unset to disable instantly
+        // without a redeploy. See docs/SUPERADMIN_PRODUCTION_ENABLEMENT_PLAN.md.
         const nodeEnv = (process.env.NODE_ENV || "").toLowerCase();
-        if (nodeEnv !== "development" && nodeEnv !== "staging") {
+        const devOrStaging = nodeEnv === "development" || nodeEnv === "staging";
+        const enabledByFlag = process.env.SUPERADMIN_LOGIN_ENABLED === "true";
+        if (!devOrStaging && !enabledByFlag) {
           return res.status(StatusCodes.FORBIDDEN).json({
             error: "Super Admin login is disabled in this environment",
           });
