@@ -2,14 +2,11 @@
 
 **Base URL**: `http://localhost:3001` (or your configured server URL)
 
-**⚠️ MULTI-TENANCY ARCHITECTURE:** This API implements a multi-tenant architecture where each institution has its own isolated database. All API requests are automatically routed to the correct institution's database based on the `institutionId` in the JWT token or `X-Institution-Id` header. See the [Multi-Tenancy Architecture](#multi-tenancy-architecture) section for details.
+**🏥 SINGLE-INSTITUTION ARCHITECTURE:** This API serves exactly **one institution** (Kasr Al Ainy / Cairo University — the "KA spoke"). The legacy multi-tenant machinery (institution selection, per-institution databases, the `X-Institution-Id` header, `institutionId` in request bodies and JWTs) has been **removed**. The frontend fetches the institution's identity and feature flags once from **`GET /institution`**. Data visibility inside the institution is scoped by **department** — see [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping).
 
-**📋 Frontend Reports:** For frontend alignment on specific features, see [FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md](./FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md) (supervisor submissions), [FRONTEND_INSTITUTION_ENDPOINT_REPORT.md](./FRONTEND_INSTITUTION_ENDPOINT_REPORT.md) (institutions endpoint), and [FRONTEND_CPT_ICD_ANALYTICS_REPORT.md](./FRONTEND_CPT_ICD_ANALYTICS_REPORT.md) (CPT & ICD role-based analytics).
-
-**🆔 IDs and database:** All entity IDs in the API are **UUIDs** (strings). The backend uses **MariaDB** with **TypeORM**; request and response examples use `id` (UUID) for entities. Legacy references to "ObjectId" or "MongoId" in this document have been updated to UUID where applicable.
+**🆔 IDs and database:** All entity IDs in the API are **UUIDs** (strings). The backend uses **PostgreSQL** with **TypeORM**. Reference data (departments, main diagnoses, diagnoses, CPT procedures, lectures, equipment, consumables) is a **read-only mirror** synced from the central Reference API ("hub") and cannot be written through this API.
 
 ---
-
 ## Health and security (bots / scanners)
 
 **Health check:** Use **GET /health** for load balancer and Kubernetes probes. It returns `200` with `{ "status": "ok" }` and is rate-limited (60 requests per 15 minutes per IP). Do **not** use GET / or POST / for health checks; those paths are unhandled and return **404**.
@@ -199,12 +196,12 @@ The `/auth/validate` endpoint returns a direct object (not wrapped by formatter)
     "email": "user@example.com",
     "role": "candidate",
     "_id": "507f1f77bcf86cd799439011",
-    "institutionId": "550e8400-e29b-41d4-a716-446655440000"
+    "departmentId": "c9a1..."
   }
 }
 ```
 
-**Note:** The `institutionId` field is included in the token payload after login/registration. This identifies which institution's database the user belongs to.
+**Note:** The `departmentId` claim is present only when the user is assigned to a department. There is no `institutionId` claim (single-institution server).
 
 **401 Unauthorized (No Token):**
 When no Authorization header is provided, `/auth/validate` returns:
@@ -279,150 +276,89 @@ if (json.status === "success") {
 
 ---
 
-## Multi-Tenancy Architecture
+## Single-Institution Architecture & Department Scoping
 
 ### Overview
 
-The MedScribe Neuro Server implements a **multi-tenant architecture** where each institution (e.g., Cairo University, Fayoum University) has its own isolated database. This allows:
+The server is the **KA spoke**: one institution, one database. There is no institution selection and no institution routing anywhere in the API surface:
 
-- **Data Isolation**: Each institution's data is completely separated
-- **Scalability**: Easy to add new institutions without affecting existing ones
-- **Independent Scaling**: Each institution can have its own database server
-- **Security**: Institution-level data access control
+- **`GET /institution`** (public) returns the single institution's identity and feature flags (`isAcademic`, `isPractical`, `isClinical`).
+- Login and registration bodies do **not** take `institutionId` (if sent, it is ignored).
+- JWTs do **not** carry an `institutionId` claim (old tokens that still have one keep working — the claim is ignored).
+- The `X-Institution-Id` header is ignored.
 
-### How It Works
+### JWT Tokens
 
-1. **Institution Selection**: Users first select an institution (via `/institutions` endpoint)
-2. **Institution Context**: The selected institution's ID is included in the JWT token after login
-3. **Database Routing**: All API requests are automatically routed to the institution's database
-4. **Connection Pooling**: Database connections are efficiently pooled per institution
+JWT payloads carry `email`, `role`, `id`/`_id` (the user's UUID), and — when the user is assigned to a department — a **`departmentId`** claim that drives department-scoped reads (candidates and supervisors always have one; clerks and institute admins may; super admins never do). There is no `institutionId` claim. Full payload details: [JWT Token Structure](#jwt-token-structure) in the Authentication section.
 
-### Institution Identification
+Tokens are delivered as **httpOnly cookies** (`auth_token`, `refresh_token`). The server prefers the `auth_token` **cookie** over the `Authorization: Bearer` header when both are present. When a user switches department via their profile-update endpoint, the server re-signs both tokens and re-sets both cookies with the new claim.
 
-The system identifies which institution's database to use through three methods (in priority order):
+### Department Scoping
 
-1. **JWT Token** (Primary): After login, `institutionId` is included in the JWT payload
-2. **X-Institution-Id Header** (Fallback): For API clients or pre-login requests
-3. **Query Parameter** (Fallback): `?institutionId=<uuid>` for initial requests
+The institution hosts **15 departments** (NS, CTS, GS, HBP, MFS, OBGYN, OPHTHAL, ORTHO, ENT, PEDSURG, PRS, SOC, TRS, UROL, VASC). Public list: **`GET /departments`**.
 
-### JWT Token Structure (Updated)
+Department-scoped reads resolve the effective department from:
 
-All JWT tokens now contain the following payload:
-```json
-{
-  "email": "user@example.com",
-  "role": "candidate" | "supervisor" | "superAdmin" | "instituteAdmin" | "clerk",
-  "_id": "507f1f77bcf86cd799439011",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
+1. the JWT `departmentId` claim and/or an explicit **`?deptCode=<CODE>`** query override (case-insensitive; unknown code → 404, malformed → 400 on reference reads),
+2. falling back to the default department **NS** (legacy behavior for sessions without a department claim).
 
-**Important Notes:**
-- `_id`: The user's UUID (use for API calls; same as `id` where present)
-- `institutionId`: The UUID of the institution the user belongs to (added in multi-tenancy update)
-- `institutionId` is automatically included in the JWT after successful login/registration
+**Department-scoped endpoints include:** reference reads (`/mainDiag`, `/diagnosis`, `/procCpt`, `/lecture`, `/equipment`, `/consumables`, the `/references` bundle), calendar surgeries (`/calSurg/getAll` family, `/calSurg/dashboard`, `/calSurg/clerkProcs`, and creation stamping), the supervisors list (`GET /supervisor`), events (`GET /event`, `GET /event/dashboard`, creation stamping), rankings (`GET /sub/submissionRanking`, `GET /event/academicRanking`), and the institute-admin dashboard reads (scoped by the **admin's own DB-row department**; a NULL department = institution-wide admin).
 
-### Authentication Flow with Multi-Tenancy
-
-1. **Step 1: Get Available Institutions** (Optional)
-   ```
-   GET /institutions
-   ```
-   Returns list of all active institutions for user selection
-
-2. **Step 2: Login/Register with Institution**
-   ```
-   POST /auth/login
-   POST /auth/registerCand
-   ```
-   Include `institutionId` in the request body. The JWT token will include this `institutionId`.
-
-3. **Step 3: Subsequent Requests**
-   - The JWT token automatically contains `institutionId`
-   - All API requests are routed to the correct institution's database
-   - No need to specify institution in subsequent requests
-
-### X-Institution-Id Header
-
-For API clients or scenarios where you need to specify the institution explicitly:
-
-```
-X-Institution-Id: 550e8400-e29b-41d4-a716-446655440000
-```
-
-**When to Use:**
-- Pre-login requests that need institution context
-- API clients that don't use JWT tokens
-- Testing with different institutions
-
-**Note:** If a JWT token is present, the `institutionId` from the JWT takes priority over the header.
-
-### Error Responses
-
-**Missing Institution ID (400 Bad Request):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "Institution ID is required. Include X-Institution-Id header, select institution via GET /institutions, or login to get institutionId in JWT token."
-}
-```
-
-**Institution Not Found (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Institution with ID 550e8400-e29b-41d4-a716-446655440000 not found"
-}
-```
-
-**Institution Not Active (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Institution Cairo University is not active"
-}
-```
-
-**Database Connection Failed (500 Internal Server Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Failed to connect to institution database. Please try again later."
-}
-```
+Institute-admin "by-id" reads (candidate dashboard/report/submissions, supervisor submissions/report) reject cross-department targets with 404.
 
 ---
 
-## Disabled Routes
+## Disabled, Gated & Removed Routes
 
-The following routes are **disabled**: they remain registered but return **410 Gone** with a JSON body. Do not rely on them in new integrations. For full reference and re-enable instructions, see [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
+### Disabled routes (registered, always return `410 Gone`)
 
 | Method | Path | Notes |
 |--------|------|--------|
 | GET | `/auth/get/all` | Returned all users; unauthenticated. |
 | POST | `/auth/resetCandPass` | Bulk reset candidate passwords. |
 | POST | `/cand/createCandsFromExternal` | Create candidates from external source. |
-| POST | `/calSurg/postAllFromExternal` | Create calendar surgeries from external. |
-| POST | `/sub/postAllFromExternal` | Import submissions from external. |
-| PATCH | `/sub/updateStatusFromExternal` | Update submission status from external. |
+| POST | `/mailer/send` | Caller-controlled email send; disabled in the 2026-07 security audit (phishing vector). |
 
 **Response when calling a disabled route:** `410 Gone` with body `{ "error": "This endpoint is disabled.", "code": "ENDPOINT_DISABLED", "reference": "docs/DISABLED_ROUTES.md" }`.
+
+### Migration-key-gated routes (operator import tooling)
+
+These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` env var (constant-time compare). When the env var is **unset** (the production default) they fail closed with **503**; a wrong key returns **401**. They are IP rate-limited (50 / 15 min).
+
+| Method | Path |
+|--------|------|
+| POST | `/sub/postAllFromExternal` |
+| PATCH | `/sub/updateStatusFromExternal` |
+| POST | `/calSurg/postAllFromExternal` |
+| GET | `/external` |
+
+### Environment-gated routes
+
+| Method | Path | Gate |
+|--------|------|------|
+| POST | `/auth/superAdmin/login` | Allowed only when `NODE_ENV` is `development` or `staging`; production or unknown env → `403`. |
+
+### Removed routes (no longer registered — plain 404)
+
+| Route(s) | Replacement / reason |
+|----------|----------------------|
+| `GET /institutions` | `GET /institution` (single institution) |
+| `/arabProc/*` (all routes) | Retired; calendar surgeries use `procCpt` + free-text `procedureText` |
+| `DELETE /hospital/:id` | Hospitals are add/edit only (referenced by surgery history) |
+| `POST /superAdmin`, `PUT /superAdmin/:id`, `DELETE /superAdmin/:id` | Security hardening; super admins are provisioned DB-side |
+| Reference-data writes (`POST`/`PUT`/`PATCH`/`DELETE`) on `/mainDiag`, `/diagnosis`, `/procCpt`, `/lecture`, `/positions`, `/approaches`, `/regions` | Reference data is a read-only hub mirror |
+| `GET /positions`, `GET /approaches`, `GET /regions` (standalone) | Served inside the `GET /references` bundle |
+| `/additionalQuestions/*` (legacy six-flag module) | `GET /mainDiag/:mainDiagId/questions` (scaled framework) |
+| `GET /instituteAdmin/arabicProcedures` | Retired with arabProc |
+| `POST /sub/submissions/:id/generateSurgicalNotes` | Removed (the voice variant remains) |
 
 ---
 
 ## Table of Contents
 
-1. [Disabled Routes](#disabled-routes)
-2. [Multi-Tenancy Architecture](#multi-tenancy-architecture)
-3. [Institutions](#institutions)
+1. [Disabled, Gated & Removed Routes](#disabled-gated--removed-routes)
+2. [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping)
+3. [Institution & Departments](#institution--departments)
 4. [Authentication](#authentication)
 5. [User Management](#user-management)
    - [Super Admins](#super-admins-superadmin)
@@ -432,138 +368,95 @@ The following routes are **disabled**: they remain registered but return **410 G
 7. [Clinical Submissions](#clinical-submissions-clinicalsub)
 8. [Activity Timeline](#activity-timeline-activitytimeline)
 9. [Candidates](#candidates-cand)
-10. [Supervisors](#supervisors)
-11. [Calendar Surgery](#calendar-surgery)
-12. [Diagnosis](#diagnosis)
-13. [Procedure CPT](#procedure-cpt)
-14. [Main Diagnosis](#main-diagnosis)
+10. [Supervisors](#supervisors-supervisor)
+11. [Calendar Surgery](#calendar-surgery-calsurg)
+12. [Diagnosis — read-only](#diagnosis-diagnosis)
+13. [Procedure CPT — read-only](#procedure-cpt-proccpt)
+14. [Main Diagnosis — read-only](#main-diagnosis-maindiag)
 15. [Additional Questions](#additional-questions-additionalquestions)
-16. [Consumables](#consumables-consumables)
-17. [Equipment](#equipment-equipment)
-18. [Positions](#positions-positions)
-19. [Approaches](#approaches-approaches)
-20. [Regions](#regions-regions)
-21. [References](#references-references)
-22. [Candidate Dashboard](#candidate-dashboard-candidate-dashboard)
-23. [Arabic Procedures](#arabic-procedures)
-24. [Hospitals](#hospitals)
-25. [Mailer](#mailer)
-26. [External Service](#external-service)
-27. [Lectures](#lectures)
-28. [Journals](#journals)
-29. [Conferences](#conferences)
-30. [Events](#events)
-31. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
-32. [Error Responses](#error-responses)
+16. [Consumables — read-only](#consumables-consumables)
+17. [Equipment — read-only](#equipment-equipment)
+18. [Positions / Approaches / Regions](#positions-positions)
+19. [References](#references-references)
+20. [Candidate Dashboard](#candidate-dashboard-candidate-dashboard)
+21. [Hospitals](#hospitals-hospital)
+22. [Mailer — disabled](#mailer-mailer)
+23. [External Service](#external-service-external)
+24. [Lectures — read-only](#lectures-lecture)
+25. [Journals](#journals-journal)
+26. [Conferences](#conferences-conf)
+27. [Events](#events-event)
+28. [WhatsApp Bot](#whatsapp-bot-wabot)
+29. [Admin / Hub Webhook](#admin--hub-webhook-adminref-resync)
+30. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
+31. [Error Responses](#error-responses)
+32. [Authentication Requirements Summary](#authentication-requirements-summary)
 33. [Load testing](#load-testing)
 
 ---
 
-## Institutions
+## Institution & Departments
 
-### Get All Institutions
-**GET** `/institutions`
+### Get the Institution
+**GET** `/institution`
 
-**Status:** ✅ **PUBLIC ENDPOINT** (No authentication required)
+**Status:** ✅ **PUBLIC ENDPOINT** (no authentication) · **Rate Limit:** 200 requests per 15 minutes per IP
 
-**Rate Limit:** 200 requests per 15 minutes per IP (IP-based)
+Returns the single institution's identity and feature flags. The frontend fetches this once at bootstrap to gate academic/practical/clinical UI. Replaces the retired multi-tenant `GET /institutions`.
 
-**Description:**  
-Returns a list of all active institutions available in the system. This endpoint is public and does not require authentication. Use this to allow users to select their institution before logging in. The response body is the **raw array** of institutions (no wrapper object). Database credentials and internal fields (e.g. `databaseName`, `isActive`, `isClinical`) are never exposed.
-
-**Response (200 OK):**  
-Body is a JSON **array** of institution objects:
-
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "code": "cairo-university",
-    "name": "Kasr El Ainy / Cairo University",
-    "isAcademic": true,
-    "isPractical": true,
-    "isClinical": true,
-    "department": "neurosurgery"
-  },
-  {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "code": "masr-el-dawly",
-    "name": "Masr El Dawly",
-    "isAcademic": false,
-    "isPractical": true,
-    "isClinical": true,
-    "department": "neurosurgery"
-  }
-]
-```
-
-**Response Fields:**
-- `id` (string, UUID): Unique identifier for the institution
-- `code` (string): Institution code (e.g., "cairo-university", "masr-el-dawly")
-- `name` (string): Display name of the institution
-- `isAcademic` (boolean): Whether the institution is academic
-- `isPractical` (boolean): Whether the institution is practical
-- `isClinical` (boolean): Whether the institution has clinical (e.g. clinical sub) features; default `true`
-- `department` (string): Department name (e.g. "neurosurgery", default "neurosurgery")
-
-**Notes:**
-- This endpoint is public and does not require authentication
-- Only active institutions are returned
-- Database credentials and internal fields are never exposed in the response
-- Use the `id` field when logging in or registering (include in request body as `institutionId`)
-- Rate limiting is IP-based; exceeding 200 requests per 15 minutes returns 429 Too Many Requests
-
-**429 Too Many Requests (Rate limit exceeded):**
+**Response (200 OK)** — raw JSON (not wrapped):
 ```json
 {
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this IP, please try again later."
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "code": "cairo-university",
+  "name": "Kasr El Ainy / Cairo University",
+  "department": "neurosurgery",
+  "isAcademic": true,
+  "isPractical": true,
+  "isClinical": true
 }
 ```
 
-**Example Usage:**
-```typescript
-// 1. Get available institutions (response body is the array directly)
-const institutionsResponse = await fetch('/institutions');
-const institutions = await institutionsResponse.json(); // array of institution objects
+### Get All Departments
+**GET** `/departments`
 
-// 2. User selects an institution (e.g., Cairo University)
-const selectedInstitution = institutions[0]; // { id: "...", code: "cairo-university", name: "...", department: "neurosurgery", ... }
+**Status:** ✅ **PUBLIC ENDPOINT** (no authentication) · **Rate Limit:** 200 requests per 15 minutes per IP
 
-// 3. Login with institutionId
-const loginResponse = await fetch('/auth/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    email: 'user@example.com',
-    password: 'password123',
-    institutionId: selectedInstitution.id
-  })
-});
+Lists the 15 mirrored departments. Used by the signup department pickers and as the source of valid `?deptCode` values.
+
+**Response (200 OK):** array of:
+```json
+{
+  "id": "uuid",
+  "code": "NS",
+  "name": "Neurosurgery",
+  "arName": "جراحة المخ والأعصاب",
+  "isAcademic": true,
+  "isPractical": true
+}
 ```
 
 ---
-
 ## Authentication
 
 ### JWT Token Structure
 
-All JWT tokens contain the following payload:
+Access-token payload:
 ```json
 {
   "email": "user@example.com",
   "role": "candidate" | "supervisor" | "superAdmin" | "instituteAdmin" | "clerk",
-  "_id": "507f1f77bcf86cd799439011",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000"
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "_id": "550e8400-e29b-41d4-a716-446655440000",
+  "departmentId": "uuid — present only when the user has a department"
 }
 ```
 
 **Important Notes:**
-- `_id`: The user's UUID (use for API calls; same as `id` where present). Use this directly in API calls without needing to query by email.
-- `institutionId`: The UUID of the institution the user belongs to. This is automatically included after login/registration and is used to route requests to the correct institution's database.
-- `role`: The user's role within the institution.
+- `id` / `_id`: the user's UUID (same value; `_id` kept for backward compatibility). Use it directly in API calls.
+- `departmentId`: drives department-scoped reads. A fresh token (and fresh cookies) is issued when a user switches department via their profile-update endpoint.
+- There is **no** `institutionId` claim (single-institution server). Stale tokens carrying one keep working — the claim is ignored.
+- The refresh token carries the same fields plus `type: "refresh"`.
 
 ### Validate Token
 **GET** `/auth/validate`
@@ -582,7 +475,9 @@ Authorization: Bearer <token>
   "tokenPayload": {
     "email": "user@example.com",
     "role": "candidate",
-    "_id": "507f1f77bcf86cd799439011"
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "_id": "550e8400-e29b-41d4-a716-446655440000",
+    "departmentId": "c9a1..."
   }
 }
 ```
@@ -603,7 +498,7 @@ Authorization: Bearer <token>
   "code": "TOKEN_EXPIRED"
 }
 ```
-**Note:** 
+**Note:**
 - This response is NOT wrapped in the standard format
 - The backend automatically clears both `auth_token` and `refresh_token` cookies when this occurs
 - Frontend must detect `code: "TOKEN_EXPIRED"` and clear Redux state, then redirect to login
@@ -612,42 +507,28 @@ Authorization: Bearer <token>
 
 ### Login Endpoints
 
-The following endpoints handle authentication for different user roles. **All login endpoints now require `institutionId` in the request body** to route the user to the correct institution's database.
+Four isolated role logins. All of them:
 
-**Important:** 
-- Include `institutionId` in the request body for all login endpoints
-- The `institutionId` will be included in the JWT token after successful login
-- Get available institutions from `GET /institutions` endpoint
-- After login, all subsequent requests automatically use the institution's database (no need to specify institution again)
-
-All login endpoints return the same response format with a JWT token and user data.
-
-**Data trim (all login endpoints):** The `user` object excludes `google_uid`, `createdAt`, and `updatedAt` for reduced payload size.
+- take **only** `{ "email", "password" }` — `institutionId` is retired (accepted and ignored if an old client still sends it);
+- are protected by the **strict IP rate limiter** (50 requests / 15 min per IP) — added in the 2026-07 security audit;
+- set the JWT as **httpOnly cookies** (`auth_token` + `refresh_token`) and also return `token` in the body **for testing purposes only**;
+- return a trimmed `user` object (no `google_uid`, `createdAt`, `updatedAt`, never a password hash) that includes **`departmentId`** when the user is assigned to a department (the JWT then carries the same claim).
 
 #### Login (Candidate & Supervisor)
 **POST** `/auth/login`
 
-**Description:**  
-Shared login endpoint for candidates and supervisors. The system automatically detects whether the provided credentials belong to a candidate or supervisor.
-
-**⚠️ Multi-Tenancy Note:** Each institution has its own separate database containing its own candidates and supervisors. The `institutionId` is **REQUIRED** for login to route to the correct institution's database.
+Shared login endpoint for candidates and supervisors. The system automatically detects whether the credentials belong to a candidate or a supervisor.
 
 **Request Body:**
 ```json
 {
   "email": "user@example.com",
-  "password": "securePassword123",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000"
+  "password": "securePassword123"
 }
 ```
 
-**Request Body Fields:**
-- `email` (string, required): User's email address (Candidate or Supervisor)
-- `password` (string, required): User's password
-- `institutionId` (string, UUID, **required**): The UUID of the institution. Get available institutions from `GET /institutions`. **Required** because each institution has its own candidates and supervisors stored in institution-specific databases.
-
-**Response (200 OK) - Candidate:**  
-The response includes role-specific extra fields at the top level of `data`: `regDeg` and `rank`.
+**Response (200 OK) - Candidate:**
+`data` also includes top-level `regDeg` and `rank` (duplicating the values inside `user` for convenience).
 ```json
 {
   "status": "success",
@@ -664,6 +545,7 @@ The response includes role-specific extra fields at the top level of `data`: `re
       "rank": "professor",
       "regDeg": "msc",
       "approved": false,
+      "departmentId": "c9a1...",
       "role": "candidate"
     },
     "role": "candidate",
@@ -674,8 +556,8 @@ The response includes role-specific extra fields at the top level of `data`: `re
 }
 ```
 
-**Response (200 OK) - Supervisor:**  
-The response includes a role-specific extra field at the top level of `data`: `position`.
+**Response (200 OK) - Supervisor:**
+`data` also includes top-level `position`.
 ```json
 {
   "status": "success",
@@ -688,9 +570,10 @@ The response includes a role-specific extra field at the top level of `data`: `p
       "fullName": "Dr. Jane Smith",
       "phoneNum": "+1234567890",
       "approved": true,
-      "role": "supervisor",
       "canValidate": true,
-      "position": "professor"
+      "departmentId": "c9a1...",
+      "position": "professor",
+      "role": "supervisor"
     },
     "role": "supervisor",
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -701,26 +584,6 @@ The response includes a role-specific extra field at the top level of `data`: `p
 
 **Error Responses:**
 
-**400 Bad Request - Missing institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "institutionId is required for login"
-}
-```
-
-**400 Bad Request - Invalid institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "Invalid or inactive institution. Please provide a valid institutionId."
-}
-```
-
 **401 Unauthorized - Invalid Credentials:**
 ```json
 {
@@ -731,313 +594,44 @@ The response includes a role-specific extra field at the top level of `data`: `p
 }
 ```
 
-**401 Unauthorized - Account Not Found:**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: Candidate or Supervisor account not found"
-}
-```
+**429 Too Many Requests:** strict IP rate limit exceeded.
 
-**Note:** 
-- JWT tokens are sent as httpOnly cookies (`auth_token` and `refresh_token`), not in the response body.
-- The `token` field in the response is included for testing purposes only.
-- This endpoint only accepts Candidate and Supervisor credentials. Admins and clerks must use their respective isolated login endpoints.
-- The system automatically determines the user type (Candidate or Supervisor) based on the email provided.
-- **Role-specific extra data:** For **candidates**, `data` also includes top-level `regDeg` and `rank`. For **supervisors**, `data` also includes top-level `position`. These duplicate the values inside `user` for convenience.
-- **Data trim:** The `user` object excludes `google_uid`, `createdAt`, and `updatedAt` for reduced payload size.
-
----
+**Notes:**
+- This endpoint only accepts candidate and supervisor credentials. Admins and clerks must use their isolated login endpoints below.
 
 #### Super Admin Login
 **POST** `/auth/superAdmin/login`
 
-**Description:**  
-Isolated login endpoint for super admins. This endpoint is separate from other login endpoints for enhanced security.
+**⚠️ ENVIRONMENT-GATED (fail-closed):** available only when `NODE_ENV` is `development` or `staging`. In production (or when the environment is missing/unknown) the route returns **403** `"Super Admin login is disabled in this environment"`. The super-admin surface is an owner/dev tool, never a production login.
 
-**⚠️ Multi-Tenancy Note:** Each institution has its own separate database containing its own super admins. The `institutionId` is **REQUIRED** for super admin login to route to the correct institution's database.
+**Request Body:** `{ "email", "password" }`
 
-**Request Body:**
-```json
-{
-  "email": "superadmin@example.com",
-  "password": "securePassword123",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Request Body Fields:**
-- `email` (string, required): Super Admin's email address
-- `password` (string, required): Super Admin's password
-- `institutionId` (string, UUID, **required**): The UUID of the institution. Get available institutions from `GET /institutions`. **Required** because each institution has its own super admins stored in institution-specific databases.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "email": "superadmin@example.com",
-      "fullName": "Super Admin",
-      "phoneNum": "+1234567890",
-      "approved": true,
-      "role": "superAdmin"
-    },
-    "role": "superAdmin",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-}
-```
-
-**Error Responses:**
-
-**400 Bad Request - Missing institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "institutionId is required for super admin login"
-}
-```
-
-**400 Bad Request - Invalid institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "Invalid or inactive institution. Please provide a valid institutionId."
-}
-```
-
-**401 Unauthorized - Invalid Credentials:**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: Invalid credentials"
-}
-```
-
-**401 Unauthorized - Super Admin Account Not Found:**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: Super Admin account not found"
-}
-```
-
-**Note:** 
-- JWT tokens are sent as httpOnly cookies (`auth_token` and `refresh_token`), not in the response body.
-- The `token` field in the response is included for testing purposes only.
-- This endpoint only accepts Super Admin credentials. Other user types must use their respective login endpoints.
-
----
+**Response (200 OK):** `data` = `{ user, role: "superAdmin", token }` (cookies set as usual). **401** on invalid credentials.
 
 #### Institute Admin Login
 **POST** `/auth/instituteAdmin/login`
 
-**Description:**  
-Isolated login endpoint for institute admins. This endpoint is separate from other login endpoints for enhanced security.
+**Request Body:** `{ "email", "password" }`
 
-**⚠️ Multi-Tenancy Note:** Each institution has its own separate database containing its own institute admins. The `institutionId` is **REQUIRED** for institute admin login to route to the correct institution's database.
-
-**Request Body:**
-```json
-{
-  "email": "instituteadmin@example.com",
-  "password": "securePassword123",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Request Body Fields:**
-- `email` (string, required): Institute Admin's email address
-- `password` (string, required): Institute Admin's password
-- `institutionId` (string, UUID, **required**): The UUID of the institution. Get available institutions from `GET /institutions`. **Required** because each institution has its own institute admins stored in institution-specific databases.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "email": "instituteadmin@example.com",
-      "fullName": "Institute Admin",
-      "phoneNum": "+1234567890",
-      "approved": true,
-      "role": "instituteAdmin",
-      "termsAcceptedAt": "2024-01-15T10:30:00.000Z"
-    },
-    "role": "instituteAdmin",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-}
-```
-
-**Error Responses:**
-
-**400 Bad Request - Missing institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "institutionId is required for institute admin login"
-}
-```
-
-**400 Bad Request - Invalid institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "Invalid or inactive institution. Please provide a valid institutionId."
-}
-```
-
-**401 Unauthorized - Invalid Credentials:**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: Invalid credentials"
-}
-```
-
-**401 Unauthorized - Institute Admin Account Not Found:**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: Institute Admin account not found"
-}
-```
-
-**Note:** 
-- JWT tokens are sent as httpOnly cookies (`auth_token` and `refresh_token`), not in the response body.
-- The `token` field in the response is included for testing purposes only.
-- This endpoint only accepts Institute Admin credentials. Other user types must use their respective login endpoints.
-
----
+**Response (200 OK):** `data` = `{ user, role: "instituteAdmin", token }`. The `user` (and JWT claim) include `departmentId` when the admin is department-scoped; a NULL department means an institution-wide admin. **401** on invalid credentials.
 
 #### Clerk Login
 **POST** `/auth/clerk/login`
 
-**Description:**  
-Isolated login endpoint for clerks. This endpoint is separate from regular user login endpoints for enhanced security.
+**Request Body:** `{ "email", "password" }`
 
-**⚠️ Multi-Tenancy Note:** Each institution has its own separate database containing its own clerks. The `institutionId` is **REQUIRED** for clerk login to route to the correct institution's database.
-
-**Request Body:**
-```json
-{
-  "email": "clerk@example.com",
-  "password": "securePassword123",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Request Body Fields:**
-- `email` (string, required): Clerk's email address
-- `password` (string, required): Clerk's password
-- `institutionId` (string, UUID, **required**): The UUID of the institution. Get available institutions from `GET /institutions`. **Required** because each institution has its own clerks stored in institution-specific databases.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "email": "clerk@example.com",
-      "fullName": "Clerk Name",
-      "phoneNum": "+1234567890",
-      "approved": true,
-      "role": "clerk",
-      "termsAcceptedAt": "2024-01-15T10:30:00.000Z"
-    },
-    "role": "clerk",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-}
-```
-
-**Error Responses:**
-
-**400 Bad Request - Missing institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "institutionId is required for clerk login"
-}
-```
-
-**400 Bad Request - Invalid institutionId:**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "Invalid or inactive institution. Please provide a valid institutionId."
-}
-```
-
-**401 Unauthorized - Invalid Credentials:**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: Invalid credentials"
-}
-```
-
-**401 Unauthorized - Clerk Account Not Found:**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: Clerk account not found"
-}
-```
-
-**Note:** 
-- JWT tokens are sent as httpOnly cookies (`auth_token` and `refresh_token`), not in the response body.
-- The `token` field in the response is included for testing purposes only.
-- This endpoint only accepts Clerk credentials. Other user types must use their respective login endpoints.
+**Response (200 OK):** `data` = `{ user, role: "clerk", token }`. The clerk's `departmentId` (when assigned) becomes the JWT claim that scopes calendar-surgery reads and the procedure typeahead. **401** on invalid credentials.
 
 ---
 
-### Register Candidate
+### Register Candidate (OTP-verified)
 **POST** `/auth/registerCand`
 
-Registers a new candidate user in the specified institution's database. No authentication required. **Institution ID is required**—the default database is used only for other configurations, not for candidate registration. **`regDeg` is optional** and may be omitted or null for non-academic institutions.
+**Rate Limit:** strict, 50 requests / 15 min per IP
 
-**Defaults (set by server, not accepted in request body):**
-- `role`: **`"candidate"`**
-- `approved`: **`false`** (0)
-- `termsAcceptedAt`: **current date/time** (set when the user accepts terms at signup in the frontend)
+Registration is **staged**: this endpoint does **NOT** create the account. It stages the signup (password already bcrypt-hashed at rest) and emails a **6-digit verification code**. The real candidate row is created only by [`POST /auth/verifySignupOtp`](#verify-signup-otp).
+
+**Defaults (set by server):** `role: "candidate"`, `approved: false`, `termsAcceptedAt: now`.
 
 **Request Body:**
 ```json
@@ -1050,30 +644,14 @@ Registers a new candidate user in the specified institution's database. No authe
   "nationality": "Egyptian",
   "rank": "professor",
   "regDeg": "msc",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000"
+  "departmentId": "c9a1..."
 }
 ```
 
 **Request Body Fields:**
-- `email` (string, required): Candidate's email address
-- `password` (string, required): Candidate's password (will be hashed)
-- `fullName` (string, required): Candidate's full name
-- `phoneNum` (string, required): Candidate's phone number
-- `regNum` (string, required): Registration number
-- `nationality` (string, required): Candidate's nationality
-- `rank` (string, required): Candidate's rank
-- `regDeg` (string, optional): Registration degree. Omit or set to `null` for non-academic institutions; when provided must be one of: `msc`, `doctor of medicine (md)`, `egyptian fellowship`, `self registration`, `other`.
-- `institutionId` (string, UUID, required): The UUID of the institution the candidate is registering for. Get available institutions from `GET /institutions`.
-
-Do not send `role` or `approved`; they are set by the server (`role: "candidate"`, `approved: false`).
-
-**Response (400 Bad Request)** — when `institutionId` is missing, invalid, or the institution is inactive:
-```json
-{
-  "error": "institutionId is required. Provide a valid institutionId in the request body, query, or X-Institution-Id header."
-}
-```
-Validation may also return 400 if `institutionId` is not a valid UUID.
+- `email` (string, required) · `password` (string, required, ≥8 chars) · `fullName` (string, required) · `phoneNum` (string, required) · `regNum` (string, required) · `nationality` (string, required) · `rank` (string, required)
+- `regDeg` (string, optional): one of `msc`, `doctor of medicine (md)`, `egyptian fellowship`, `self registration`, `other`.
+- `departmentId` (string UUID, **required**): the candidate's department — pick from public `GET /departments`. Unknown ids are rejected.
 
 **Response (201 Created):**
 ```json
@@ -1082,75 +660,77 @@ Validation may also return 400 if `institutionId` is not a valid UUID.
   "statusCode": 201,
   "message": "Created",
   "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "candidate@example.com",
-    "fullName": "John Doe",
-    "phoneNum": "+1234567890",
-    "regNum": "REG123456",
-    "nationality": "Egyptian",
-    "rank": "professor",
-    "regDeg": "msc",
-    "approved": false,
-    "role": "candidate"
+    "signupId": "uuid",
+    "expiresAt": "2026-07-22T12:15:00.000Z",
+    "email": "candidate@example.com"
   }
 }
 ```
 
+**Response (409 Conflict):** the email already belongs to an existing account.
+
 ---
 
-### Register Supervisor
+### Register Supervisor (OTP-verified)
 **POST** `/auth/registerSupervisor`
 
-Registers a new supervisor in the specified institution's database. No authentication required. **Institution ID is required.** Rate limited by IP (50 requests per 15 minutes per IP).
+**Rate Limit:** strict, 50 requests / 15 min per IP
 
-**Defaults (set by server, not accepted in request body):**
-- `role`: **`"supervisor"`**
-- `approved`: **`false`** (0)
-- `canValidate`: **`false`** (0) — no validation rights until an admin grants them
-- `termsAcceptedAt`: **current date/time** (set when the user accepts terms at signup in the frontend)
+Same staged OTP flow as candidate registration (no account row until the code is verified).
+
+**Defaults (set by server):** `role: "supervisor"`, `approved: false`, `canValidate: false`, `termsAcceptedAt: now`.
+
+**Request Body Fields:**
+- `email`, `password` (≥8), `fullName`, `phoneNum` — required.
+- `departmentId` (string UUID, **required**): from `GET /departments`.
+- `position` (string, optional): one of `Professor`, `Assistant Professor`, `Lecturer`, `Assistant Lecturer`, `Guest Doctor`, `Consultant`, `unknown` (default `unknown`).
+
+**Response (201 Created):** same staged shape as Register Candidate (`signupId`, `expiresAt`, `email`). **409** if the email already exists.
+
+---
+
+### Verify Signup OTP
+**POST** `/auth/verifySignupOtp`
+
+**Rate Limit:** strict, 50 requests / 15 min per IP
+
+Completes a staged signup: on a correct code the real (unapproved) candidate/supervisor account is created transactionally (with an email-uniqueness race guard).
 
 **Request Body:**
 ```json
 {
-  "email": "supervisor@example.com",
-  "password": "securePassword123",
-  "fullName": "Jane Smith",
-  "phoneNum": "+1234567890",
-  "institutionId": "550e8400-e29b-41d4-a716-446655440000",
-  "position": "Professor"
+  "signupId": "uuid",
+  "code": "123456"
 }
 ```
+(`code` must match `/^\d{6}$/`.)
 
-**Request Body Fields:**
-- `email` (string, required): Supervisor's email address
-- `password` (string, required): At least 8 characters (will be hashed)
-- `fullName` (string, required): Supervisor's full name
-- `phoneNum` (string, required): Supervisor's phone number
-- `institutionId` (string, UUID, required): Institution UUID. Get from `GET /institutions`.
-- `position` (string, optional): Supervisor's position. When provided must be one of: `Professor`, `Assistant Professor`, `Lecturer`, `Assistant Lecturer`, `Guest Doctor`, `Consultant`, `unknown`. If omitted, stored as `unknown`.
+**Responses:**
+- **201 Created** — account created; `data` contains the new (unapproved) user.
+- **400 Bad Request** — wrong code; body includes `attemptsRemaining`. After **5 wrong attempts** the signup is rejected and the user must register again.
+- **410 Gone** — the staged signup `expired` (15-minute window; resending does NOT extend it) or was `rejected`; body includes `reason`.
+- **404 Not Found** — unknown `signupId` (also returned after the periodic purge sweep removes stale signups).
 
-Do not send `role`, `approved`, or `canValidate`; they are set by the server (`role: "supervisor"`, `approved: false`, `canValidate: false`).
+---
 
-**Response (400 Bad Request)** — when `institutionId` is missing or invalid: same shape as Register Candidate.
+### Resend Signup OTP
+**POST** `/auth/resendSignupOtp`
 
-**Response (201 Created):**
-```json
-{
-  "id": "uuid",
-  "email": "supervisor@example.com",
-  "fullName": "Jane Smith",
-  "phoneNum": "+1234567890",
-  "approved": false,
-  "role": "supervisor"
-}
-```
+**Rate Limit:** strict, 50 requests / 15 min per IP
+
+**Request Body:** `{ "signupId": "uuid" }`
+
+**Responses:**
+- **200 OK** — a new email was sent; `data` = `{ sendsRemaining, expiresAt }`. Max **3 sends** per signup, **60-second cooldown** between sends; the 15-minute expiry is **not** extended.
+- **429 Too Many Requests** — cooldown active (body includes `retryInSeconds`) or send quota exhausted.
+- **410 Gone** — signup expired. · **404 Not Found** — unknown `signupId`.
 
 ---
 
 ### Reset All Candidate Passwords
 **POST** `/auth/resetCandPass`
 
-**Status:** DISABLED — returns `410 Gone`. See [Disabled Routes](#disabled-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
+**Status:** DISABLED — returns `410 Gone`. See [Disabled, Gated & Removed Routes](#disabled-gated--removed-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
 
 ---
 
@@ -1510,12 +1090,11 @@ Allows users to request a password reset link via email. The system searches for
 ```
 
 **Notes:**
-- **Multi-tenancy:** Requires `institutionId` (in request body or query) or `X-Institution-Id` header so the request is scoped to the correct institution.
 - Email is searched in candidate, supervisor, instituteAdmin, and clerk only (not superAdmin)
 - If user exists, a secure reset token is generated and sent via email
 - Reset link expires in 1 hour
 - Always returns success message to prevent email enumeration attacks
-- **Reset link format:** `{FRONTEND_URL}/reset-password?token={token}&institutionId={institutionId}` — the backend includes `institutionId` in the email link (from the request that triggered the reset), so the Reset Password page does not need to show an institution selector when the user opens the link.
+- **Reset link format:** `{FRONTEND_URL}/reset-password?token={token}`.
 - **Rate Limiting**: Two-layer protection:
   - Router-level: 50 requests per 15 minutes per IP address (prevents rapid-fire abuse)
   - Application-level: Maximum 3 password reset tokens per user per hour (prevents token flooding per user)
@@ -1601,7 +1180,6 @@ Allows users to reset their password using a token received via email from the f
 ```
 
 **Notes:**
-- **Multi-tenancy:** Requires `institutionId` (in request body or query) or `X-Institution-Id` header so the request is scoped to the correct institution.
 - Token is obtained from the password reset email link
 - Token expires after 1 hour
 - Token can only be used once
@@ -1616,26 +1194,11 @@ Allows users to reset their password using a token received via email from the f
 
 ---
 
-Resets all candidate passwords to the default encrypted password (`MEDscrobe01$`). No authentication required.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "modifiedCount": 42,
-    "defaultPassword": "MEDscrobe01$"
-  }
-}
-```
-
 ---
 
 ## User Management
 
-**⚠️ Multi-Tenancy Note:** All endpoints in this section automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access data from their own institution.
+**Note:** Single-institution server — all data belongs to the one KA institution (no institution routing). Department-scoped behavior, where present, is described per endpoint; see [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping).
 
 ### Super Admins (`/superAdmin`)
 
@@ -1666,79 +1229,7 @@ Rate limiting uses the authenticated user's ID from the JWT token. If no valid t
 ### Create Super Admin
 **POST** `/superAdmin`
 
-**Status:** ⚠️ **TEMPORARILY DISABLED** (Security hardening)
-
-**Note:** This endpoint has been temporarily disabled to reduce attack surface. Super Admin accounts should be created directly in the database by system administrators.
-
-**Requires:** Super Admin authentication (when enabled)
-
-**Rate Limit:** 50 requests per 15 minutes per user (when enabled)
-
-**Description:**  
-~~Creates a new Super Admin account. Only existing Super Admins can create new Super Admin accounts.~~ **Currently disabled for security reasons.**
-
-**Request Body:**
-```json
-{
-  "email": "superadmin2@example.com",
-  "password": "SuperAdmin123$",
-  "fullName": "Super Admin User",
-  "phoneNum": "01000000000",
-  "approved": true
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "superadmin2@example.com",
-    "fullName": "Super Admin User",
-    "phoneNum": "01000000000",
-    "approved": true,
-    "role": "superAdmin"
-  }
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Only Super Admins can create other Super Admin accounts
-- The password is automatically hashed before being stored in the database
-- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+**Status:** ❌ **REMOVED** (security hardening) — the route is not registered (404). Super-admin accounts are provisioned directly in the database (DB/ETL-side); there is no API creation path. Note that `POST /auth/superAdmin/login` itself is environment-gated (development/staging only).
 
 ---
 
@@ -1920,21 +1411,9 @@ Returns a specific Super Admin by ID.
 
 ---
 
-### Update Super Admin
-**PUT** `/superAdmin/:id`
+### Update / Delete Super Admin
 
-**Status:** ❌ **REMOVED** (Security hardening)
-
-**Note:** This endpoint has been removed to reduce attack surface. Super Admin accounts should be updated directly in the database by system administrators.
-
----
-
-### Delete Super Admin
-**DELETE** `/superAdmin/:id`
-
-**Status:** ❌ **REMOVED** (Security hardening)
-
-**Note:** This endpoint has been removed to reduce attack surface. Super Admin accounts should be deleted directly in the database by system administrators.
+**Status:** ❌ **REMOVED** (security hardening) — `PUT /superAdmin/:id` and `DELETE /superAdmin/:id` are not registered (404). Only `GET /superAdmin` and `GET /superAdmin/:id` remain (Super Admin auth).
 
 ---
 
@@ -2012,6 +1491,7 @@ Authorization: Bearer <token>
 
 **Notes:**
 - Only Super Admins can create Institute Admins
+- `departmentId` (UUID, optional): scopes the admin to a department (validated against the mirrored `departments`); omitted = institution-wide admin. All institute-admin dashboard reads are scoped by this value (read from the admin's DB row, not the JWT).
 - The password is automatically hashed before being stored in the database
 - All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
 
@@ -2198,232 +1678,39 @@ Returns a specific Institute Admin by ID.
 ### Update Institute Admin
 **PUT** `/instituteAdmin/:id`
 
-**Requires:** Authentication (Institute Admin or Super Admin)
+**Requires:** Institute Admin (**own account only**) or Super Admin (any account) · **Rate Limit:** 50 / 15 min per user
 
-**Rate Limit:** 50 requests per 15 minutes per user
+**Request Body** (all optional): `email`, `password` (≥8, bcrypt-hashed), `fullName` (≤100), `phoneNum` (≥11), `approved` (boolean), `departmentId` (UUID — must exist in the mirrored `departments`; UUID only, an admin cannot null their own scope to institution-wide).
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
+**Behavior:**
+- An institute admin may update **only their own** record (403 otherwise); super admins may update any (2026-07 security audit, F11 — peer-admin updates removed).
+- **Self department switch:** when an institute admin changes their own `departmentId`, the server re-signs **both** access and refresh tokens with the new `departmentId` claim, re-sets the `auth_token`/`refresh_token` cookies, and includes `token` in the response. The frontend must adopt the new token and invalidate cached queries (all department-scoped reads change).
+- The bcrypt password hash is **never** returned (stripped from GET and PUT responses).
 
-**URL Parameters:**
-- `id` (required): Institute Admin UUID (must be a valid UUID format)
-
-**Description:**  
-Updates an Institute Admin's information.
-
-**Request Body:**
-```json
-{
-  "fullName": "Updated Institute Admin",
-  "phoneNum": "+9876543210"
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "instituteadmin@example.com",
-    "fullName": "Updated Institute Admin",
-    "phoneNum": "+9876543210",
-    "approved": true,
-    "role": "instituteAdmin"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "institute admin ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Institute admin not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Accessible to Institute Admins and Super Admins
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- If password is provided, it is automatically hashed before being stored
-- Returns 404 if the Institute Admin with the specified ID does not exist
-- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+**Response (200 OK):** the updated admin (password stripped; plus `token` on a self department switch). **404** if not found.
 
 ---
 
 ### Delete Institute Admin
 **DELETE** `/instituteAdmin/:id`
 
-**Requires:** Super Admin authentication
+**Requires:** **Super Admin only** · **Rate Limit:** 50 / 15 min per user
 
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <superAdmin_token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**URL Parameters:**
-- `id` (required): Institute Admin UUID (must be a valid UUID format)
-
-**Description:**  
-Deletes an Institute Admin from the system. Only Super Admins can delete Institute Admins.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "Institute admin deleted successfully"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "institute admin ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Institute admin not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Only Super Admins can delete Institute Admins
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the Institute Admin with the specified ID does not exist
-- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+**Response (200 OK):** `{ "message": "..." }`. **404** if not found.
 
 ---
 
 ### Institute Admin Dashboard – Main Diagnosis
 
-The **Institute Admin dashboard** can manage Main Diagnosis with the same full CRUD as Super Admin. All operations are **institution-scoped**: the dashboard uses the Institute Admin's JWT (which includes `institutionId`), so only main diagnoses for that institution's database are listed, created, updated, or deleted.
+Reference data is now a **read-only hub mirror** — the dashboard can browse main diagnoses but can no longer create, update, or delete them (those routes return 404).
 
 | Action | Method | Endpoint | Description |
 |--------|--------|----------|-------------|
-| List all | GET | `/mainDiag` | List all main diagnoses for the institution |
+| List all | GET | `/mainDiag` | Department-scoped list (`?deptCode` → JWT claim → NS) |
 | Get one | GET | `/mainDiag/:id` | Get a main diagnosis by ID |
-| Create | POST | `/mainDiag` | Create a new main diagnosis (title, procsArray, diagnosis) |
-| Update | PUT | `/mainDiag/:id` | Update title and/or append procs/diagnosis |
-| Remove procs | POST | `/mainDiag/:id/procs/remove` | Remove CPT links (body: `numCodes` array) |
-| Remove diagnosis | POST | `/mainDiag/:id/diagnosis/remove` | Remove ICD links (body: `icdCodes` array) |
-| Delete | DELETE | `/mainDiag/:id` | Delete a main diagnosis |
+| Questions | GET | `/mainDiag/:mainDiagId/questions` | Per-diagnosis dynamic questions with narrowed options |
 
-**Authentication:** All of the above require **Super Admin or Institute Admin** (POST, PUT, remove, DELETE) or any authenticated user (GET). Send `Authorization: Bearer <token>` and, if needed, `X-Institution-Id` header. Full request/response details, validation, and rate limits are in [Main Diagnosis (`/mainDiag`)](#main-diagnosis-maindiag).
-
-**Frontend (i-admin dashboard):** The dashboard should show an **Add New** (create) and **Delete** button for main diagnosis so Institute Admins can manage them. See [Institute Admin – Main Diagnosis (Add New & Delete)](./docs/FRONTEND_INSTITUTE_ADMIN_MAIN_DIAGNOSIS.md) for the exact API calls and a UI checklist.
+Full details in [Main Diagnosis (`/mainDiag`)](#main-diagnosis-maindiag).
 
 ---
 
@@ -2517,7 +1804,6 @@ OR
 ```
 Cookie: auth_token=<token>
 ```
-Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **Description:** Generates and returns a PDF report of **all supervisors** for the current institution. The PDF uses the same layout and style as the candidate summary report: E-Certificate header, institution name and department, report-generated date, line dividers, footer (LIBELUSpro / www.libeluspro.com), and page numbers. Content includes:
 
@@ -2530,7 +1816,7 @@ Optional: `X-Institution-Id` when institution is not in the JWT.
 **Notes:**
 - This endpoint returns the PDF bytes directly; do not expect a `{ status, statusCode, message, data }` wrapper.
 - Accessible to Institute Admins and Super Admins (same as other institute admin dashboard reports).
-- Institution is resolved from the JWT or `X-Institution-Id` header; the report lists only supervisors from that institution’s database.
+- The report lists only supervisors within the admin's department scope.
 
 **Errors:**
 - 401 Unauthorized, 403 Forbidden, or 429 Too Many Requests same as other institute admin endpoints.
@@ -2552,10 +1838,9 @@ OR
 ```
 Cookie: auth_token=<token>
 ```
-Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **URL Parameters:**
-- `supervisorId` (required): Supervisor UUID. Must belong to the institution (same dataSource as resolved from JWT / `X-Institution-Id`).
+- `supervisorId` (required): Supervisor UUID. Must be within the admin's department scope (cross-department targets return 404).
 
 **Description:** Generates and returns a PDF report for a specific supervisor. The report uses the same layout system as the candidate E-Certificate report (header, footer, typography, line dividers) but with supervisor-focused content:
 
@@ -2571,7 +1856,7 @@ Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **Notes:**
 - This endpoint returns the PDF bytes directly; do not expect a `{ status, statusCode, message, data }` wrapper.
-- Accessible to Institute Admins and Super Admins. Institution name and department on the report come from the resolved institution (JWT or `X-Institution-Id`).
+- Accessible to Institute Admins and Super Admins. Institution name and department on the report come from the single KA institution.
 
 **Errors:**
 - 400 if `supervisorId` is not a valid UUID.
@@ -2641,7 +1926,7 @@ Cookie: auth_token=<token>
             "lat": 30.0444
           }
         },
-        "arabProc": {
+        "procCpt": {
           "_id": "507f1f77bcf86cd799439021",
           "title": "اسم الإجراء بالعربية",
           "numCode": "61070",
@@ -2881,7 +2166,6 @@ OR
 ```
 Cookie: auth_token=<token>
 ```
-Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **Query Parameters:**
 - `search` (optional, string): When present and non-empty, filter candidates server-side by `fullName`, `regNum`, `rank`, `regDeg`, and `email`. Trimmed; empty/whitespace is treated as no search (returns full list).
@@ -2948,10 +2232,9 @@ OR
 ```
 Cookie: auth_token=<token>
 ```
-Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **URL Parameters:**
-- `candidateId` (required): Candidate UUID. Must belong to the institution (same dataSource as resolved from JWT / X-Institution-Id).
+- `candidateId` (required): Candidate UUID. Must be within the admin's department scope (cross-department targets return 404).
 
 **Description:** Returns the full dashboard snapshot for a single candidate—same structure as one element of **GET /instituteAdmin/candidates/dashboard** `items[]`. Use when the user opens a candidate's detail/snapshot page (by click or direct URL). Includes `candidate`, `stats`, `submissions`, `cptAnalytics`, `icdAnalytics`, `supervisorAnalytics`; `points` when institution is academic; `clinicalSubCand` when institution is clinical.
 
@@ -2997,10 +2280,9 @@ OR
 ```
 Cookie: auth_token=<token>
 ```
-Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **URL Parameters:**
-- `candidateId` (required): Candidate UUID. Must belong to the institution (same dataSource as resolved from JWT / X-Institution-Id).
+- `candidateId` (required): Candidate UUID. Must be within the admin's department scope (cross-department targets return 404).
 
 **Description:** Generates and returns a PDF report for the specified candidate. The report header shows the brand **LIBELUSpro** and uses the institution name and department (from the resolved institution). The report includes:
 
@@ -3015,7 +2297,7 @@ Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **Notes:**
 - This endpoint returns the PDF bytes directly; do not expect a `{ status, statusCode, message, data }` wrapper.
-- Accessible only to Institute Admins. Institution name and department on the report come from the resolved institution (JWT or `X-Institution-Id`).
+- Accessible only to Institute Admins. Institution name and department on the report come from the single KA institution.
 
 **Errors:**
 - 400 if `candidateId` is not a valid UUID.
@@ -3082,7 +2364,7 @@ Cookie: auth_token=<token>
             "lat": 30.0444
           }
         },
-        "arabProc": {
+        "procCpt": {
           "_id": "507f1f77bcf86cd799439021",
           "title": "اسم الإجراء بالعربية",
           "numCode": "61070",
@@ -3230,7 +2512,7 @@ Cookie: auth_token=<token>
           "lat": 30.0444
         }
       },
-      "arabProc": {
+      "procCpt": {
         "_id": "507f1f77bcf86cd799439021",
         "title": "اسم الإجراء بالعربية",
         "numCode": "61070",
@@ -3354,10 +2636,9 @@ OR
 ```
 Cookie: auth_token=<token>
 ```
-Optional: `X-Institution-Id` when institution is not in the JWT.
 
 **URL Parameters:**
-- `submissionId` (required): Submission UUID. Must exist in the institution’s database (tenant is resolved from JWT or `X-Institution-Id`).
+- `submissionId` (required): Submission UUID. Must be within the admin's department scope (404 otherwise).
 
 **Query Parameters (optional):**
 - `inline=1` or `view=1`: When present, the response uses `Content-Disposition: inline` so the PDF opens in the browser instead of downloading. Omit for attachment (download) behavior.
@@ -3384,25 +2665,23 @@ Optional: `X-Institution-Id` when institution is not in the JWT.
 **Example – download PDF:**
 ```
 GET /instituteAdmin/submissions/8fd9b7dc-e62a-4ddf-b0d7-a56110927328/report
-X-Institution-Id: 550e8400-e29b-41d4-a716-446655440000
 Authorization: Bearer <token>
 ```
 
 **Example – view PDF in browser (no download):**
 ```
 GET /instituteAdmin/submissions/8fd9b7dc-e62a-4ddf-b0d7-a56110927328/report?inline=1
-X-Institution-Id: 550e8400-e29b-41d4-a716-446655440000
 Authorization: Bearer <token>
 ```
 
 **Notes:**
 - This endpoint returns the PDF bytes directly; do not expect a `{ status, statusCode, message, data }` wrapper.
-- Accessible to Institute Admins and Super Admins. Institution (and thus tenant DB) is resolved from JWT or `X-Institution-Id`; the submission must exist in that institution’s database.
+- Accessible to Institute Admins and Super Admins; the submission must be within the admin's department scope.
 - Use `?inline=1` or `?view=1` to display the PDF in the browser; omit for attachment (download).
 
 **Errors:**
 - 400 if `submissionId` is not a valid UUID.
-- 404 if the submission does not exist in the institution’s database.
+- 404 if the submission does not exist or is outside the admin's department scope.
 - Otherwise same as other institute admin endpoints (401, 403, 429).
 
 ---
@@ -3423,12 +2702,12 @@ OR
 Cookie: auth_token=<token>
 ```
 
-**Description:** Returns all calendar procedures (calSurg) with optional filtering capabilities. Supports filtering by hospital, arabProc (by title or numCode), and timestamp (month/year).
+**Description:** Returns all calendar procedures (calSurg) with optional filtering capabilities. Supports filtering by hospital, procedure (procCpt title or numCode), and timestamp (month/year). Results are scoped to the admin's department (institution-wide for unscoped admins).
 
 **Query Parameters (all optional):**
 - `hospitalId` (optional): Filter by hospital UUID
-- `arabProcTitle` (optional): Filter by Arabic procedure title (partial match, case-insensitive)
-- `arabProcNumCode` (optional): Filter by Arabic procedure numCode (exact or partial match)
+- `procTitle` (optional): Filter by procedure (CPT) title (partial match, case-insensitive)
+- `procNumCode` (optional): Filter by procedure (CPT) numCode (exact or partial match)
 - `month` (optional): Filter by month (1-12). When provided, filters calSurg entries within that month
 - `year` (optional): Filter by year (e.g., 2025). When provided, filters calSurg entries within that year
 - `startDate` (optional): Filter by start date (ISO 8601 format). When provided with `endDate`, filters calSurg entries within the date range
@@ -3458,7 +2737,7 @@ Cookie: auth_token=<token>
           "lat": 30.0444
         }
       },
-      "arabProc": {
+      "procCpt": {
         "_id": "507f1f77bcf86cd799439021",
         "title": "اسم الإجراء بالعربية",
         "numCode": "61070",
@@ -3588,75 +2867,7 @@ Cookie: auth_token=<token>
 ### Get Arabic Procedures (Dashboard)
 **GET** `/instituteAdmin/arabicProcedures`
 
-**Requires:** Authentication (Institute Admin or Super Admin)
-
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Description:** Returns a list of all Arabic procedures. Used for the autocomplete/search functionality when filtering calendar procedures by arabProc.
-
-**Query Parameters (optional):**
-- `search` (optional): Search term to filter by title or numCode (case-insensitive partial match). If provided, returns only procedures matching the search term.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "title": "مراجعة صمام اوميا",
-      "alphaCode": "VSHN",
-      "numCode": "61070",
-      "description": "Ommaya valve reservoir check and fluid sampling procedure."
-    }
-  ]
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Accessible to Institute Admins and Super Admins
-- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+**Status:** ❌ **REMOVED** — the `arab_procs` module was retired (2026-07-15); the route returns 404. Procedure names now come from the CPT catalog (`procCpt`, with Arabic `arTitle`) and the learned clerk-phrase table (`clerkProc`).
 
 ---
 
@@ -3684,7 +2895,7 @@ Cookie: auth_token=<token>
 - `year` (optional): Filter by year (e.g., 2025). When provided, filters calSurg entries within that year
 - `startDate` (optional): Filter by start date (ISO 8601 format). When provided with `endDate`, filters calSurg entries within the date range
 - `endDate` (optional): Filter by end date (ISO 8601 format). When provided with `startDate`, filters calSurg entries within the date range
-- `groupBy` (optional): Grouping method. Valid values: `title` (group by arabProc title) or `alphaCode` (group by arabProc alphaCode). Default: `title`
+- `groupBy` (optional): Grouping method. Valid values: `title` (group by procCpt title) or `alphaCode` (group by procCpt alphaCode). Default: `title`
 
 **Response (200 OK) - When groupBy is "title":**
 ```json
@@ -3911,6 +3122,7 @@ Creates a new Clerk account. Only Super Admins and Institute Admins can create C
 
 **Notes:**
 - Only Super Admins and Institute Admins can create Clerk accounts
+- `approved` (boolean) is **required**; `departmentId` (UUID, optional) scopes the clerk to a department (validated against the mirrored `departments`; omitted = institution-scoped clerk). The clerk's department becomes their JWT claim at login and scopes calendar-surgery work.
 - The password is automatically hashed before being stored in the database
 - All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
 
@@ -4308,7 +3520,7 @@ Deletes a Clerk from the system. Only Super Admins and Institute Admins can dele
 
 ## Submissions (`/sub`)
 
-**⚠️ Multi-Tenancy Note:** All submission endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access submissions from their own institution.
+**Note:** Single-institution server — all data belongs to the one KA institution (no institution routing). Department-scoped behavior, where present, is described per endpoint; see [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping).
 
 **Optional field `subGoogleUid`:** In all submission response bodies (GET/POST/PATCH), the field `subGoogleUid` is **optional** and may be `null`. Submissions created via the webapp (POST candidate/submissions or POST supervisor/submissions) do not set this field; it will be `null` in the response. It is present (non-null) for submissions imported from external sources (e.g. Google Sheets). The request body for creating submissions does not include `subGoogleUid`. Example for webapp-created submissions: `"subGoogleUid": null`.
 
@@ -4333,91 +3545,20 @@ Rate limiting uses the authenticated user's ID from the JWT token. If no valid t
 ### Create Submissions from External
 **POST** `/sub/postAllFromExternal`
 
-**Status:** DISABLED — returns `410 Gone`. See [Disabled Routes](#disabled-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
+**Status:** 🔐 **Migration-key-gated** (operator import tooling — not for app use)
 
-Creates submissions from external data source (Google Sheets).
+**Auth:** `X-Migration-Key: <MIGRATION_API_KEY>` header (constant-time compare), **no JWT**. When `MIGRATION_API_KEY` is unset (the production default) → **503**; wrong key → **401**.
 
-**Requires:** Super Admin authentication
+**Rate Limit:** 50 / 15 min per IP (strict)
 
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <superAdmin_token>
-```
-
-**Request Body:**
-```json
-{
-  "row": 46
-}
-```
-
-**Note:** `row` is optional. If omitted, all rows are processed.
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "timeStamp": "2025-07-14T04:49:35.286Z",
-      "candDocId": "507f1f77bcf86cd799439012",
-      "procDocId": "507f1f77bcf86cd799439013",
-      "supervisorDocId": "507f1f77bcf86cd799439014",
-      "roleInSurg": "operator",
-      "subStatus": "pending",
-      "procedureName": ["Procedure A", "Procedure B"],
-      "diagnosisName": ["Diagnosis X"],
-      "procCptDocId": ["507f1f77bcf86cd799439015"],
-      "icdDocId": ["507f1f77bcf86cd799439016"]
-    }
-  ]
-}
-```
+**Body:** `{ "row"?: number, "startRow"?: number }` — imports submission rows from the configured Google Sheet (all rows when omitted).
 
 ---
 
 ### Update Submission Status from External
 **PATCH** `/sub/updateStatusFromExternal`
 
-**Status:** DISABLED — returns `410 Gone`. See [Disabled Routes](#disabled-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
-
-Updates submission statuses from external data source.
-
-**Requires:** Super Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <superAdmin_token>
-```
-
-**Request Body:**
-```json
-{
-  "row": 46
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "subStatus": "approved"
-    }
-  ]
-}
-```
+**Status:** 🔐 **Migration-key-gated** — same auth, gating, rate limit, and body as `POST /sub/postAllFromExternal`.
 
 ---
 
@@ -4492,7 +3633,7 @@ Returns the created submission document with populated relations. Same shape as 
 
 | Path | Fields |
 |------|--------|
-| **calSurg** (procedure) | `id`, `patientName`, `patientDob`, `gender`, `hospital` (`id`, `engName`), `arabProc` (`id`, `title`, `alphaCode`, `numCode`, `description`), `procDate` |
+| **calSurg** (procedure) | `id`, `patientName`, `patientDob`, `gender`, `hospital` (`id`, `engName`), `procCpt` (`id`, `title`, `arTitle`, `alphaCode`, `numCode`, `description`), `procDate` |
 | **supervisor** | `id`, `fullName`, `position` only |
 | **mainDiag** | `id`, `title` only |
 | **procCpts** | Each: `id`, `title`, `alphaCode`, `numCode`, `description` |
@@ -4564,7 +3705,7 @@ The backend enforces two rules per candidate per procedure (`procDocId`): at mos
 - **Submission limits per procedure:** A candidate may create at most **2 submissions** for the same `procDocId`. The two must have **different** `roleInSurg` values (no duplicate role per procedure). Rejected submissions do not count toward these limits. When violated, the API returns 400 with one of the messages above; the frontend should display that message to the user.
 - Submissions are created with `subStatus: "pending"` and must be reviewed by a validator supervisor.
 - The assigned supervisor receives an email (subject: "Review submission from [candidate name] · [shortId]") with a link to review the submission. Email is sent asynchronously; the API does not wait for it. If the supervisor has no email, the email is skipped.
-- All submission endpoints use the institution database resolved from the JWT (`institutionId`).
+- All submission endpoints operate on the single KA institution's database.
 - Standard rate limit for POST: 50 requests per 15 minutes per user.
 - `subGoogleUid` is not in the request body and is not generated by the server; the response may have `subGoogleUid: null`.
 
@@ -4646,7 +3787,6 @@ Same as Create Candidate Submission.
 **Notes:**
 - Supervisor submissions are auto-approved; no review flow.
 - Use `POST /sub/candidate/submissions` for candidate submissions (requires `supervisorDocId`).
-- See [FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md](./FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md) for frontend alignment details.
 - `subGoogleUid` is not in the request body and is not generated by the server; the response may have `subGoogleUid: null`.
 
 ---
@@ -4764,7 +3904,6 @@ Cookie: auth_token=<token>
 - `byRole[].percentage`: (count / total.count for this CPT) × 100
 - `items` are sorted by `total.count` descending
 
-**Frontend alignment:** See [FRONTEND_CPT_ICD_ANALYTICS_REPORT.md](./FRONTEND_CPT_ICD_ANALYTICS_REPORT.md).
 
 ---
 
@@ -4834,7 +3973,6 @@ Cookie: auth_token=<token>
 - `byRole[].percentage`: (count / total.count for this ICD) × 100
 - `items` are sorted by `total.count` descending
 
-**Frontend alignment:** See [FRONTEND_CPT_ICD_ANALYTICS_REPORT.md](./FRONTEND_CPT_ICD_ANALYTICS_REPORT.md).
 
 ---
 
@@ -4908,11 +4046,13 @@ Cookie: auth_token=<token>
 ### Submission Ranking (Surgical Experience)
 **GET** `/sub/submissionRanking`
 
+**Department-scoped:** ranks only candidates of the caller's department (JWT `departmentId` claim; NS default for legacy sessions without the claim).
+
 **Authentication Required:** Yes (Candidate, Supervisor, Institute Admin, or Super Admin)
 
 **Rate Limit:** 200 requests per 15 minutes per user
 
-**Multi-Tenancy:** Institution is resolved from the JWT token or `X-Institution-Id` header (same as all authenticated endpoints). Ranking is scoped to the institution’s candidates and submissions.
+**Scope:** department-scoped — only candidates of the caller's department are ranked (JWT `departmentId` claim; NS default).
 
 Returns a **ranking** by approved submission count (surgical experience). The endpoint returns **only**:
 - The **top 10** ranked candidates (by approved count, descending), and
@@ -4982,7 +4122,7 @@ Each submission includes `submissionType`: `"candidate"` (candidate submissions 
 
 | Path | Fields returned |
 |------|-----------------|
-| **calSurg** (procedure) | `id`, `patientName`, `patientDob`, `gender`, `hospital` (`id`, `engName` only), `arabProc` (`id`, `title`, `alphaCode`, `numCode`, `description`), `procDate` |
+| **calSurg** (procedure) | `id`, `patientName`, `patientDob`, `gender`, `hospital` (`id`, `engName` only), `procCpt` (`id`, `title`, `arTitle`, `alphaCode`, `numCode`, `description`), `procDate` |
 | **supervisor** | `id`, `fullName`, `position` only |
 | **mainDiag** | `id`, `title` only |
 | **procCpts** | Each item: `id`, `title`, `alphaCode`, `numCode`, `description` |
@@ -4990,7 +4130,7 @@ Each submission includes `submissionType`: `"candidate"` (candidate submissions 
 
 **Optional review fields** (when submission has been reviewed): `review` (supervisor comments), `reviewedAt` (ISO datetime), `reviewedBy` (supervisor UUID).
 
-**Omitted for security/redundancy:** `candidate` (removed entirely); `procDocId`, `supervisorDocId`, `mainDiagDocId`; from calSurg: `hospitalId`, `arabProcId`, `google_uid`, `formLink`, `createdAt`, `updatedAt`; from hospital: `location`, `createdAt`, `updatedAt`; from supervisor: `email`, `password`, `phoneNum`, `approved`, `role`, `canValidate`, `termsAcceptedAt`, `createdAt`, `updatedAt`; from mainDiag: `procs`, `diagnosis`, `createdAt`, `updatedAt`; from procCpts/icds: `createdAt`, `updatedAt`, `neuroLogName`.
+**Omitted for security/redundancy:** `candidate` (removed entirely); `procDocId`, `supervisorDocId`, `mainDiagDocId`; from calSurg: `hospitalId`, `procCptId`, `google_uid`, `formLink`, `createdAt`, `updatedAt`; from hospital: `location`, `createdAt`, `updatedAt`; from supervisor: `email`, `password`, `phoneNum`, `approved`, `role`, `canValidate`, `termsAcceptedAt`, `createdAt`, `updatedAt`; from mainDiag: `procs`, `diagnosis`, `createdAt`, `updatedAt`; from procCpts/icds: `createdAt`, `updatedAt`, `neuroLogName`.
 
 **Headers:**
 ```
@@ -5019,7 +4159,7 @@ Cookie: auth_token=<token>
         "patientDob": "1980-01-15T00:00:00.000Z",
         "gender": "male",
         "hospital": { "id": "...", "engName": "Cairo University Hospital" },
-        "arabProc": { "id": "...", "title": "اسم الإجراء بالعربية", "alphaCode": "ABC", "numCode": "61070", "description": "Procedure description" },
+        "procCpt": { "id": "...", "title": "اسم الإجراء بالعربية", "alphaCode": "ABC", "numCode": "61070", "description": "Procedure description" },
         "procDate": "2025-07-14T04:49:35.286Z"
       },
       "supervisor": { "id": "...", "fullName": "Dr. Jane Smith", "position": "professor" },
@@ -5124,7 +4264,7 @@ Cookie: auth_token=<token>
           "lat": 30.0444
         }
       },
-      "arabProc": {
+      "procCpt": {
         "_id": "507f1f77bcf86cd799439021",
         "title": "اسم الإجراء بالعربية",
         "numCode": "61070",
@@ -5309,8 +4449,7 @@ Cookie: auth_token=<token>
 - Get rejected submissions: `GET /sub/supervisor/submissions?status=rejected`
 
 **Response (200 OK):**  
-The API returns a **trimmed** payload: nested objects (`calSurg`, `candidate`, `supervisor`, `mainDiag`, `procCpts`, `icds`) omit sensitive or redundant fields. See [FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md](./FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md) for the exact response shape and frontend alignment.
-
+The API returns a **trimmed** payload: nested objects (`calSurg`, `candidate`, `supervisor`, `mainDiag`, `procCpts`, `icds`) omit sensitive or redundant fields.
 ```json
 {
   "status": "success",
@@ -5348,7 +4487,7 @@ The API returns a **trimmed** payload: nested objects (`calSurg`, `candidate`, `
           "arabName": "مستشفى جامعة القاهرة",
           "engName": "Cairo University Hospital"
         },
-        "arabProc": {
+        "procCpt": {
           "id": "d4e5f6a7-b8c9-0123-def0-234567890123",
           "title": "Procedure Title",
           "alphaCode": "ABC",
@@ -5454,8 +4593,7 @@ Cookie: auth_token=<token>
 - Get approved own submissions: `GET /sub/supervisor/own/submissions?status=approved`
 
 **Response (200 OK):**  
-Same trimmed shape as Get Supervisor Submissions. Each item has `submissionType: "supervisor"`, `candidate` / `candDocId` is `null`, and `subStatus` is typically `"approved"`. See [FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md](./FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md) for response details.
-
+Same trimmed shape as Get Supervisor Submissions. Each item has `submissionType: "supervisor"`, `candidate` / `candDocId` is `null`, and `subStatus` is typically `"approved"`.
 **Notes:**
 - Institute admins and super admins can access this endpoint; they typically receive an empty array unless they have a linked supervisor identity
 - Supervisors use **GET /sub/cptAnalytics** and **GET /sub/icdAnalytics** for analytics of their supervisor-owned approved submissions
@@ -5484,8 +4622,7 @@ Cookie: auth_token=<token>
 - `id` (required): Submission UUID
 
 **Response (200 OK):**  
-The API returns a **trimmed** payload: nested objects omit sensitive or redundant fields. See [FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md](./FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md) for the exact response shape and frontend alignment.
-
+The API returns a **trimmed** payload: nested objects omit sensitive or redundant fields.
 ```json
 {
   "status": "success",
@@ -5522,7 +4659,7 @@ The API returns a **trimmed** payload: nested objects omit sensitive or redundan
         "arabName": "مستشفى جامعة القاهرة",
         "engName": "Cairo University Hospital"
       },
-      "arabProc": {
+      "procCpt": {
         "id": "d4e5f6a7-b8c9-0123-def0-234567890123",
         "title": "Procedure Title",
         "alphaCode": "ABC",
@@ -5623,7 +4760,7 @@ OR
 - The supervisor ID is automatically extracted from the JWT token
 - The submission ID parameter is validated as a UUID
 - The endpoint verifies that the submission belongs to the logged-in supervisor
-- Nested relations are populated but **trimmed** (see FRONTEND_SUPERVISOR_SUBMISSIONS_REPORT.md)
+- Nested relations are populated but **trimmed**
 - Returns 400 if the submission ID format is invalid
 - Returns 404 if submission doesn't exist or doesn't belong to the supervisor
 
@@ -5694,7 +4831,7 @@ Cookie: auth_token=<token>
             "lat": 30.0444
           }
         },
-        "arabProc": {
+        "procCpt": {
           "_id": "507f1f77bcf86cd799439021",
           "title": "Procedure Title",
           "numCode": "12345",
@@ -5878,7 +5015,7 @@ Cookie: auth_token=<token>
           "lat": 30.0444
         }
       },
-      "arabProc": {
+      "procCpt": {
         "_id": "507f1f77bcf86cd799439021",
         "title": "Procedure Title",
         "numCode": "12345",
@@ -6055,142 +5192,27 @@ OR
 ### Generate Surgical Notes using AI
 **POST** `/sub/submissions/:id/generateSurgicalNotes`
 
-**⚠️ STATUS: DISABLED** - This endpoint has been temporarily disabled for security/maintenance reasons.
-
-**Authentication Required:** Yes (Institute Admin or Super Admin role)
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Description:** ~~Generates comprehensive surgical notes for a submission using AI (Google Gemini). The endpoint takes a submission ID, populates all required fields, and uses AI to generate professional surgical notes based on the submission data.~~ **This endpoint is currently disabled and will return 404 Not Found.**
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**URL Parameters:**
-- `id` (required): Submission UUID
-
-**⚠️ Current Response (404 Not Found) - Endpoint Disabled:**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Route not found"
-}
-```
-
-**Note:** This endpoint is currently disabled. Any attempt to access it will return 404 Not Found.
-
-~~**Response (200 OK):**~~ *(Historical - Endpoint Disabled)*
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "surgicalNotes": "PREOPERATIVE DIAGNOSIS:\n1. [Diagnosis from submission]\n\nPOSTOPERATIVE DIAGNOSIS:\n1. [Diagnosis from submission]\n\nPROCEDURE PERFORMED:\n[Procedure names from submission]\n\nSURGEON(S):\n[Surgeon name] (Operator)\n[Supervisor name] (Supervisor)\n\nASSISTANT(S):\n[Other surgeons if applicable]\n\nANESTHESIA:\nGeneral anesthesia\n\nPROCEDURE DESCRIPTION:\n[Detailed AI-generated procedure description based on submission data]\n\nFINDINGS:\n[AI-generated findings based on submission data]\n\nINSTRUMENTS AND MATERIALS USED:\n[Instruments and consumables from submission]\n\nINTRAOPERATIVE EVENTS:\n[Intraoperative events from submission, if any]\n\nESTIMATED BLOOD LOSS:\n[If applicable]\n\nPOSTOPERATIVE PLAN:\n[AI-generated postoperative plan]"
-  }
-}
-```
-
-~~**Error Response (400 Bad Request):**~~ *(Historical - Endpoint Disabled)*
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "Submission ID must be a valid UUID",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-~~**Error Response (404 Not Found):**~~ *(Historical - Endpoint Disabled)*
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Submission not found"
-}
-```
-
-~~**Error Response (403 Forbidden):**~~ *(Historical - Endpoint Disabled)*
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-~~**Error Response (500 Internal Server Error):**~~ *(Historical - Endpoint Disabled)*
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "AI service is not configured"
-}
-```
-
-OR
-
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Failed to generate text from AI"
-}
-```
-
-**Notes:**
-- ⚠️ **This endpoint is currently DISABLED** and will return 404 Not Found if accessed
-- The endpoint has been temporarily disabled for security/maintenance reasons
-- ~~The submission must exist and have all required populated fields~~
-- ~~The AI uses Google Gemini API (gemini-2.5-flash model by default)~~
-- ~~Requires `GEMINI_API_KEY` environment variable to be configured~~
-- ~~The generated surgical notes are comprehensive and include:~~
-  - ~~Preoperative and postoperative diagnoses~~
-  - ~~Procedure performed~~
-  - ~~Surgeon and assistant information~~
-  - ~~Detailed procedure description~~
-  - ~~Findings~~
-  - ~~Instruments and materials used~~
-  - ~~Intraoperative events~~
-  - ~~Postoperative plan~~
-- **Current Behavior**: Returns 404 Not Found (route not registered)
-- ~~Only Institute Admins and Super Admins can access this endpoint~~
+**Status:** ❌ **REMOVED** — the text-based variant is no longer registered (404). Use the voice variant below.
 
 ---
 
 ### Generate Surgical Notes from Voice
 **POST** `/sub/calSurg/:calSurgId/generateSurgicalNotesFromVoice`
 
-**Authentication Required:** Yes. **Candidates**, **supervisors**, **institute admins**, and **super admins** can call this endpoint. Institution context required (e.g. `X-Institution-Id` header if your app uses it).
+**Authentication Required:** Yes. **Candidates**, **supervisors**, **institute admins**, and **super admins** can call this endpoint.
 
 **Rate Limit:** Same as other submission endpoints (user-based strict rate limiter).
 
-**Description:** Generates surgical notes from a **voice recording** during **submission creation**, when no submission id exists yet. The client sends an audio file and the **calendar surgery (procedure) id** (`calSurgId`). The backend loads that procedure (patient, hospital, procedure name, date, etc.) and sends it plus the audio to Google Gemini; the AI returns surgical notes. The audio is not stored. This is the only voice-to-surgical-notes endpoint; use it on the **create submission** form once the user has selected a procedure (the frontend has `calSurgId` / `procDocId` at that point). For frontend implementation details, see [docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md](./docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md).
+**Description:** Generates surgical notes from a **voice recording** during **submission creation**, when no submission id exists yet. The client sends an audio file and the **calendar surgery (procedure) id** (`calSurgId`). The backend loads that procedure (patient, hospital, procedure name, date, etc.) and sends it plus the audio to Google Gemini; the AI returns surgical notes. The audio is not stored. This is the only voice-to-surgical-notes endpoint; use it on the **create submission** form once the user has selected a procedure (the frontend has `calSurgId` / `procDocId` at that point).
 
 **Headers:**
 ```
 Authorization: Bearer <token>
-X-Institution-Id: <institution_uuid>   (if your app uses institution-scoped requests)
 Content-Type: multipart/form-data      (set automatically by the browser when using FormData)
 ```
 
 **URL Parameters:**
-- `calSurgId` (required): Calendar surgery (procedure) UUID. The procedure the user has selected on the form. The backend fetches it (with hospital, arabProc) to build context for the AI.
+- `calSurgId` (required): Calendar surgery (procedure) UUID. The procedure the user has selected on the form. The backend fetches it (with hospital, procCpt, clerkProc) to build context for the AI.
 
 **Request Body:** `multipart/form-data` with a single file field:
 - **Field name:** `audio` (required)
@@ -6218,7 +5240,7 @@ Standard wrapper; `data` contains the generated surgical notes:
 **Notes:**
 - **Candidates**, **supervisors**, **institute admins**, and **super admins** can call this endpoint; other roles receive 403.
 - Use on the **create submission** form: the frontend has `calSurgId` (or `procDocId`) as soon as the user selects a procedure; no submission needs to be saved first.
-- Audio is not stored (multer memory storage). Frontend guide: [docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md](./docs/FRONTEND_VOICE_SURGICAL_NOTES_IMPLEMENTATION.md).
+- Audio is not stored (multer memory storage).
 
 ---
 
@@ -6328,190 +5350,55 @@ Authorization: Bearer <superAdmin_token>
 
 ## Clinical Submissions (`/clinicalSub`)
 
-Clinical submissions (clinical sub) record candidate clinical activity (e.g. clinical round, outpatient clinic, workshop) with an assigned supervisor. All endpoints are institution-scoped via JWT or `X-Institution-Id`.
-
-**Important:** Every response that includes `candidate` or `supervisor` uses **censored** objects only: no `password`, `email`, or `phone` is ever returned. Candidate is returned as `{ id, fullName, regNum, rank, regDeg, approved, role }`. Supervisor is returned as `{ id, fullName, position, canValidate, approved, role }`.
+Clinical activities logged by candidates and reviewed by their **assigned** supervisor. Available when the institution's `isClinical` flag is true.
 
 ### Rate Limiting
 
-- **GET endpoints:** 200 requests per 15 minutes per user (user-based)
-- **POST/PUT endpoints:** 50 requests per 15 minutes per user (user-based)
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "error": "Too many requests, please try again later."
-}
-```
+- **GET endpoints:** 200 requests per 15 minutes per user
+- **POST/PUT endpoints:** 50 requests per 15 minutes per user
 
 ### Get All Clinical Submissions
-**GET** `/clinicalSub/`
+**GET** `/clinicalSub`
 
 **Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
 
-**Headers:**
-```
-Authorization: Bearer <token>
-X-Institution-Id: <institution_uuid>   (or institutionId in JWT)
-```
+Role-scoped transparently: admins see **all**; a **candidate** sees only their own rows (`candDocId` = caller); a **supervisor** sees only rows assigned to them (`supervisorDocId` = caller).
 
-**Response (200 OK):** Array of clinical subs with censored `candidate` and `supervisor`:
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "candDocId": "660e8400-e29b-41d4-a716-446655440001",
-    "supervisorDocId": "770e8400-e29b-41d4-a716-446655440002",
-    "dateCA": "2025-02-01",
-    "typeCA": "clinical round",
-    "description": "Observed lumbar puncture and case presentation.",
-    "subStatus": "pending",
-    "review": null,
-    "reviewedAt": null,
-    "createdAt": "2025-02-17T10:00:00.000Z",
-    "updatedAt": "2025-02-17T10:00:00.000Z",
-    "candidate": {
-      "id": "660e8400-e29b-41d4-a716-446655440001",
-      "fullName": "Ahmed Ali",
-      "regNum": "R123",
-      "rank": "resident",
-      "regDeg": "msc",
-      "approved": true,
-      "role": "candidate"
-    },
-    "supervisor": {
-      "id": "770e8400-e29b-41d4-a716-446655440002",
-      "fullName": "Dr. Sara Mohamed",
-      "position": "professor",
-      "canValidate": true,
-      "approved": true,
-      "role": "supervisor"
-    }
-  }
-]
-```
-
-**Notes:** `typeCA` is one of: `clinical round`, `outpatient clinic`, `workshop`, `other`. `subStatus` is one of: `pending`, `approved`, `rejected`. `description` is a non-null string (candidate-provided summary of the activity); may be empty `""`.
-
----
-
-### Get Clinical Submissions for Signed-in Supervisor (`/super`)
+### Get Clinical Submissions for Signed-in Supervisor
 **GET** `/clinicalSub/super`
 
 **Requires:** Supervisor, Institute Admin, or Super Admin
 
-**Behavior:** If the caller is a **Supervisor**, returns only clinical subs where `supervisorDocId` equals the signed-in supervisor. If the caller is **Institute Admin** or **Super Admin**, returns all clinical subs in the institution.
+Supervisor: own assigned rows only; admins: all. The embedded candidate/supervisor objects are **censored** (no password, email, or phone).
 
-**Headers:** Same as above.
-
-**Response (200 OK):** Same array shape as GET `/clinicalSub/` with censored `candidate` and `supervisor`.
-
----
-
-### Get Clinical Submissions for Signed-in Candidate (`/cand`)
+### Get Clinical Submissions for Signed-in Candidate
 **GET** `/clinicalSub/cand`
 
 **Requires:** Candidate, Institute Admin, or Super Admin
 
-**Behavior:** If the caller is a **Candidate**, returns only clinical subs where `candDocId` equals the signed-in candidate. If the caller is **Institute Admin** or **Super Admin**, returns all clinical subs in the institution.
-
-**Headers:** Same as above.
-
-**Response (200 OK):** Same array shape as GET `/clinicalSub/` with censored `candidate` and `supervisor`.
-
----
+Candidate: own rows only; admins: all. Censored relations as above.
 
 ### Get Clinical Sub by ID
 **GET** `/clinicalSub/:id`
 
-**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
-
-**Parameters:** `id` (path) — UUID of the clinical sub.
-
-**Response (200 OK):** Single clinical sub with censored `candidate` and `supervisor`. Same shape as one element of the list above.
-
-**Response (404 Not Found):**
-```json
-{ "error": "Clinical sub not found" }
-```
-
-**Response (400 Bad Request):** If `id` is not a valid UUID (e.g. validation errors in array form).
-
----
+**Requires:** any of the roles above — but the row is returned only if the caller is an admin, the **owner candidate**, or the **assigned supervisor** (403 otherwise).
 
 ### Create Clinical Sub
-**POST** `/clinicalSub/`
+**POST** `/clinicalSub`
 
 **Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
 
-**Rate Limit:** 50 requests per 15 minutes per user
+**Request Body:** `candDocId` (UUID), `supervisorDocId` (UUID), `dateCA` (ISO 8601), `typeCA` (clinical-activity-type enum), `description?` (string).
 
-**Email notification:** After the clinical sub is saved, the server sends an email to the assigned supervisor (`supervisorDocId`) to notify them that a new clinical submission requires review. The email includes the candidate name, date, type, description, and a link to the review page. Sending is done in the background (non-blocking); the API responds immediately. If the supervisor has no email address, no email is sent.
+When the caller is a **candidate**, `candDocId` is forced from the JWT (any body value is ignored) — a candidate can only create their own clinical submissions.
 
-**Review link format:** `{FRONTEND_URL}/dashboard/supervisor/clinical-submissions/{clinicalSubId}?institutionId={institutionId}`. Example: `https://your-app.com/dashboard/supervisor/clinical-submissions/8e6eb422-549c-4f57-9b26-99169efd5788?institutionId=550e8400-e29b-41d4-a716-446655440000`
-
-**Request Body:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `candDocId` | string (UUID) | Yes | Candidate ID |
-| `supervisorDocId` | string (UUID) | Yes | Supervisor ID |
-| `dateCA` | string (ISO 8601 date) | Yes | Date of clinical activity |
-| `typeCA` | string | Yes | One of: `clinical round`, `outpatient clinic`, `workshop`, `other` |
-| `description` | string | No | Text describing the clinical activity (defaults to `""` if omitted) |
-
-**Example:**
-```json
-{
-  "candDocId": "660e8400-e29b-41d4-a716-446655440001",
-  "supervisorDocId": "770e8400-e29b-41d4-a716-446655440002",
-  "dateCA": "2025-02-15",
-  "typeCA": "clinical round",
-  "description": "Observed lumbar puncture and case presentation."
-}
-```
-
-**Response (201 Created):** Created clinical sub (IDs and timestamps; relations not populated in response).
-
-**Response (400 Bad Request):** Validation errors or "Candidate/Supervisor with ID '...' not found".
-
-**Notes:**
-- The assigned supervisor receives an email (subject: "Review clinical submission from [candidate name] · [shortId]") with a link to the review page (`/dashboard/supervisor/clinical-submissions/{id}?institutionId=...`). Email is sent asynchronously; the API does not wait for it. If the supervisor has no email, the email is skipped.
-
----
-
-### Update Clinical Sub
+### Update / Review Clinical Sub
 **PUT** `/clinicalSub/:id`
 
-**Requires:** Candidate, Supervisor, Institute Admin, or Super Admin
+**Requires:** the **assigned supervisor** (`supervisorDocId` = caller) or an admin.
 
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Parameters:** `id` (path) — UUID of the clinical sub.
-
-**Email notification (supervisor review):** When the request updates `subStatus` to `approved` or `rejected` (and the status has changed from its previous value), the server sends an email to the candidate to notify them of the review outcome. The email includes the supervisor name, status, date, type, description, and review text (if provided). Sending is done in the background (non-blocking); the API responds immediately. If the candidate has no email address, no email is sent.
-
-**Request Body (all optional):**
-| Field | Type | Description |
-|-------|------|-------------|
-| `candDocId` | string (UUID) | Candidate ID |
-| `supervisorDocId` | string (UUID) | Supervisor ID |
-| `dateCA` | string (ISO 8601 date) | Date of clinical activity |
-| `typeCA` | string | One of: `clinical round`, `outpatient clinic`, `workshop`, `other` |
-| `subStatus` | string | One of: `pending`, `approved`, `rejected` |
-| `description` | string | Text describing the clinical activity (empty string to clear) |
-| `review` | string \| null | Review text (supervisor) |
-| `reviewedAt` | string (ISO 8601 datetime) \| null | When reviewed |
-
-**Response (200 OK):** Updated clinical sub with censored `candidate` and `supervisor`.
-
-**Response (404 Not Found):** `{ "error": "Clinical sub not found" }`
-
-**Response (400 Bad Request):** Invalid UUID or "Candidate/Supervisor with ID '...' not found".
-
-**Notes:**
-- When a supervisor updates the clinical sub to approved or rejected, the candidate receives an email (subject: "Clinical submission Approved" or "Clinical submission Rejected") with the review details. Email is sent asynchronously; the API does not wait for it. If the candidate has no email, the email is skipped.
-- No clinical sub endpoint returns candidate or supervisor `password`, `email`, or `phone`.
-- All endpoints use user-based rate limiting and require a valid JWT and institution context.
+- Candidates **cannot** review/approve their own clinical submissions, and non-assigned supervisors cannot touch them (2026-07 security audit, F4/F7 — self-approval fixed).
+- Non-admin callers cannot reassign `candDocId` / `supervisorDocId` (the fields are stripped from their updates).
 
 ---
 
@@ -6529,7 +5416,7 @@ Chronological timeline of the **candidate** user's recent activity (submissions 
 
 **Rate Limit:** 200 requests per 15 minutes per user
 
-**Multi-Tenancy:** Institution is resolved from the JWT token or `X-Institution-Id` header. Timeline is scoped to the institution’s submissions and attendance.
+**Scope:** the timeline is scoped to the signed-in candidate's submissions and attendance.
 
 Returns the latest **10** activities for the logged-in **candidate** user, merged from submissions and attendance records, ordered by datetime descending (newest first). Only activity **created by** the candidate (their submissions, their attendance) is included. Supervisors, institute admins, and super admins may call the endpoint but receive an empty list unless logged in as a candidate.
 
@@ -6813,9 +5700,9 @@ Returns a specific candidate by ID. This endpoint is accessible to Super Admins 
 ### Create Candidates from External
 **POST** `/cand/createCandsFromExternal`
 
-**Status:** DISABLED — returns `410 Gone`. See [Disabled Routes](#disabled-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
+**Status:** DISABLED — returns `410 Gone`. See [Disabled, Gated & Removed Routes](#disabled-gated--removed-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
 
-**Requires (when re-enabled):** No authentication (caller sent X-Institution-Id)
+**Requires (when re-enabled):** No authentication
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
@@ -6905,7 +5792,6 @@ Cookie: auth_token=<token>
 
 **Rate Limit:** 200 requests per 15 minutes per user (user-based)
 
-**Institution-scoped:** Super admins and institute admins can only update the `approved` status of candidates in their **same institution**. The institution is determined by the JWT (or `X-Institution-Id` header); the candidate must exist in that institution's database.
 
 **Headers:**
 ```
@@ -6938,107 +5824,18 @@ Cookie: auth_token=<token>
 ### Update Candidate
 **PUT** `/cand/:id`
 
-**Requires:** Authentication (Super Admin, Institute Admin, or Candidate)
+**Requires:** Super Admin, Institute Admin, or the candidate themself · **Rate Limit:** 50 / 15 min per user
 
-**Rate Limit:** 50 requests per 15 minutes per user
+**Request Body** (all optional): `email`, `password` (≥8), `fullName`, `phoneNum` (≥11), `regNum`, `nationality`, `rank`, `regDeg`, `approved`, `departmentId` (UUID, validated against the mirrored `departments`; unknown ids rejected).
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
+**Behavior:**
+- **Candidate:** may update **only their own** record (403 otherwise), restricted to `regDeg`, `regNum`, `phoneNum`, and a **`departmentId` self-switch**.
+- **Department self-switch:** the response carries a fresh `token`, and **both** `auth_token`/`refresh_token` cookies are re-set with the new `departmentId` claim. The frontend must adopt the token and invalidate all cached queries (every department-scoped read changes).
+- Clerks and supervisors are explicitly rejected (403) even though the role hierarchy would otherwise admit them (2026-07 security audit, F3 — candidate account-takeover fix).
+- **Admins:** full field control; `password` is bcrypt-hashed; `departmentId` validated.
+- The password hash is stripped from every response.
 
-**URL Parameters:**
-- `id` (required): Candidate UUID (must be a valid UUID format)
-
-**Description:**  
-Updates a candidate's information. Access and allowed fields depend on the caller:
-
-- **Super Admin, Institute Admin:** Can update any candidate. All request body fields below are allowed.
-- **Candidate:** Can update **only their own** profile (the `:id` in the URL must match the authenticated user's ID). Only **`regDeg`**, **`regNum`**, and **`phoneNum`** may be sent; all other fields are ignored. Attempting to update another candidate returns **403 Forbidden**.
-
-**Request Body (Super Admin / Institute Admin – all optional):**
-```json
-{
-  "email": "candidate@example.com",
-  "password": "newPassword123",
-  "fullName": "John Doe",
-  "phoneNum": "+1234567890",
-  "regNum": "REG123456",
-  "nationality": "Egyptian",
-  "rank": "professor",
-  "regDeg": "msc",
-  "approved": false
-}
-```
-
-**Request Body (Candidate – own profile only; only these three fields are accepted):**
-```json
-{
-  "regDeg": "msc",
-  "regNum": "REG123456",
-  "phoneNum": "+1234567890"
-}
-```
-
-**Request Body Fields:**
-- `email`: Candidate email address (Super Admin / Institute Admin only)
-- `password`: Candidate password, min 8 characters (Super Admin / Institute Admin only)
-- `fullName`: Full name (Super Admin / Institute Admin only)
-- `phoneNum`: Phone number (min 11 characters). Allowed for **all roles** when updating own profile (Candidate) or any profile (admins).
-- `regNum`: Registration number (Super Admin / Institute Admin only; Candidate may update own)
-- `nationality`: Nationality (Super Admin / Institute Admin only)
-- `rank`: Rank – one of `professor`, `assistant professor`, `lecturer`, `assistant lecturer`, `resident`, `guest`, `specialist`, `other`, `none` (Super Admin / Institute Admin only)
-- `regDeg`: Registration degree – one of `msc`, `doctor of medicine (md)`, `egyptian fellowship`, `self registration`, `other` (Super Admin / Institute Admin only; Candidate may update own)
-- `approved`: Approval status (boolean) (Super Admin / Institute Admin only)
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "candidate@example.com",
-    "fullName": "John Doe",
-    "phoneNum": "+1234567890",
-    "regNum": "REG123456",
-    "nationality": "Egyptian",
-    "rank": "professor",
-    "regDeg": "msc",
-    "approved": false,
-    "role": "candidate"
-  }
-}
-```
-
-**Error Response (403 Forbidden – Candidate updating another candidate):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Candidates can only update their own profile"
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Candidate not found"
-}
-```
-
-**Notes:**
-- When admins send `password`, it is hashed before storage.
-- Candidates can only change their own `regDeg`, `regNum`, and `phoneNum`.
+**Response (200 OK):** the updated candidate (password stripped; plus `token` on a self department switch). **404** if not found.
 
 ---
 
@@ -7294,7 +6091,7 @@ Authorization: Bearer <superAdmin_token>
 
 ## Supervisors (`/supervisor`)
 
-**⚠️ Multi-Tenancy Note:** All supervisor endpoints automatically route to the institution's database based on the `institutionId` in the JWT token (or `X-Institution-Id` header). Users can only access supervisors from their own institution.
+**Note:** Single-institution server — all data belongs to the one KA institution (no institution routing). Department-scoped behavior, where present, is described per endpoint; see [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping).
 
 **Response format:** Success responses return the **raw** body (array or object). There is no wrapper like `{ status, data }` unless otherwise noted for specific endpoints.
 
@@ -7551,6 +6348,8 @@ Authorization: Bearer <superAdmin_token>
 ### Get All Supervisors
 **GET** `/supervisor`
 
+**Department-scoped:** returns only supervisors of the resolved department (JWT claim → `?deptCode` → NS default). Feeds the candidate submission-form supervisor picker and the calendar-manager event presenter picker. Results are censored (no email/phone/password) for non-admin viewers.
+
 **Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
 
 **Rate Limit:** 200 requests per 15 minutes per user
@@ -7706,7 +6505,6 @@ Body is a single **object** (no email, phone, or password):
 
 **Rate Limit:** 200 requests per 15 minutes per user (user-based)
 
-**Institution-scoped:** Super admins and institute admins can only update the `approved` status of supervisors in their **same institution**. The institution is determined by the JWT (or `X-Institution-Id` header); the supervisor must exist in that institution's database.
 
 **Headers:**
 ```
@@ -7739,89 +6537,17 @@ Cookie: auth_token=<token>
 ### Update Supervisor
 **PUT** `/supervisor/:id`
 
-**Requires:** Authentication (Super Admin, Institute Admin, or Supervisor)
+**Requires:** Super Admin, Institute Admin, or the supervisor themself · **Rate Limit:** 50 / 15 min per user
 
-**Rate Limit:** 50 requests per 15 minutes per user
+**Request Body** (all optional): `email`, `password` (≥8), `fullName`, `phoneNum` (≥11), `approved`, `canValidate`, `canValClin`, `position` (enum), `departmentId` (UUID, validated against the mirrored `departments`).
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
+**Behavior:**
+- **Supervisor:** may update **only their own** record (403 otherwise), restricted to `phoneNum`, `position`, and a **`departmentId` self-switch**.
+- **Department self-switch:** the response carries a fresh `token`, and **both** `auth_token`/`refresh_token` cookies are re-set with the new `departmentId` claim — the frontend must adopt it and invalidate cached queries. A switched supervisor disappears from other departments' supervisor pickers (`GET /supervisor` is department-scoped).
+- **Admins:** full field control (including `approved`, `canValidate`, `canValClin`); `password` bcrypt-hashed.
+- The password hash is stripped from every response.
 
-**URL Parameters:**
-- `id` (required): Supervisor UUID (must be a valid UUID format)
-
-**Description:**  
-Updates a supervisor's information. Access and allowed fields depend on the caller:
-
-- **Super Admin, Institute Admin:** Can update any supervisor. All request body fields below are allowed.
-- **Supervisor:** Can update **only their own** profile (the `:id` in the URL must match the authenticated user's ID). Only **`phoneNum`** and **`position`** may be sent; all other fields are ignored. Attempting to update another supervisor returns **403 Forbidden**.
-
-**Request Body (Super Admin / Institute Admin – all optional):**
-```json
-{
-  "fullName": "Dr. Jane Smith Updated",
-  "phoneNum": "+9876543210",
-  "canValidate": false,
-  "canValClin": true,
-  "position": "Assistant Professor"
-}
-```
-
-**Request Body (Supervisor – own profile only; only these two fields are accepted):**
-```json
-{
-  "phoneNum": "+9876543210",
-  "position": "Assistant Professor"
-}
-```
-
-**Request Body Fields:**
-- `email`: Supervisor email address (Super Admin / Institute Admin only)
-- `password`: Supervisor password, min 8 characters (Super Admin / Institute Admin only)
-- `fullName`: Supervisor full name (Super Admin / Institute Admin only)
-- `phoneNum`: Supervisor phone number (min 11 characters). Allowed for **all roles** when updating own profile (Supervisor) or any profile (admins).
-- `approved`: Approval status (boolean) (Super Admin / Institute Admin only)
-- `canValidate`: Whether supervisor can validate submissions (boolean) (Super Admin / Institute Admin only)
-  - `true`: Validator supervisor (can validate submissions AND participate in events)
-  - `false`: Academic supervisor (can ONLY participate in events, cannot validate)
-- `canValClin`: Whether supervisor can validate **clinical submissions** (boolean) (Super Admin / Institute Admin only)
-  - `true`: Supervisor can review/approve **clinical** submissions in clinical modules
-  - `false`: Supervisor cannot validate clinical submissions (default)
-- `position`: Supervisor's academic position. Allowed for **all roles** when updating own profile (Supervisor) or any profile (admins).
-  - Valid values: `"Professor"`, `"Assistant Professor"`, `"Lecturer"`, `"Assistant Lecturer"`, `"Guest Doctor"`, `"Consultant"`, `"Specialist"`, `"unknown"`
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "email": "supervisor@example.com",
-    "fullName": "Dr. Jane Smith Updated",
-    "phoneNum": "+9876543210",
-    "approved": true,
-    "role": "supervisor",
-    "position": "Assistant Professor"
-  }
-}
-```
-
-**Error Response (403 Forbidden – Supervisor updating another supervisor):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Supervisors can only update their own profile"
-}
-```
+**Response (200 OK):** the updated supervisor (password stripped; plus `token` on a self department switch). **404** if not found.
 
 ---
 
@@ -8010,4589 +6736,426 @@ No request body required.
 
 ## Calendar Surgery (`/calSurg`)
 
-**⚠️ Multi-Tenancy Note:** All calendar surgery endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access calendar surgeries from their own institution.
+Calendar surgeries are **department-scoped** (see [Department Scoping](#single-institution-architecture--department-scoping)). Rows carry three procedure representations plus bilingual patient-name slots:
 
-All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+- `clerkProc { _id, title, titleAr, titleEn }` — the clerk's learned free-text phrase (what the calendar shows);
+- `procCpt { _id, title, arTitle, numCode, alphaCode }` — the mapped CPT procedure;
+- `patientNameAr` / `patientNameEn` — bilingual patient-name slots (initials-aware transliteration).
 
 ### Rate Limiting
 
-All `/calSurg` endpoints are protected with user-based rate limiting:
-
-- **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/DELETE endpoints**: 50 requests per 15 minutes per user
-
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
+- **GET endpoints:** 200 requests per 15 minutes per user
+- **POST/PATCH/DELETE endpoints:** 50 requests per 15 minutes per user
+- **External import:** 50 requests per 15 minutes per IP (strict)
 
 ### Create CalSurg (webapp)
 **POST** `/calSurg`
 
-**Requires:** Clerk, Institute Admin, or Super Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Description:** Creates a single calendar surgery record from the webapp. Patient name is sanitized; `google_uid` and `formLink` are set to null (registration via webapp).
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
+**Requires:** Clerk, Institute Admin, or Super Admin
 
 **Request Body:**
 ```json
 {
   "hospital": "0b808c24-ab60-43ce-8a5e-ce3aa86730d2",
-  "patientName": "Patient Name",
+  "patientName": "أحمد م خ",
   "gender": "male",
-  "procedure": "39a33c66-a55f-4049-a12e-9002b803ec8c",
-  "surgeryDate": "2026-02-15",
-  "patientDob": "1980-01-01"
+  "procedureText": "شفط دم من المخ",
+  "surgeryDate": "2026-07-15",
+  "patientDob": "1980-01-01",
+  "departmentId": "c9a1..."
 }
 ```
 
 **Field Requirements:**
-- `hospital` (required): Hospital UUID
-- `patientName` (required): Patient name (max 255 characters; sanitized by server)
+- `hospital` (required): hospital UUID
+- `patientName` (required, ≤255): privacy format (first name + initials) is enforced server-side
 - `gender` (required): `"male"` or `"female"`
-- `procedure` (required): Arab procedure (arabProc) UUID
-- `surgeryDate` (required): Surgery date (ISO 8601 format)
-- `patientDob` (optional): Patient date of birth (ISO 8601). If omitted, `surgeryDate` is used.
+- `procedureText` (required, free text ≤500): the clerk's own words — **NOT a UUID**. The first time a phrase is seen in a department it is learned (`clerk_procs`): resolved to a CPT via the hub's semantic procedure search and translated to bilingual titles; repeats are free.
+- `surgeryDate` (required, ISO 8601) · `patientDob` (optional; defaults to `surgeryDate`)
+- `departmentId` (optional UUID): department resolution = body → JWT claim → NS default
 
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "timeStamp": "2026-02-08T12:00:00.000Z",
-    "patientName": "Patient Name",
-    "patientDob": "1980-01-01T00:00:00.000Z",
-    "gender": "male",
-    "hospital": {
-      "id": "0b808c24-ab60-43ce-8a5e-ce3aa86730d2",
-      "engName": "Cairo University Hospital",
-      "arabName": "مستشفى جامعة القاهرة"
-    },
-    "arabProc": {
-      "id": "39a33c66-a55f-4049-a12e-9002b803ec8c",
-      "title": "Procedure title",
-      "numCode": "61070",
-      "alphaCode": "VSHN"
-    },
-    "procDate": "2026-02-15T00:00:00.000Z",
-    "google_uid": null,
-    "formLink": null,
-    "createdAt": "2026-02-08T12:00:00.000Z",
-    "updatedAt": "2026-02-08T12:00:00.000Z"
-  }
-}
-```
+**Behavior:**
+- **Instant save** (~1–2 s): CPT resolution and bilingual enrichment complete in the background after the response.
+- `clerkId` is stamped from the JWT when the caller is a clerk.
 
-**Error Response (400 Bad Request - Validation):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "hospital must be a valid UUID",
-      "path": "hospital",
-      "location": "body"
-    }
-  ]
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
----
+**Response (201 Created):** the created row (hospital relation loaded; `procCpt`/`clerkProc`/bilingual name slots may fill in asynchronously).
 
 ### Create CalSurg from External
 **POST** `/calSurg/postAllFromExternal`
 
-**Status:** DISABLED — returns `410 Gone`. See [Disabled Routes](#disabled-routes) and [docs/DISABLED_ROUTES.md](./docs/DISABLED_ROUTES.md).
-
-**Requires (when re-enabled):** No authentication (caller must send `X-Institution-Id` header for institution context)
-
-**Rate Limit:** 50 requests per 15 minutes per IP (strict rate limiter)
-
-**Headers:**
-```
-X-Institution-Id: <institution-uuid>
-Content-Type: application/json
-```
-
-**Request Body:**
-```json
-{
-  "row": 46
-}
-```
-
-**Field Requirements:**
-- `row` (optional): Row number to fetch from external source. If omitted, all rows are processed.
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "timeStamp": "2025-01-15T10:00:00.000Z",
-      "patientName": "John Doe",
-      "patientDob": "1980-05-15T00:00:00.000Z",
-      "gender": "male",
-      "hospital": {
-        "id": "hospital-uuid-123",
-        "engName": "Cairo University Hospital",
-        "arabName": "مستشفى جامعة القاهرة"
-      },
-      "arabProc": {
-        "id": "proc-uuid-456",
-        "title": "مراجعة صمام اوميا",
-        "numCode": "61070",
-        "alphaCode": "VSHN"
-      },
-      "procDate": "2025-01-15T10:00:00.000Z",
-      "google_uid": "unique-google-id",
-      "formLink": "https://example.com/form",
-      "createdAt": "2025-01-15T10:00:00.000Z",
-      "updatedAt": "2025-01-15T10:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs. Patient names are automatically sanitized.
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
+**Status:** 🔐 **Migration-key-gated** (`X-Migration-Key`; **503** when `MIGRATION_API_KEY` is unset, **401** on a wrong key). Operator sheet-import: body `{ "row"?, "startRow"? }`; matches procedures by exact `proc_cpts` title/arTitle; dedupes by `google_uid`.
 
 ### Get CalSurg by ID
-**GET** `/calSurg/getById`
+**GET** `/calSurg/getById?_id=<uuid>`
 
-**Quick reference:** See [docs/GET_CALSURG_BY_ID.md](./docs/GET_CALSURG_BY_ID.md) for a focused usage guide (URL, institution ID, request body, and examples).
+**Requires:** any authenticated role. Returns the row with `hospital`, `procCpt`, and `clerkProc` relations. Unscoped by-id read.
 
-**Requires:** Authentication (Super Admin, Institute Admin, Clerk, Supervisor, or Candidate)
+### Get Clerk Procedure Phrases (typeahead)
+**GET** `/calSurg/clerkProcs`
 
-**Rate Limit:** 200 requests per 15 minutes per user
+**Requires:** Clerk, Institute Admin, or Super Admin · department-scoped (JWT claim → `?deptCode` → NS)
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Request Body:**
-```json
-{
-  "_id": "507f1f77bcf86cd799439011"
-}
-```
-
-**Field Requirements:**
-- `_id` (required): CalSurg UUID (must be a valid UUID format)
-
-**Description:**  
-Returns a specific calendar surgery record by ID. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Clerk, Supervisor, and Candidate).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "timeStamp": "2025-01-15T10:00:00.000Z",
-    "patientName": "John Doe",
-    "patientDob": "1980-05-15T00:00:00.000Z",
-    "gender": "male",
-    "hospital": {
-      "id": "hospital-uuid-123",
-      "engName": "Cairo University Hospital",
-      "arabName": "مستشفى جامعة القاهرة"
-    },
-    "arabProc": {
-      "id": "proc-uuid-456",
-      "title": "مراجعة صمام اوميا",
-      "numCode": "61070",
-      "alphaCode": "VSHN"
-    },
-    "procDate": "2025-01-15T10:00:00.000Z",
-    "google_uid": "unique-google-id",
-    "formLink": "https://example.com/form",
-    "createdAt": "2025-01-15T10:00:00.000Z",
-    "updatedAt": "2025-01-15T10:00:00.000Z"
-  }
-}
-```
-
-**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs.
-
-**Error Response (400 Bad Request - Validation Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "_id is required and must be a valid UUID string",
-      "path": "_id",
-      "location": "body"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "CalSurg not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
+Feeds the surgery-create typeahead: the department's previously learned clerk phrases with their bilingual titles and mapped CPTs.
 
 ### Get CalSurg Dashboard (Trimmed)
 **GET** `/calSurg/dashboard`
 
-**Requires:** Authentication (Candidate, Supervisor, Clerk, Institute Admin, or Super Admin)
+**Requires:** any authenticated role · department-scoped (JWT claim → `?deptCode` → NS)
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Description:**  
-Dashboard endpoint returning calendar procedures within the **last 60 days** only. Optimized for candidate dashboard (isAcademic & isPractical institutions). Each item excludes `formLink` and `google_uid` for reduced payload size.
-
-**Response (200 OK):**
-```json
-[
-  {
-    "_id": "507f1f77bcf86cd799439011",
-    "id": "507f1f77bcf86cd799439011",
-    "patientName": "John Doe",
-    "procDate": "2025-01-15T00:00:00.000Z",
-    "hospital": {
-      "_id": "hospital-uuid-123",
-      "engName": "Cairo University Hospital",
-      "arabName": "مستشفى جامعة القاهرة"
-    },
-    "arabProc": {
-      "_id": "proc-uuid-456",
-      "title": "مراجعة صمام اوميا",
-      "numCode": "61070",
-      "alphaCode": "VSHN",
-      "description": "..."
-    },
-    "timeStamp": "2025-01-15T10:00:00.000Z",
-    "patientDob": "1980-05-15T00:00:00.000Z",
-    "gender": "male"
-  }
-]
-```
-
-**Error Responses:**
-- `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: Insufficient permissions
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
-
----
+This is the calendar feed for the candidate dashboard and supervisor logbook. Last **60 days**, max 1000 rows, `procDate DESC`. Each row: `_id`, `patientName`, `patientNameAr`, `patientNameEn`, `gender`, `procDate`, `hospital { _id, engName, arabName }`, `procCpt { _id, title, arTitle, numCode, alphaCode }`, `clerkProc { _id, title, titleAr, titleEn }` (`formLink`, `google_uid`, `createdAt`, `updatedAt` stripped).
 
 ### Get All CalSurg with Filters
 **GET** `/calSurg/getAll`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Clerk, Supervisor, or Candidate)
+**Requires:** any authenticated role · department-scoped (JWT claim → `?deptCode` → NS)
 
-**Rate Limit:** 200 requests per 15 minutes per user
+**Query modes:**
+- `?recent=<1–200>` — **work-queue mode**: latest created/edited first (`updatedAt DESC`), bounded. Used by the calendar-manager surgeries list.
+- `?month=YYYY-MM` · `?year=YYYY` · `?day=YYYY-MM-DD` · `?startDate=&endDate=` — date-scoped (bounded to the last 2 years, not future). The month mode is what the calendar views use (unscoped getAll of all rows is ~10 MB; a month is ~200 KB).
+- No filters — all rows, `procDate DESC` (avoid; prefer a mode above).
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Query Parameters (all optional):**
-- `startDate` (ISO 8601): Filter by start date (must be within last 2 years, not in future)
-- `endDate` (ISO 8601): Filter by end date (must be within last 2 years, not in future)
-- `month` (YYYY-MM format): Filter by month (must be within last 2 years, not in future)
-- `year` (YYYY format): Filter by year (must be within last 2 years, not in future)
-- `day` (ISO 8601): Filter by specific day (must be within last 2 years, not in future)
-
-**Description:**  
-Returns all calendar surgery records with optional date filtering. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Clerk, Supervisor, and Candidate). Supports filtering by date ranges, month, year, or specific day.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "timeStamp": "2025-01-15T10:00:00.000Z",
-      "patientName": "John Doe",
-      "patientDob": "1980-05-15T00:00:00.000Z",
-      "gender": "male",
-      "hospital": {
-        "id": "hospital-uuid-123",
-        "engName": "Cairo University Hospital",
-        "arabName": "مستشفى جامعة القاهرة"
-      },
-      "arabProc": {
-        "id": "proc-uuid-456",
-        "title": "مراجعة صمام اوميا",
-        "numCode": "61070",
-        "alphaCode": "VSHN"
-      },
-      "procDate": "2025-01-15T10:00:00.000Z",
-      "google_uid": "unique-google-id",
-      "formLink": "https://example.com/form",
-      "createdAt": "2025-01-15T10:00:00.000Z",
-      "updatedAt": "2025-01-15T10:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs.
-
-**Error Response (400 Bad Request - Validation Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "startDate cannot be in the future",
-      "path": "startDate",
-      "location": "query"
-    }
-  ]
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
+Rows carry `hospital`, `procCpt`, `clerkProc` relations plus the bilingual patient-name slots.
 
 ### Update CalSurg
 **PATCH** `/calSurg/:id`
 
-**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
+**Requires:** Clerk, Institute Admin, or Super Admin
 
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**URL Parameters:**
-- `id` (required): CalSurg UUID (must be a valid UUID format)
-
-**Request Body (all fields optional):**
-```json
-{
-  "timeStamp": "2025-01-15T10:00:00.000Z",
-  "patientName": "John Doe",
-  "patientDob": "1980-05-15T00:00:00.000Z",
-  "gender": "male",
-  "hospital": "hospital-uuid-123",
-  "arabProc": "proc-uuid-456",
-  "procDate": "2025-01-15T10:00:00.000Z",
-  "google_uid": "unique-google-id",
-  "formLink": "https://example.com/form"
-}
-```
-
-**Field Requirements:**
-- `timeStamp` (optional): Timestamp, ISO 8601 date string
-- `patientName` (optional): Patient name, string, max 200 characters (automatically sanitized)
-- `patientDob` (optional): Patient date of birth, ISO 8601 date string
-- `gender` (optional): Gender, must be either "male" or "female"
-- `hospital` (optional): Hospital UUID, must be a valid UUID format
-- `arabProc` (optional): Arabic procedure UUID, must be a valid UUID format
-- `procDate` (optional): Procedure date, ISO 8601 date string
-- `google_uid` (optional): Google UID, string, max 200 characters
-- `formLink` (optional): Form link URL, must be a valid URL format
-
-**Note:** All fields are optional - you can update any subset of fields. The `patientName` is automatically sanitized.
-
-**Description:**  
-Updates a calendar surgery record in the system. The `id` parameter must be a valid UUID format. Only Super Admins, Institute Admins, and Clerks can update calendar surgery records.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "timeStamp": "2025-01-15T10:00:00.000Z",
-    "patientName": "John Doe",
-    "patientDob": "1980-05-15T00:00:00.000Z",
-    "gender": "male",
-    "hospital": {
-      "id": "hospital-uuid-123",
-      "engName": "Cairo University Hospital",
-      "arabName": "مستشفى جامعة القاهرة"
-    },
-    "arabProc": {
-      "id": "proc-uuid-456",
-      "title": "مراجعة صمام اوميا",
-      "numCode": "61070",
-      "alphaCode": "VSHN"
-    },
-    "procDate": "2025-01-15T10:00:00.000Z",
-    "google_uid": "unique-google-id",
-    "formLink": "https://example.com/form",
-    "createdAt": "2025-01-15T10:00:00.000Z",
-    "updatedAt": "2025-01-15T11:00:00.000Z"
-  }
-}
-```
-
-**Note:** The `hospital` and `arabProc` fields are populated with full document data, not just IDs.
-
-**Error Response (400 Bad Request - Validation Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "calSurg ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "CalSurg not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Only Super Admins, Institute Admins, and Clerks can update calendar surgery records
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the calendar surgery record with the specified ID does not exist
-- All fields are optional - you can update any subset of fields
-- The `patientName` is automatically sanitized before saving
-
----
+A **clerk** may only edit rows of their own department (JWT claim / `?deptCode` vs. the row's department; 403 otherwise); admins are institution-wide. A `patientName` edit re-derives the bilingual name slots in the background (slots never go stale). A `procedureText` edit re-runs the phrase-learning pipeline.
 
 ### Delete CalSurg
 **DELETE** `/calSurg/:id`
 
-**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**URL Parameters:**
-- `id` (required): CalSurg UUID (must be a valid UUID format)
-
-**Description:**  
-Deletes a calendar surgery record from the system. The `id` parameter must be a valid UUID format. Only Super Admins, Institute Admins, and Clerks can delete calendar surgery records.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "CalSurg deleted successfully"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "calSurg ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "CalSurg not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Only Super Admins, Institute Admins, and Clerks can delete calendar surgery records
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the calendar surgery record with the specified ID does not exist
-- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+**Requires:** Clerk (**own department only**), Institute Admin, or Super Admin.
 
 ---
 
 ## Diagnosis (`/diagnosis`)
 
-**⚠️ Multi-Tenancy Note:** All diagnosis endpoints route to the institution's database based on the `institutionId` in the JWT or `X-Institution-Id` header. Users only access diagnoses for their own institution. All IDs are UUIDs.
-
-All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting-1) section below for details.
-
-### Rate Limiting
-
-All `/diagnosis` endpoints are protected with user-based rate limiting:
-
-- **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
-
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
+**Read-only** reference data mirrored from the hub. All write routes (`POST /post`, `POST /postBulk`, `PATCH /:id`, `DELETE /:id`) are **gone (404)**.
 
 ### Get All Diagnoses
 **GET** `/diagnosis`
 
-**Requires:** Authentication (Super Admin or Institute Admin)
+**Requires:** Super Admin · **Rate Limit:** 200 / 15 min per user · department-scoped (`?deptCode` → JWT claim → NS)
 
-**Rate Limit:** 200 requests per 15 minutes per user
+Returns the diagnoses linked to the department (via `department_diagnoses`).
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Description:**  
-Returns all diagnoses in the system, ordered by creation date (newest first). This endpoint is protected and requires authentication as a Super Admin or Institute Admin.
-
-**Response (200 OK):**
+**Response (200 OK):** array of:
 ```json
 {
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "icdCode": "G93.1",
-      "icdName": "anoxic brain damage",
-      "neuroLogName": ["anoxic brain damage"],
-      "createdAt": "2025-12-01T14:00:00.000Z",
-      "updatedAt": "2025-12-01T14:00:00.000Z"
-    },
-    {
-      "id": "507f1f77bcf86cd799439012",
-      "icdCode": "G93.2",
-      "icdName": "benign intracranial hypertension",
-      "neuroLogName": ["benign intracranial hypertension"],
-      "createdAt": "2025-12-01T14:00:00.000Z",
-      "updatedAt": "2025-12-01T14:00:00.000Z"
-    }
-  ]
+  "id": "uuid",
+  "icdCode": "8B01",
+  "icdName": "subarachnoid hemorrhage",
+  "icdArName": "نزيف تحت العنكبوتية",
+  "neuroLogName": "SAH",
+  "createdAt": "…",
+  "updatedAt": "…"
 }
 ```
-
-**Note:** The API returns `id` (UUID) for each diagnosis.
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Create Bulk Diagnoses
-**POST** `/diagnosis/postBulk`
-
-**Requires:** Super Admin authentication only
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**Request Body:**
-```json
-{
-  "diagnoses": [
-    {
-      "icdCode": "G93.1",
-      "icdName": "Anoxic brain damage",
-      "neuroLogName": ["Anoxic Brain Damage"]
-    },
-    {
-      "icdCode": "G93.2",
-      "icdName": "Benign intracranial hypertension",
-      "neuroLogName": ["Benign Intracranial Hypertension"]
-    }
-  ]
-}
-```
-
-**Field Requirements:**
-- `diagnoses` (required): Array of diagnosis objects
-  - `icdCode` (required): ICD code, string
-  - `icdName` (required): ICD name, string
-  - `neuroLogName` (optional): Array of neuro log names, string array
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "icdCode": "G93.1",
-      "icdName": "Anoxic brain damage",
-      "neuroLogName": ["anoxic brain damage"],
-      "createdAt": "2025-12-01T14:00:00.000Z",
-      "updatedAt": "2025-12-01T14:00:00.000Z"
-    },
-    {
-      "id": "507f1f77bcf86cd799439012",
-      "icdCode": "G93.2",
-      "icdName": "Benign intracranial hypertension",
-      "neuroLogName": ["benign intracranial hypertension"],
-      "createdAt": "2025-12-01T14:00:00.000Z",
-      "updatedAt": "2025-12-01T14:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Note:** The `neuroLogName` array values are automatically converted to lowercase. Each diagnosis object uses `id` (UUID).
-
----
-
-### Create Single Diagnosis
-**POST** `/diagnosis/post`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**Request Body:**
-```json
-{
-  "icdCode": "G93.1",
-  "icdName": "Anoxic brain damage",
-  "neuroLogName": ["Anoxic Brain Damage"]
-}
-```
-
-**Field Requirements:**
-- `icdCode` (required): ICD code, string
-- `icdName` (required): ICD name, string
-- `neuroLogName` (optional): Array of neuro log names, string array
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "icdCode": "G93.1",
-    "icdName": "Anoxic brain damage",
-    "neuroLogName": ["anoxic brain damage"],
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T14:00:00.000Z"
-  }
-}
-```
-
-**Note:** The `neuroLogName` array values are automatically converted to lowercase. The response uses `id` (UUID).
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Error Response (409 Conflict - Duplicate ICD):**
-When a diagnosis with the same `icdCode` already exists for the institution, the API returns:
-```json
-{
-  "status": "error",
-  "statusCode": 409,
-  "message": "Conflict",
-  "error": "Diagnosis with ICD code 'G93.1' already exists"
-}
-```
-
----
-
-### Update Diagnosis
-**PATCH** `/diagnosis/:id`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Diagnosis UUID (must be a valid UUID format)
-
-**Request Body (all fields optional):**
-```json
-{
-  "icdCode": "G93.1",
-  "icdName": "Anoxic brain damage",
-  "neuroLogName": ["Anoxic Brain Damage"]
-}
-```
-
-**Field Requirements:**
-- `icdCode` (optional): ICD code, string (will be normalized to uppercase)
-- `icdName` (optional): ICD name, string (will be normalized to lowercase)
-- `neuroLogName` (optional): Array of neuro log names, string array (will be normalized to lowercase)
-
-**Note:** 
-- All fields are optional - you can update any subset of fields
-- The `neuroLogName` array values are automatically converted to lowercase
-- The `icdCode` is automatically converted to uppercase
-- The `icdName` is automatically converted to lowercase
-- Duplicate checks are performed if `icdCode` or `icdName` are being updated
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "icdCode": "G93.1",
-    "icdName": "anoxic brain damage",
-    "neuroLogName": ["anoxic brain damage"],
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T15:00:00.000Z"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Validation Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "Diagnosis ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (400 Bad Request - Duplicate):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": "Diagnosis with ICD code 'G93.1' already exists"
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Diagnosis not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Super Admins and Institute Admins can update diagnoses (institution-scoped).
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the diagnosis with the specified ID does not exist
-- If updating `icdCode` or `icdName`, the system checks for duplicates and prevents conflicts
-- All string fields are automatically normalized (uppercase for `icdCode`, lowercase for `icdName` and `neuroLogName`)
-
----
-
-### Delete Diagnosis
-**DELETE** `/diagnosis/:id`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Diagnosis UUID (must be a valid UUID format)
-
-**Description:**  
-Deletes a diagnosis from the system. The `id` parameter must be a valid UUID format.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "Diagnosis deleted successfully"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "Diagnosis ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Diagnosis not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Super Admins and Institute Admins can delete diagnoses (institution-scoped).
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the diagnosis with the specified ID does not exist
-- All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting-1) above)
+(ICD-11 codes; `icdArName` = Arabic name, present on all mirrored rows.)
 
 ---
 
 ## Procedure CPT (`/procCpt`)
 
-**⚠️ Multi-Tenancy Note:** All procedure CPT endpoints route to the institution's database based on the `institutionId` in the JWT or `X-Institution-Id` header. Users only access procedure CPTs for their own institution. All IDs are UUIDs.
-
-All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting) section below for details.
-
-### Rate Limiting
-
-All `/procCpt` endpoints are protected with user-based rate limiting:
-
-- **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
-
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
+**Read-only** mirrored CPT catalog. All write routes (`POST`, `POST /upsert`, `POST /postAllFromExternal`, `PUT/PATCH /:id`, `DELETE /:id`) are **gone (404)**.
 
 ### Get All Procedure CPT Codes
 **GET** `/procCpt`
 
-**Requires:** Authentication (Super Admin or Institute Admin)
+**Requires:** Super Admin, Institute Admin, or Clerk · **Rate Limit:** 200 / 15 min per user · department-scoped (`?deptCode` → JWT claim → NS, via the department's main-diagnosis links)
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Description:**  
-Returns all procedure CPT codes in the system, ordered by creation date (newest first). This endpoint is protected and requires authentication as a Super Admin or Institute Admin.
-
-**Response (200 OK):**
+**Response (200 OK):** array of:
 ```json
 {
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "numCode": "61783",
-      "alphaCode": "A",
-      "title": "Craniotomy for tumor resection",
-      "description": "Procedure description",
-      "createdAt": "2025-01-15T10:00:00.000Z",
-      "updatedAt": "2025-01-15T10:00:00.000Z"
-    }
-  ]
+  "id": "uuid",
+  "title": "craniotomy for evacuation of hematoma",
+  "arTitle": "…",
+  "alphaCode": "CRAN",
+  "numCode": "61312",
+  "description": "…",
+  "createdAt": "…",
+  "updatedAt": "…"
 }
 ```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Create Procedure CPT (create only)
-**POST** `/procCpt`
-
-Creates a new procedure CPT code. **Create-only:** if a procedure with the same `numCode` already exists, the API returns **409 Conflict** instead of updating. Use **PUT** `/procCpt/:id` to update an existing procedure, or **POST** `/procCpt/upsert` for create-or-update by `numCode`.
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**Request Body:**
-```json
-{
-  "numCode": "61783",
-  "alphaCode": "A",
-  "title": "Craniotomy for tumor resection",
-  "description": "Procedure description"
-}
-```
-
-**Field Requirements:**
-- `numCode` (required): Numerical code, string, max 50 characters
-- `alphaCode` (required): Alpha code, string, max 50 characters
-- `title` (required): Procedure title, string, max 200 characters. **Must not contain commas.**
-- `description` (required): Procedure description, string, max 500 characters
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "numCode": "61783",
-    "alphaCode": "A",
-    "title": "Craniotomy for tumor resection",
-    "description": "Procedure description",
-    "createdAt": "2025-01-15T10:00:00.000Z",
-    "updatedAt": "2025-01-15T10:00:00.000Z"
-  }
-}
-```
-
-**Error Response (409 Conflict - CPT code already exists):**
-When a procedure with the same `numCode` already exists for the institution:
-```json
-{
-  "status": "error",
-  "statusCode": 409,
-  "message": "Conflict",
-  "error": "CPT with this code already exists"
-}
-```
-
-**Error Response (400 Bad Request):** Validation errors (e.g. missing fields, title contains commas).
-
-**Error Response (401/403/429):** Same as other procCpt endpoints.
-
----
-
-### Create ProcCpt from External
-**POST** `/procCpt/postAllFromExternal`
-
-Creates procedure CPT codes from external data source.
-
-**Requires:** Super Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <superAdmin_token>
-```
-
-**Request Body:**
-```json
-{
-  "row": 46
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "numCode": "61783",
-      "alphaCode": "A",
-      "title": "Craniotomy for tumor resection",
-      "description": "Procedure description",
-      "createdAt": "2025-01-15T10:00:00.000Z",
-      "updatedAt": "2025-01-15T10:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Note:** Each item uses `id` (UUID). Super Admin only.
-
----
-
-### Upsert ProcCpt
-**POST** `/procCpt/upsert`
-
-Creates or updates a procedure CPT code by `numCode`. If a procedure with the same `numCode` exists, it will be updated; otherwise, a new procedure will be created. For strict **create-only** or **update-only** behavior, use **POST** `/procCpt` (returns 409 if code exists) and **PUT** `/procCpt/:id` (update by id, returns 404 if not found).
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**Request Body:**
-```json
-{
-  "numCode": "61783",
-  "alphaCode": "A",
-  "title": "Craniotomy for tumor resection",
-  "description": "Procedure description"
-}
-```
-
-**Field Requirements:**
-- `numCode` (required): Numerical code, string, max 50 characters (used to determine if procedure exists)
-- `alphaCode` (required): Alpha code, string, max 50 characters
-- `title` (required): Procedure title, string, max 200 characters
-- `description` (required): Procedure description, string, max 500 characters
-
-**Note:** The upsert operation uses `numCode` to determine if a procedure already exists. If a procedure with the same `numCode` is found, all fields will be updated. Otherwise, a new procedure will be created. **Title must not contain commas.**
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "numCode": "61783",
-    "alphaCode": "A",
-    "title": "Craniotomy for tumor resection",
-    "description": "Procedure description",
-    "createdAt": "2025-01-15T10:00:00.000Z",
-    "updatedAt": "2025-01-15T10:00:00.000Z"
-  }
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Update Procedure CPT (update only)
-**PUT** `/procCpt/:id`
-
-Updates an existing procedure CPT code by id. **Update-only:** if no procedure with the given `id` exists, the API returns **404 Not Found**. All body fields are optional; only provided fields are updated.
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): ProcCpt UUID (must be a valid UUID format)
-
-**Request Body (all fields optional):**
-```json
-{
-  "numCode": "61783",
-  "alphaCode": "A",
-  "title": "Craniotomy for tumor resection",
-  "description": "Procedure description"
-}
-```
-
-**Field Requirements:**
-- `title` (optional): Procedure title, string, max 200 characters. **Must not contain commas** if provided.
-- `alphaCode` (optional): Alpha code, string, max 50 characters
-- `numCode` (optional): Numerical code, string, max 50 characters
-- `description` (optional): Procedure description, string, max 500 characters
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "numCode": "61783",
-    "alphaCode": "A",
-    "title": "Craniotomy for tumor resection",
-    "description": "Procedure description",
-    "createdAt": "2025-01-15T10:00:00.000Z",
-    "updatedAt": "2025-01-15T11:00:00.000Z"
-  }
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "ProcCpt not found"
-}
-```
-
-**Error Response (400 Bad Request):** Validation errors (e.g. invalid UUID, title contains commas).
-
-**Error Response (401/403/429):** Same as other procCpt endpoints.
-
----
-
-### Delete Procedure CPT Code
-**DELETE** `/procCpt/:id`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): ProcCpt UUID (must be a valid UUID format)
-
-**Description:**  
-Deletes a procedure CPT code from the system. The `id` parameter must be a valid UUID format.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "ProcCpt deleted successfully"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "ProcCpt ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "ProcCpt not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Super Admins and Institute Admins can delete procedure CPT codes (institution-scoped).
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the procedure CPT code with the specified ID does not exist
-- All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting) above)
 
 ---
 
 ## Main Diagnosis (`/mainDiag`)
 
-**⚠️ Multi-Tenancy Note:** All main diagnosis endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access main diagnoses from their own institution.
-
-**Institute Admin dashboard:** Institute Admins have full CRUD access (create, read, update, delete, remove procs/diagnosis). For a summary of endpoints to use in the i-admin dashboard, see [Institute Admin Dashboard – Main Diagnosis](#institute-admin-dashboard--main-diagnosis).
-
-All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
-
-### Rate Limiting
-
-All `/mainDiag` endpoints are protected with user-based rate limiting:
-
-- **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/PUT/DELETE endpoints** (including POST `/:id/procs/remove` and POST `/:id/diagnosis/remove`): 50 requests per 15 minutes per user
-
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Create Main Diagnosis
-**POST** `/mainDiag`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**Request Body:**
-```json
-{
-  "title": "cns tumors",
-  "procsArray": ["61783", "61108-00"],
-  "diagnosis": ["G93.1", "G93.2"]
-}
-```
-
-**Field Requirements:**
-- `title` (required): Main diagnosis title, string, max 200 characters
-- `procsArray` (optional): Array of procedure numCodes (strings)
-- `diagnosis` (optional): Array of diagnosis icdCodes (strings)
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "title": "cns tumors",
-    "procs": [
-      {
-        "id": "507f1f77bcf86cd799439012",
-        "numCode": "61783",
-        "alphaCode": "A",
-        "title": "Procedure Title",
-        "description": "Procedure description"
-      }
-    ],
-    "diagnosis": [
-      {
-        "id": "507f1f77bcf86cd799439014",
-        "icdCode": "G93.1",
-        "icdName": "Anoxic brain damage"
-      }
-    ],
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T14:00:00.000Z"
-  }
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs. The `title` is automatically converted to lowercase.
-
----
+**Read-only** mirrored diagnosis categories with their linked diagnoses and procedures. All write routes (`POST`, `PUT /:id`, `POST /:id/procs/remove`, `POST /:id/diagnosis/remove`, `DELETE /:id`) are **gone (404)**.
 
 ### Get All Main Diagnoses
 **GET** `/mainDiag`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+**Requires:** any authenticated role · **Rate Limit:** 200 / 15 min per user · department-scoped (`?deptCode` → JWT claim → NS)
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Description:**  
-Returns all main diagnoses in the system. Each main diagnosis includes its related additional-questions configuration (which optional questions are enabled for that main diagnosis). This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "507f1f77bcf86cd799439011",
-      "title": "cns tumors",
-      "procs": [
-        {
-          "id": "507f1f77bcf86cd799439012",
-          "numCode": "61783",
-          "alphaCode": "A",
-          "title": "Procedure Title",
-          "description": "Procedure description"
-        }
-      ],
-      "diagnosis": [
-        {
-          "id": "507f1f77bcf86cd799439014",
-          "icdCode": "G93.1",
-          "icdName": "Anoxic brain damage"
-        }
-      ],
-      "additionalQuestions": {
-        "mainDiagDocId": "507f1f77bcf86cd799439011",
-        "spOrCran": 0,
-        "pos": 1,
-        "approach": 1,
-        "region": 1,
-        "clinPres": 0,
-        "intEvents": 1
-      },
-      "createdAt": "2025-12-01T14:00:00.000Z",
-      "updatedAt": "2025-12-01T14:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs. The `additionalQuestions` field is populated from the `additional_questions` table (one row per main diagnosis); it is `null` when no row exists for that main diagnosis. The flags (`spOrCran`, `pos`, `approach`, `region`, `clinPres`, `intEvents`) indicate which optional questions are enabled (0 or 1).
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
+Each row loads the `procs` and `diagnosis` relations as full bilingual mirror entities (`arTitle`, `arDescription`, `icdArName`, descriptions — everything the hub carries).
 
 ### Get Main Diagnosis by ID
 **GET** `/mainDiag/:id`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+**Requires:** any authenticated role. Unscoped by-id read. **404** if not found.
 
-**Rate Limit:** 200 requests per 15 minutes per user
+### Get Additional Questions for a Main Diagnosis
+**GET** `/mainDiag/:mainDiagId/questions`
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
+**Requires:** any authenticated role
 
-**URL Parameters:**
-- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
+The scaled per-department additional-questions framework (replaces the legacy six-flag `/additionalQuestions` module). Option lists are already narrowed per main diagnosis where narrowing is configured.
 
-**Description:**  
-Returns a specific main diagnosis by ID, including its related additional-questions configuration. This endpoint is accessible to all authenticated users (Super Admin, Institute Admin, Supervisor, and Candidate).
-
-**Response (200 OK):**
+**Response (200 OK):** array of:
 ```json
 {
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "title": "cns tumors",
-    "procs": [
-      {
-        "id": "507f1f77bcf86cd799439012",
-        "numCode": "61783",
-        "alphaCode": "A",
-        "title": "Procedure Title",
-        "description": "Procedure description"
-      }
-    ],
-    "diagnosis": [
-      {
-        "id": "507f1f77bcf86cd799439014",
-        "icdCode": "G93.1",
-        "icdName": "Anoxic brain damage"
-      }
-    ],
-    "additionalQuestions": {
-      "mainDiagDocId": "507f1f77bcf86cd799439011",
-      "spOrCran": 0,
-      "pos": 1,
-      "approach": 1,
-      "region": 1,
-      "clinPres": 0,
-      "intEvents": 1
-    },
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T14:00:00.000Z"
-  }
-}
-```
-
-**Note:** The `procs` and `diagnosis` fields are populated with full document data, not just IDs. The `additionalQuestions` field is populated from the `additional_questions` table; it is `null` when no row exists for this main diagnosis. The flags (`spOrCran`, `pos`, `approach`, `region`, `clinPres`, `intEvents`) indicate which optional questions are enabled (0 or 1).
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "mainDiag ID is required.",
-      "path": "id",
-      "location": "params"
-    }
+  "id": "uuid",
+  "key": "approach",
+  "label": "Surgical approach",
+  "arLabel": "…",
+  "inputType": "single_choice",
+  "isRequired": true,
+  "sortOrder": 1,
+  "options": [
+    { "id": "uuid", "value": "open", "arValue": "…", "sortOrder": 1 }
   ]
 }
 ```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "MainDiag not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Update Main Diagnosis
-**PUT** `/mainDiag/:id`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user (strict user-based rate limiter)
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
-
-**Request Body:**
-```json
-{
-  "title": "updated title",
-  "procs": ["61783"],
-  "diagnosis": ["G93.1"]
-}
-```
-
-**Field Requirements:**
-- `title` (optional): Main diagnosis title, string, max 200 characters
-- `procs` (optional): Array of procedure numCodes (strings) to append to existing procedures. Duplicates are automatically avoided.
-- `diagnosis` (optional): Array of diagnosis icdCodes (strings) to append to existing diagnoses. Duplicates are automatically avoided.
-
-**Note:** The `procs` and `diagnosis` arrays are appended to existing values, not replaced. If a procedure or diagnosis already exists, it won't be duplicated. The `title` is automatically converted to lowercase. To remove CPT or ICD links, use the dedicated remove endpoints (POST `/:id/procs/remove`, POST `/:id/diagnosis/remove`).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "title": "updated title",
-    "procs": [
-      {
-        "id": "507f1f77bcf86cd799439012",
-        "numCode": "61783",
-        "alphaCode": "A",
-        "title": "Procedure Title",
-        "description": "Procedure description"
-      }
-    ],
-    "diagnosis": [
-      {
-        "id": "507f1f77bcf86cd799439014",
-        "icdCode": "G93.1",
-        "icdName": "Anoxic brain damage"
-      }
-    ],
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T15:00:00.000Z"
-  }
-}
-```
-
-**Note:** The `procs` and `diagnosis` fields are populated with full document data in the response.
-
-**Error Response (400 Bad Request - Validation Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "mainDiag ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "MainDiag not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Remove Proc (CPT) Links from Main Diagnosis
-**POST** `/mainDiag/:id/procs/remove`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
-
-**Request Body:**
-```json
-{
-  "numCodes": ["61783", "61108-00"]
-}
-```
-
-**Field Requirements:**
-- `numCodes` (required): Non-empty array of non-empty strings (procedure numCodes) to remove from this main diagnosis. Only the link between the main diagnosis and those CPT codes is removed; the procCpt records themselves are not deleted.
-
-**Description:**  
-Removes the association between the main diagnosis and the given CPT procedure codes. Matching is case-insensitive. Returns the updated main diagnosis with `procs` and `diagnosis` relations populated (wrapped in the standard response format; the main diagnosis object is in `data`).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "id": "507f1f77bcf86cd799439011",
-    "title": "cns tumors",
-    "procs": [
-      {
-        "id": "507f1f77bcf86cd799439012",
-        "numCode": "61108-00",
-        "alphaCode": "A",
-        "title": "Procedure Title",
-        "description": "Procedure description"
-      }
-    ],
-    "diagnosis": [
-      {
-        "id": "507f1f77bcf86cd799439014",
-        "icdCode": "G93.1",
-        "icdName": "Anoxic brain damage"
-      }
-    ],
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T15:00:00.000Z"
-  }
-}
-```
-
-**Error Response (400 Bad Request):** Validation error (e.g. invalid UUID, `numCodes` must be a non-empty array of non-empty strings).
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "MainDiag not found"
-}
-```
-
-**Error Response (401/403/429):** Same as other mainDiag write endpoints.
-
----
-
-### Remove Diagnosis (ICD) Links from Main Diagnosis
-**POST** `/mainDiag/:id/diagnosis/remove`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
-
-**Request Body:**
-```json
-{
-  "icdCodes": ["G93.1", "G93.2"]
-}
-```
-
-**Field Requirements:**
-- `icdCodes` (required): Non-empty array of non-empty strings (diagnosis icdCodes) to remove from this main diagnosis. Only the link between the main diagnosis and those ICD codes is removed; the diagnosis records themselves are not deleted.
-
-**Description:**  
-Removes the association between the main diagnosis and the given ICD diagnosis codes. Matching is case-insensitive. Returns the updated main diagnosis with `procs` and `diagnosis` relations populated (wrapped in the standard response format; the main diagnosis object is in `data`).
-
-**Response (200 OK):** Same shape as the remove-procs response (standard wrapper with full main diagnosis object in `data`: `procs`, `diagnosis`, `createdAt`, `updatedAt`).
-
-**Error Response (400 Bad Request):** Validation error (e.g. invalid UUID, `icdCodes` must be a non-empty array of non-empty strings).
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "MainDiag not found"
-}
-```
-
-**Error Response (401/403/429):** Same as other mainDiag write endpoints.
-
----
-
-### Delete Main Diagnosis
-**DELETE** `/mainDiag/:id`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Main Diagnosis UUID (must be a valid UUID format)
-
-**Description:**  
-Deletes a main diagnosis from the system. The `id` parameter must be a valid UUID format.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "MainDiag deleted successfully"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "mainDiag ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "MainDiag not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Only Super Admins can delete main diagnoses
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the main diagnosis with the specified ID does not exist
-- All endpoints are protected with user-based rate limiting (see Rate Limiting section above)
+`inputType` ∈ `single_choice | multi_choice | free_text`; `free_text` questions have empty `options`. Submission answers are posted inside `POST /sub/candidate/submissions` as the `answers[]` array keyed by question id.
 
 ---
 
 ## Additional Questions (`/additionalQuestions`)
 
-**⚠️ Multi-Tenancy Note:** All additional questions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access additional questions from their own institution.
-
-**GET** endpoints are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access for **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **PUT** (update flags only) is allowed for **Super Admin and Institute Admin** only.
-
-### Rate Limiting
-
-- **GET** `/additionalQuestions`, **GET** `/additionalQuestions/:mainDiagDocId`: 200 requests per 15 minutes per user
-- **PUT** `/additionalQuestions/:mainDiagDocId`: 50 requests per 15 minutes per user (strict)
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Get All Additional Questions
-**GET** `/additionalQuestions`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Description:**  
-Returns all additional-question records (one per main diagnosis). Each record indicates which optional questions (e.g. spine/cranial, position, approach, region, clinical presentation, intraoperative events) are enabled for that main diagnosis.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "mainDiagDocId": "550e8400-e29b-41d4-a716-446655440000",
-      "spOrCran": 0,
-      "pos": 0,
-      "approach": 0,
-      "region": 0,
-      "clinPres": 0,
-      "intEvents": 0
-    }
-  ]
-}
-```
-
-**Response Fields:**
-- `mainDiagDocId` (string, UUID): Main diagnosis ID (primary key)
-- `spOrCran`, `pos`, `approach`, `region`, `clinPres`, `intEvents` (number, 0 or 1): Flags for which additional questions are enabled
-
-**Error Responses:** 401 Unauthorized, 403 Forbidden, 429 Too Many Requests (same format as other endpoints)
-
----
-
-### Get Additional Question by Main Diagnosis ID
-**GET** `/additionalQuestions/:mainDiagDocId`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**URL Parameters:**
-- `mainDiagDocId` (required): Main Diagnosis UUID (must be a valid UUID format)
-
-**Description:**  
-Returns the additional-question configuration for a specific main diagnosis.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "mainDiagDocId": "550e8400-e29b-41d4-a716-446655440000",
-    "spOrCran": 0,
-    "pos": 0,
-    "approach": 0,
-    "region": 0,
-    "clinPres": 0,
-    "intEvents": 0
-  }
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Additional question not found"
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):** Validation errors array. **Other errors:** 401 Unauthorized, 403 Forbidden, 429 Too Many Requests.
-
----
-
-### Update Additional Question (flags)
-**PUT** `/additionalQuestions/:mainDiagDocId`
-
-**Requires:** Authentication (Super Admin or Institute Admin only)
-
-**Rate Limit:** 50 requests per 15 minutes per user (strict)
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**URL Parameters:**
-- `mainDiagDocId` (required): Main Diagnosis UUID (must be a valid UUID format)
-
-**Request Body (JSON):** All fields are optional. Only provided fields are updated. Each value must be **0** or **1**.
-- `spOrCran` (number, 0 or 1): Spine/Cranial question enabled
-- `pos` (number, 0 or 1): Position question enabled
-- `approach` (number, 0 or 1): Approach question enabled
-- `region` (number, 0 or 1): Region question enabled
-- `clinPres` (number, 0 or 1): Clinical presentation question enabled
-- `intEvents` (number, 0 or 1): Intraoperative events question enabled
-
-**Example Request:**
-```json
-{
-  "spOrCran": 1,
-  "approach": 1
-}
-```
-
-**Description:**  
-Updates the boolean (0/1) flags for the additional-question row for the given main diagnosis. The row must already exist (e.g. created with the main diagnosis). No new rows are created; only existing rows are updated.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "mainDiagDocId": "550e8400-e29b-41d4-a716-446655440000",
-    "spOrCran": 1,
-    "pos": 0,
-    "approach": 1,
-    "region": 0,
-    "clinPres": 0,
-    "intEvents": 0
-  }
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Additional question not found"
-}
-```
-
-**Error Response (400 Bad Request):** Invalid UUID for `mainDiagDocId`, or any body field not 0 or 1 — validation errors array. **Other errors:** 401 Unauthorized, 403 Forbidden, 429 Too Many Requests.
+**Status:** ❌ the legacy six-flag `/additionalQuestions` module is **no longer mounted** (404). Per-diagnosis dynamic questions are served by **`GET /mainDiag/:mainDiagId/questions`** (see [Main Diagnosis](#main-diagnosis-maindiag)).
 
 ---
 
 ## Consumables (`/consumables`)
 
-**⚠️ Multi-Tenancy Note:** All consumables endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access consumables from their own institution.
-
-All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
-
-### Rate Limiting
-
-- **GET** `/consumables`, **GET** `/consumables/:id`: 200 requests per 15 minutes per user
-- **POST, PUT, DELETE** `/consumables`, `/consumables/:id`: 50 requests per 15 minutes per user (strict)
-
-**Rate Limit Response (429 Too Many Requests):** Same format as elsewhere.
-
----
+**Read-only** mirror. Write routes are **gone (404)**.
 
 ### Get All Consumables
 **GET** `/consumables`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+**Requires:** any authenticated role · **Rate Limit:** 200 / 15 min per user · department-scoped (`?deptCode` → JWT claim → NS)
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Description:**  
-Returns all consumables (reference list, e.g. artificial dural graft, bone cement, pedicle screws, etc.).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "consumables": "artificial dural graft"
-    },
-    {
-      "id": "660e8400-e29b-41d4-a716-446655440001",
-      "consumables": "bone cement"
-    }
-  ]
-}
-```
-
-**Response Fields:** `id` (string, UUID), `consumables` (string). **Error Responses:** 401, 403, 429.
-
----
+**Response (200 OK):** array of `{ "id", "consumables", "arName" }` (`consumables` = English name, `arName` = Arabic name — populated on all mirrored rows).
 
 ### Get Consumable by ID
 **GET** `/consumables/:id`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**URL Parameters:** `id` (required): Consumable UUID
-
-**Description:**  
-Returns a single consumable by ID.
-
-**Response (200 OK):** Single object with `id`, `consumables`. **404 Not Found** if not found. **400** for invalid UUID. **401, 403, 429** as above.
-
----
-
-### Create Consumable
-**POST** `/consumables`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Request Body:**
-```json
-{
-  "consumables": "artificial dural graft"
-}
-```
-
-**Field Requirements:** `consumables` (required): string, max 100 characters
-
-**Response (201 Created):** Standard wrapper with `data` containing `{ "id": "<UUID>", "consumables": "..." }`. **400** for validation errors. **401, 403, 429** as above.
-
----
-
-### Update Consumable
-**PUT** `/consumables/:id`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**URL Parameters:** `id` (required): Consumable UUID
-
-**Request Body (optional):**
-```json
-{
-  "consumables": "updated name"
-}
-```
-
-**Response (200 OK):** Full consumable object. **404** if not found. **400** for invalid UUID or validation. **401, 403, 429** as above.
-
----
-
-### Delete Consumable
-**DELETE** `/consumables/:id`
-
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**URL Parameters:** `id` (required): Consumable UUID
-
-**Response (200 OK):** `{ "message": "Consumable deleted successfully" }`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
+**Requires:** any authenticated role. Returns `{ "id", "consumables", "arName" }`. **404** if not found.
 
 ---
 
 ## Equipment (`/equipment`)
 
-**⚠️ Multi-Tenancy Note:** All equipment endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access equipment from their own institution.
-
-All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
-
-### Rate Limiting
-
-- **GET** `/equipment`, **GET** `/equipment/:id`: 200 requests per 15 minutes per user
-- **POST, PUT, DELETE** `/equipment`, `/equipment/:id`: 50 requests per 15 minutes per user (strict)
-
----
+**Read-only** mirror. Write routes are **gone (404)**.
 
 ### Get All Equipment
 **GET** `/equipment`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+**Requires:** any authenticated role · **Rate Limit:** 200 / 15 min per user · department-scoped (`?deptCode` → JWT claim → NS)
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Description:**  
-Returns all equipment (reference list, e.g. endoscope, microscope, high speed drill, neuronavigation, etc.).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "equipment": "endoscope"
-    },
-    {
-      "id": "660e8400-e29b-41d4-a716-446655440001",
-      "equipment": "microscope"
-    }
-  ]
-}
-```
-
-**Response Fields:** `id` (string, UUID), `equipment` (string). **Error Responses:** 401, 403, 429.
-
----
+**Response (200 OK):** array of `{ "id", "equipment", "arName" }`.
 
 ### Get Equipment by ID
 **GET** `/equipment/:id`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**URL Parameters:** `id` (required): Equipment UUID
-
-**Response (200 OK):** Single object with `id`, `equipment`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
-
----
-
-### Create Equipment
-**POST** `/equipment`
-
-**Requires:** Super Admin or Institute Admin authentication. **Rate Limit:** 50 requests per 15 minutes per user.
-
-**Request Body:** `{ "equipment": "endoscope" }` — `equipment` (required): string, max 100 characters.
-
-**Response (201 Created):** `data` contains `{ "id": "<UUID>", "equipment": "..." }`. **400** validation. **401, 403, 429** as above.
-
----
-
-### Update Equipment
-**PUT** `/equipment/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Equipment UUID.
-
-**Request Body (optional):** `{ "equipment": "updated name" }`
-
-**Response (200 OK):** Full equipment object. **404** if not found. **400** invalid UUID/validation. **401, 403, 429** as above.
-
----
-
-### Delete Equipment
-**DELETE** `/equipment/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Equipment UUID.
-
-**Response (200 OK):** `{ "message": "Equipment deleted successfully" }`. **404** if not found. **400** invalid UUID. **401, 403, 429** as above.
+**Requires:** any authenticated role. Returns `{ "id", "equipment", "arName" }`. **404** if not found.
 
 ---
 
 ## Positions (`/positions`)
 
-**⚠️ Multi-Tenancy Note:** All positions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access positions from their own institution.
-
-All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
-
-### Rate Limiting
-
-- **GET** `/positions`, **GET** `/positions/:id`: 200 requests per 15 minutes per user
-- **POST, PUT, DELETE** `/positions`, `/positions/:id`: 50 requests per 15 minutes per user (strict)
-
----
-
-### Get All Positions
-**GET** `/positions`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**Description:**  
-Returns all positions (reference list, e.g. supine, prone, lateral, concorde, other).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "position": "supine"
-    },
-    {
-      "id": "660e8400-e29b-41d4-a716-446655440001",
-      "position": "prone"
-    }
-  ]
-}
-```
-
-**Response Fields:** `id` (string, UUID), `position` (string). **Error Responses:** 401, 403, 429.
-
----
-
-### Get Position by ID
-**GET** `/positions/:id`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**URL Parameters:** `id` (required): Position UUID
-
-**Response (200 OK):** Single object with `id`, `position`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
-
----
-
-### Create Position
-**POST** `/positions`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **Request Body:** `{ "position": "supine" }` — `position` (required): string, max 50 characters. **Response (201):** `data`: `{ "id", "position" }`. **400/401/403/429** as above.
-
----
-
-### Update Position
-**PUT** `/positions/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Position UUID. **Request Body (optional):** `{ "position": "updated" }`. **Response (200):** Full position object. **404** if not found. **400/401/403/429** as above.
-
----
-
-### Delete Position
-**DELETE** `/positions/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Position UUID. **Response (200):** `{ "message": "Position deleted successfully" }`. **404** if not found. **400/401/403/429** as above.
+**Status:** ❌ the standalone `GET /positions` routes are **not registered** (404), and all position write routes are gone. The positions lookup list is served inside the **`GET /references`** bundle (array `positions`). It is a fallback option list used only when a main diagnosis has no configured question options.
 
 ---
 
 ## Approaches (`/approaches`)
 
-**⚠️ Multi-Tenancy Note:** All approaches endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access approaches from their own institution.
-
-All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
-
-### Rate Limiting
-
-- **GET** `/approaches`, **GET** `/approaches/:id`: 200 requests per 15 minutes per user
-- **POST, PUT, DELETE** `/approaches`, `/approaches/:id`: 50 requests per 15 minutes per user (strict)
-
----
-
-### Get All Approaches
-**GET** `/approaches`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**Description:**  
-Returns all approaches (reference list, e.g. pterional, endonasal, suboccipital, retrosigmoid, laminectomy, etc.).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "approach": "pterional"
-    },
-    {
-      "id": "660e8400-e29b-41d4-a716-446655440001",
-      "approach": "endonasal"
-    }
-  ]
-}
-```
-
-**Response Fields:** `id` (string, UUID), `approach` (string). **Error Responses:** 401, 403, 429.
-
----
-
-### Get Approach by ID
-**GET** `/approaches/:id`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**URL Parameters:** `id` (required): Approach UUID
-
-**Response (200 OK):** Single object with `id`, `approach`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
-
----
-
-### Create Approach
-**POST** `/approaches`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **Request Body:** `{ "approach": "pterional" }` — `approach` (required): string, max 50 characters. **Response (201):** `data`: `{ "id", "approach" }`. **400/401/403/429** as above.
-
----
-
-### Update Approach
-**PUT** `/approaches/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Approach UUID. **Request Body (optional):** `{ "approach": "updated" }`. **Response (200):** Full approach object. **404** if not found. **400/401/403/429** as above.
-
----
-
-### Delete Approach
-**DELETE** `/approaches/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Approach UUID. **Response (200):** `{ "message": "Approach deleted successfully" }`. **404** if not found. **400/401/403/429** as above.
+**Status:** ❌ same as Positions — no standalone routes (404); served as the `approaches` array of the **`GET /references`** bundle.
 
 ---
 
 ## Regions (`/regions`)
 
-**⚠️ Multi-Tenancy Note:** All regions endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access regions from their own institution.
-
-All endpoints are protected with **user-based rate limiting**. **GET** is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**. **POST, PUT, DELETE** are allowed for **Super Admin and Institute Admin** only.
-
-### Rate Limiting
-
-- **GET** `/regions`, **GET** `/regions/:id`: 200 requests per 15 minutes per user
-- **POST, PUT, DELETE** `/regions`, `/regions/:id`: 50 requests per 15 minutes per user (strict)
-
----
-
-### Get All Regions
-**GET** `/regions`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**Description:**  
-Returns all regions (reference list, e.g. craniocervical, cervical, dorsal, lumbar).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "region": "craniocervical"
-    },
-    {
-      "id": "660e8400-e29b-41d4-a716-446655440001",
-      "region": "cervical"
-    }
-  ]
-}
-```
-
-**Response Fields:** `id` (string, UUID), `region` (string). **Error Responses:** 401, 403, 429.
-
----
-
-### Get Region by ID
-**GET** `/regions/:id`
-
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
-
-**URL Parameters:** `id` (required): Region UUID
-
-**Response (200 OK):** Single object with `id`, `region`. **404** if not found. **400** for invalid UUID. **401, 403, 429** as above.
-
----
-
-### Create Region
-**POST** `/regions`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **Request Body:** `{ "region": "craniocervical" }` — `region` (required): string, max 50 characters. **Response (201):** `data`: `{ "id", "region" }`. **400/401/403/429** as above.
-
----
-
-### Update Region
-**PUT** `/regions/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Region UUID. **Request Body (optional):** `{ "region": "updated" }`. **Response (200):** Full region object. **404** if not found. **400/401/403/429** as above.
-
----
-
-### Delete Region
-**DELETE** `/regions/:id`
-
-**Requires:** Super Admin or Institute Admin. **Rate Limit:** 50/15 min. **URL Parameters:** `id` (required): Region UUID. **Response (200):** `{ "message": "Region deleted successfully" }`. **404** if not found. **400/401/403/429** as above.
+**Status:** ❌ same as Positions — no standalone routes (404); served as the `regions` array of the **`GET /references`** bundle.
 
 ---
 
 ## References (`/references`)
 
-This endpoint is implemented by the **bundler** module. The path remains **GET** `/references`.
-
-**⚠️ Multi-Tenancy Note:** The references endpoint automatically routes to the institution's database based on the `institutionId` in the JWT token. Users only receive reference data for their own institution.
-
-**GET** `/references` returns a single response that aggregates the same data as **GET** `/consumables`, **GET** `/equipment`, **GET** `/approaches`, **GET** `/regions`, and **GET** `/positions`. Use this endpoint to reduce round-trips when the front end needs all five reference lists (e.g. on dashboard load). The response is **cached per institution** on the server; cache is invalidated only on server restart.
-
-These endpoints are **GET-only** and are protected with **user-based rate limiting** (200 requests per 15 minutes per user). Access is allowed for **Super Admin, Institute Admin, Supervisor, and Candidate**.
-
-### Rate Limiting
-
-- **GET** `/references`: 200 requests per 15 minutes per user
-
-**Rate Limit Response (429 Too Many Requests):** Same format as elsewhere (status, statusCode, message, error).
-
----
-
 ### Get All References (Aggregated)
 **GET** `/references`
 
-**Requires:** Authentication (Super Admin, Institute Admin, Supervisor, or Candidate)
+**Requires:** any authenticated role · **Rate Limit:** 200 / 15 min per user
 
-**Rate Limit:** 200 requests per 15 minutes per user
+One-shot bundle for the submission form. Response object keys (arrays): **`consumables`, `equipment`, `approaches`, `regions`, `positions`**. Equipment and consumables are department-scoped (JWT claim → NS default) and include `arName`.
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Institution context:** Send `X-Institution-Id` header or ensure the JWT contains `institutionId` (e.g. after login with institution).
-
-**Description:**  
-Returns all reference lists in one response: consumables, equipment, approaches, regions, and positions. Equivalent to calling the five separate endpoints but in a single request. Data is cached per institution on the server until the process restarts.
-
-**Response (200 OK):**
-```json
-{
-  "consumables": [
-    { "id": "550e8400-e29b-41d4-a716-446655440000", "consumables": "artificial dural graft" },
-    { "id": "660e8400-e29b-41d4-a716-446655440001", "consumables": "bone cement" }
-  ],
-  "equipment": [
-    { "id": "750e8400-e29b-41d4-a716-446655440002", "equipment": "endoscope" },
-    { "id": "860e8400-e29b-41d4-a716-446655440003", "equipment": "microscope" }
-  ],
-  "approaches": [
-    { "id": "950e8400-e29b-41d4-a716-446655440004", "approach": "anterior" },
-    { "id": "a60e8400-e29b-41d4-a716-446655440005", "approach": "posterior" }
-  ],
-  "regions": [
-    { "id": "b50e8400-e29b-41d4-a716-446655440006", "region": "craniocervical" },
-    { "id": "c60e8400-e29b-41d4-a716-446655440007", "region": "cervical" }
-  ],
-  "positions": [
-    { "id": "d50e8400-e29b-41d4-a716-446655440008", "position": "prone" },
-    { "id": "e60e8400-e29b-41d4-a716-446655440009", "position": "supine" }
-  ]
-}
-```
-
-**Response Fields:**
-- `consumables`: Array of `{ id: string (UUID), consumables: string }`
-- `equipment`: Array of `{ id: string (UUID), equipment: string }`
-- `approaches`: Array of `{ id: string (UUID), approach: string }`
-- `regions`: Array of `{ id: string (UUID), region: string }`
-- `positions`: Array of `{ id: string (UUID), position: string }`
-
-**Error Responses:** 400 (missing institution context), 401 Unauthorized, 403 Forbidden, 429 Too Many Requests, 500 Internal Server Error.
+**Caching:** served with **`Cache-Control: private, no-cache`** — browsers must revalidate on every use (ETag 304s keep this cheap). Do **not** rely on long-lived HTTP caching of this bundle; it previously used `max-age=86400`, which made Chrome serve stale bodies from disk cache for a day.
 
 ---
 
 ## Candidate Dashboard (`/candidate/dashboard`)
 
-This endpoint is implemented by the **bundler** module (same module as GET /references). The bundler module provides aggregated responses to reduce round-trips: **GET /references** (five reference lists) and **GET /candidate/dashboard** (candidate dashboard bundle).
+This endpoint is implemented by the **bundler** module (same module as GET /references). The bundler module provides aggregated responses to reduce round-trips: **GET /references** (reference lists) and **GET /candidate/dashboard** (candidate dashboard bundle).
 
-**⚠️ Multi-Tenancy Note:** The dashboard bundle uses the institution's database based on the `institutionId` in the JWT token or `X-Institution-Id` header. Data is scoped to the candidate and institution.
+**Implementation note:** The dashboard is optimized for throughput: one submission load per request (candidate submissions fetched once), with stats, CPT/ICD/supervisor analytics and the submissions list derived in memory. Event points and submission/academic rankings use batched candidate and supervisor lookups to avoid N+1 queries. There is no server-side caching; each request computes fresh data for the authenticated candidate. The bundled CPT/ICD analytics items carry the Arabic labels (`arTitle` on CPT items, `icdArName` on ICD items) for bilingual dashboard cards.
 
-**Implementation note:** The dashboard is optimized for throughput: one submission load per request (candidate submissions fetched once), with stats, CPT/ICD/supervisor analytics and the submissions list derived in memory. Event points and submission/academic rankings use batched candidate and supervisor lookups to avoid N+1 queries. There is no server-side caching; each request computes fresh data for the authenticated candidate.
+**GET** `/candidate/dashboard` returns a single response whose **shape depends on the institution's feature flags** (from `GET /institution`):
 
-**GET** `/candidate/dashboard` returns a single response whose **shape depends on the institution type**:
+- **Academic + practical + clinical:** full bundle with **ten** keys — the nine below plus `clinicalSubCand` (same as GET /clinicalSub/cand: the signed-in candidate's clinical subs with censored candidate/supervisor).
+- **Academic + practical:** full bundle — **nine** keys (stats, points, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking, academicRanking).
+- **Practical only:** practical bundle — **seven** keys (no `points`, no `academicRanking`).
 
-- **Academic, practical, and clinical** (`isAcademic: true`, `isPractical: true`, `isClinical: true`): full bundle with **ten** keys — the nine below plus `clinicalSubCand` (same as GET /clinicalSub/cand: the signed-in candidate’s clinical subs with censored candidate/supervisor).
-- **Academic and practical** (`isAcademic: true`, `isPractical: true`, `isClinical: false`): full bundle — same data as **nine** endpoints (stats, points, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking, academicRanking).
-- **Practical only** (`isPractical: true`, `isAcademic: false`): practical bundle — seven keys (stats, submissions, cptAnalytics, icdAnalytics, supervisorAnalytics, activityTimeline, submissionRanking). No `points` or `academicRanking`.
-
-**Access:** Logged-in **candidates only**, and only when the institution has **practical** enabled (`isPractical` true). Institutions with `isPractical: false` receive **403 Forbidden**. There is **no server-side caching**; data is per-candidate and subject to change. The front end may cache the response (e.g. refetch every 15 minutes). For frontend usage by institution type, see [Candidate dashboard for practical institutions](./docs/FRONTEND_CANDIDATE_DASHBOARD_PRACTICAL.md).
+**Access:** Logged-in **candidates only**, and only when the institution has **practical** enabled (`isPractical: true`; otherwise **403**). Rankings inside the bundle are **department-scoped** to the candidate's department.
 
 ### Rate Limiting
 
 - **GET** `/candidate/dashboard`: 200 requests per 15 minutes per user
 
-**Rate Limit Response (429 Too Many Requests):** Same format as elsewhere (status, statusCode, message, error).
-
----
-
 ### Get Candidate Dashboard (Aggregated)
 **GET** `/candidate/dashboard`
 
-**Requires:** Authentication (Candidate only). Institution must be active and have `isPractical: true`.
+**Requires:** Authentication (Candidate only). Institution must have `isPractical: true`.
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Institution context:** Send `X-Institution-Id` header or ensure the JWT contains `institutionId` (e.g. after login with institution).
-
-**Description:**  
-Returns candidate dashboard data in one response. The response **shape depends on the institution**:
-
-1. **Full bundle (academic + practical):** When the institution has both `isAcademic` and `isPractical` true, the response has **nine** keys (or **ten** when `isClinical` is also true — see below).
-2. **Full bundle with clinical (academic + practical + clinical):** When the institution has `isAcademic`, `isPractical`, and `isClinical` all true, the response includes an extra key **`clinicalSubCand`** — same as GET /clinicalSub/cand (signed-in candidate’s clinical subs with censored candidate/supervisor).
-3. **Practical-only bundle:** When the institution has `isPractical: true` and `isAcademic: false`, the response has **seven** keys (no event points or academic ranking).
-
-No server-side caching; the front end may cache (e.g. refetch every 15 minutes).
-
-**Response (200 OK) – Full bundle** (institution is academic and practical):  
-A single JSON object with **nine** keys (or **ten** when institution is also clinical). Body returned directly; no top-level `status`/`data` wrapper:
+**Response (200 OK) – Full bundle** (institution is academic and practical):
+A single JSON object with **nine** keys (or **ten** when the institution is also clinical). Body returned directly; no top-level `status`/`data` wrapper:
 
 - `stats` – same as GET /sub/candidate/stats
 - `points` – same as GET /event/candidate/points
 - `submissions` – same as GET /sub/candidate/submissions
-- `cptAnalytics` – same as GET /sub/cptAnalytics
-- `icdAnalytics` – same as GET /sub/icdAnalytics
+- `cptAnalytics` – same as GET /sub/cptAnalytics (items include `arTitle`)
+- `icdAnalytics` – same as GET /sub/icdAnalytics (items include `icdArName`)
 - `supervisorAnalytics` – same as GET /sub/supervisorAnalytics
 - `activityTimeline` – same as GET /activityTimeline (object with `items` array)
-- `submissionRanking` – same as GET /sub/submissionRanking
-- `academicRanking` – same as GET /event/academicRanking
-- `clinicalSubCand` – *(only when institution has `isClinical: true`)* same as GET /clinicalSub/cand: array of clinical subs for the signed-in candidate with censored candidate and supervisor (no password, email, phone)
+- `submissionRanking` – same as GET /sub/submissionRanking (department-scoped)
+- `academicRanking` – same as GET /event/academicRanking (department-scoped)
+- `clinicalSubCand` – *(only when `isClinical: true`)* same as GET /clinicalSub/cand
 
-**Response (200 OK) – Practical-only bundle** (institution is practical, not academic):  
-A single JSON object with **seven** keys (no `points`, no `academicRanking`):
+**Response (200 OK) – Practical-only bundle:** seven keys (no `points`, no `academicRanking`).
 
-- `stats` – same as GET /sub/candidate/stats
-- `submissions` – same as GET /sub/candidate/submissions
-- `cptAnalytics` – same as GET /sub/cptAnalytics
-- `icdAnalytics` – same as GET /sub/icdAnalytics
-- `supervisorAnalytics` – same as GET /sub/supervisorAnalytics
-- `activityTimeline` – same as GET /activityTimeline (object with `items` array)
-- `submissionRanking` – same as GET /sub/submissionRanking
-
-**Error Responses:** 400 (missing institution context), 401 Unauthorized, 403 Forbidden (not a candidate, or institution does not have practical enabled), 404 Not Found (institution not found), 429 Too Many Requests, 500 Internal Server Error. On 403 with message that the dashboard is only for institutions with practical training, the front end should fall back to calling the individual endpoints.
+**Error Responses:** 401 Unauthorized, 403 Forbidden (not a candidate, or the institution does not have practical enabled), 429 Too Many Requests, 500 Internal Server Error. On 403 the front end should fall back to calling the individual endpoints.
 
 ---
 
 ## Arabic Procedures (`/arabProc`)
 
-**⚠️ Multi-Tenancy Note:** All Arabic procedure endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access Arabic procedures from their own institution.
-
-**Access:** Full CRUD (GET list, GET by id, POST create, POST create from external, PUT update, DELETE) is available to **Super Admin, Institute Admin, or Clerk**.
-
-All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See [Rate Limiting](#rate-limiting) section below for details.
-
-### Rate Limiting
-
-All `/arabProc` endpoints are protected with user-based rate limiting:
-
-- **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
-
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Get All Arab Procedures
-**GET** `/arabProc/getAllArabProcs`
-
-**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
-
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Description:**  
-Returns all Arabic procedures in the system. This endpoint is protected and requires authentication as a Super Admin, Institute Admin, or Clerk.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "title": "مراجعة صمام اوميا",
-      "alphaCode": "VSHN",
-      "numCode": "61070",
-      "description": "Ommaya valve reservoir check and fluid sampling procedure."
-    }
-  ]
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Get Arab Procedure by ID
-**GET** `/arabProc/:id`
-
-**Requires:** Authentication (Super Admin, Institute Admin, or Clerk)
-
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): ArabProc UUID (must be a valid UUID format)
-
-**Description:** Returns a single Arabic procedure by ID.
-
-**Response (200 OK):** Same shape as one item in the Get All response (object with `id`, `title`, `alphaCode`, `numCode`, `description`, `createdAt`, `updatedAt`).
-
-**Error Response (404 Not Found):**
-```json
-{
-  "error": "ArabProc not found"
-}
-```
-
-**Error Response (400 Bad Request):** Invalid UUID in `id`.
-
----
-
-### Create Arab Procedure
-**POST** `/arabProc/createArabProc`
-
-**Requires:** Super Admin, Institute Admin, or Clerk authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**Request Body:**
-```json
-{
-  "title": "مراجعة صمام اوميا",
-  "alphaCode": "VSHN",
-  "numCode": "61070",
-  "description": "Ommaya valve reservoir check and fluid sampling procedure."
-}
-```
-
-**Field Requirements:**
-- `title` (required): Arabic procedure title, string, max 100 characters
-- `alphaCode` (required): Alpha code, string, max 10 characters
-- `numCode` (required): Numerical code, string
-- `description` (required): Procedure description, string
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "title": "مراجعة صمام اوميا",
-    "alphaCode": "VSHN",
-    "numCode": "61070",
-    "description": "Ommaya valve reservoir check and fluid sampling procedure."
-  }
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Create Arab Procedure from External
-**POST** `/arabProc/createArabProcFromExternal`
-
-**Requires:** Super Admin, Institute Admin, or Clerk authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**Request Body:**
-```json
-{
-  "row": 46
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "title": "مراجعة صمام اوميا",
-      "alphaCode": "VSHN",
-      "numCode": "61070",
-      "description": "Ommaya valve reservoir check and fluid sampling procedure."
-    }
-  ]
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Update Arab Procedure
-**PUT** `/arabProc/:id`
-
-**Requires:** Super Admin, Institute Admin, or Clerk authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): ArabProc UUID (must be a valid UUID format)
-
-**Request Body:** All fields optional (at least one recommended). Only provided fields are updated.
-```json
-{
-  "title": "Updated procedure title",
-  "alphaCode": "CODE",
-  "numCode": "61070",
-  "description": "Updated description."
-}
-```
-
-**Field Requirements:**
-- `title` (optional): string, max 100 characters
-- `alphaCode` (optional): string, max 10 characters
-- `numCode` (optional): string, max 255 characters
-- `description` (optional): string
-
-**Response (200 OK):** Updated Arab procedure object (same shape as create response, with `id`, `createdAt`, `updatedAt`).
-
-**Error Response (404 Not Found):**
-```json
-{
-  "error": "ArabProc not found"
-}
-```
-
-**Error Response (400 Bad Request):** Invalid UUID or validation error on body.
-
----
-
-### Delete Arab Procedure
-**DELETE** `/arabProc/:id`
-
-**Requires:** Super Admin, Institute Admin, or Clerk authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): ArabProc UUID (must be a valid UUID format)
-
-**Description:**  
-Deletes an Arabic procedure from the system. The `id` parameter must be a valid UUID format.
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "ArabProc deleted successfully"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Invalid UUID):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "ArabProc ID is required.",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "ArabProc not found"
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Notes:**
-- Only Super Admins can delete Arabic procedures
-- The `id` parameter is validated to ensure it's a valid UUID format before processing
-- Returns 404 if the procedure with the specified ID does not exist
-- All endpoints are protected with user-based rate limiting (see [Rate Limiting](#rate-limiting) above)
+**Status:** ❌ **RETIRED** (2026-07-15). The `arab_procs` table and every `/arabProc/*` route were removed — all paths return **404**. Replacements:
+
+- Calendar-surgery creation takes free-text **`procedureText`** (the clerk's phrase, learned and auto-mapped to a CPT via semantic search).
+- Arabic display names come from `procCpt.arTitle` and `clerkProc.titleAr`.
+- The clerk typeahead is **`GET /calSurg/clerkProcs`**.
 
 ---
 
 ## Hospitals (`/hospital`)
 
-**⚠️ Multi-Tenancy Note:** All hospital endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access hospitals from their own institution.
-
-All endpoints in this module are protected with **user-based rate limiting**. Rate limits are applied per authenticated user (identified by JWT token user ID), with IP address fallback for edge cases. See Rate Limiting section below for details.
+Tenant data (not hub-mirrored): hospitals/units, each scoped to one department. **Add + edit only — DELETE was removed** (hospitals are referenced by calendar-surgery history and must never be deleted through the API).
 
 ### Rate Limiting
 
-All `/hospital` endpoints are protected with user-based rate limiting:
-
-- **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/PUT/DELETE endpoints**: 50 requests per 15 minutes per user
-
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
-### Authentication
-
-- **GET endpoints**: Require authentication (accessible to all authenticated users: candidates, clerks, supervisors, institute admins, super admins)
-- **POST/PUT/DELETE endpoints**: Require Super Admin or Institute Admin authentication
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
----
+- **GET endpoints:** 200 / 15 min per user · **POST/PUT:** 50 / 15 min per user
 
 ### Get All Hospitals
-
 **GET** `/hospital`
 
-**Requires:** Authentication (all authenticated users)
+**Requires:** any authenticated role (candidate and up)
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Description:**  
-Returns all hospitals in the system, ordered by creation date (newest first). Accessible to all authenticated users (candidates, clerks, supervisors, institute admins, and super admins).
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "arabName": "مستشفى جامعة القاهرة",
-      "engName": "Cairo University Hospital",
-      "location": {
-        "long": 31.2001,
-        "lat": 30.0444
-      },
-      "createdAt": "2025-12-01T14:00:00.000Z",
-      "updatedAt": "2025-12-01T14:00:00.000Z"
-    },
-    {
-      "_id": "507f1f77bcf86cd799439012",
-      "arabName": "مستشفى آخر",
-      "engName": "Another Hospital",
-      "location": {
-        "long": 31.2002,
-        "lat": 30.0445
-      },
-      "createdAt": "2025-12-01T13:00:00.000Z",
-      "updatedAt": "2025-12-01T13:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Response Fields:**
-- `_id` (string, required): Hospital UUID
-- `arabName` (string, required): Arabic hospital name
-- `engName` (string, required): English hospital name
-- `location` (object, optional): Hospital coordinates
-  - `long` (number, optional): Longitude (-180 to 180)
-  - `lat` (number, optional): Latitude (-90 to 90)
-- `createdAt` (string, optional): ISO 8601 timestamp
-- `updatedAt` (string, optional): ISO 8601 timestamp
-
-**Error Responses:**
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Error Response (500 Internal Server Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Error message"
-}
-```
-
----
+**Response (200 OK):** array of hospitals `{ id, engName, arabName, location?, departmentId, … }`.
 
 ### Get Hospital by ID
-
 **GET** `/hospital/:id`
 
-**Requires:** Authentication (all authenticated users)
-
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Description:**  
-Returns a specific hospital by ID. The `id` parameter must be a valid UUID format.
-
-**URL Parameters:**
-- `id` (required): Hospital UUID
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "arabName": "مستشفى جامعة القاهرة",
-    "engName": "Cairo University Hospital",
-    "location": {
-      "long": 31.2001,
-      "lat": 30.0444
-    },
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T14:00:00.000Z"
-  }
-}
-```
-
-**Error Responses:**
-
-**Error Response (400 Bad Request - Validation Errors):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "Hospital ID must be a valid UUID",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Hospital not found"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Error Response (500 Internal Server Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Error message"
-}
-```
-
----
+**Requires:** any authenticated role. **404** if not found.
 
 ### Create Hospital
-
 **POST** `/hospital/create`
 
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
+**Requires:** **Super Admin**
 
 **Request Body:**
-```json
-{
-  "arabName": "مستشفى جامعة القاهرة",
-  "engName": "Cairo University Hospital",
-  "location": {
-    "long": 31.2001,
-    "lat": 30.0444
-  }
-}
-```
+- `engName` (required, ≤100) · `arabName` (required, ≤100)
+- `departmentId` (required UUID — every hospital is scoped to one department)
+- `location.long` / `location.lat` (optional floats; validated ranges ±180/±90)
 
-**Field Requirements:**
-- `arabName` (required): Arabic hospital name, string, max 100 characters
-- `engName` (required): English hospital name, string, max 100 characters
-- `location` (optional): Object with coordinates
-  - `long` (optional): Longitude, number between -180 and 180
-  - `lat` (optional): Latitude, number between -90 and 90
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "arabName": "مستشفى جامعة القاهرة",
-    "engName": "Cairo University Hospital",
-    "location": {
-      "long": 31.2001,
-      "lat": 30.0444
-    },
-    "createdAt": "2025-12-01T14:00:00.000Z",
-    "updatedAt": "2025-12-01T14:00:00.000Z"
-  }
-}
-```
-
-**Error Responses:**
-
-**Error Response (400 Bad Request - Validation Errors):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "hospital name is required in arabic.",
-      "path": "arabName",
-      "location": "body"
-    }
-  ]
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Error Response (500 Internal Server Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Error message"
-}
-```
-
----
+**Response (201 Created):** the created hospital.
 
 ### Update Hospital
-
 **PUT** `/hospital/:id`
 
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Hospital UUID (must be valid UUID format)
-
-**Request Body (all fields optional):**
-```json
-{
-  "arabName": "مستشفى محدث",
-  "engName": "Updated Hospital Name",
-  "location": {
-    "long": 31.2001,
-    "lat": 30.0444
-  }
-}
-```
-
-**Field Requirements:**
-- `arabName` (optional): Arabic hospital name, string, max 100 characters
-- `engName` (optional): English hospital name, string, max 100 characters
-- `location` (optional): Object with `long` (-180 to 180) and/or `lat` (-90 to 90). Merged with existing location if only one coordinate is sent.
-
-**Response (200 OK):** Full hospital object (id, arabName, engName, location, createdAt, updatedAt) in standard wrapper.
-
-**Error Response (404 Not Found):** `"Hospital not found"` if no hospital with the given id exists.
-
-**Error Response (400 Bad Request):** Validation errors (e.g. invalid UUID). **401, 403, 429** as for other hospital write endpoints.
-
----
+**Requires:** **Super Admin**. Same fields as create (all optional on update). **404** if not found.
 
 ### Delete Hospital
-
 **DELETE** `/hospital/:id`
 
-**Requires:** Super Admin or Institute Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-Optionally: `X-Institution-Id` header if institution is not in JWT.
-
-**URL Parameters:**
-- `id` (required): Hospital UUID (must be valid UUID format)
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "Hospital deleted successfully"
-  }
-}
-```
-
-**Error Responses:**
-
-**Error Response (400 Bad Request - Validation Errors):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "Hospital ID must be a valid UUID",
-      "path": "id",
-      "location": "params"
-    }
-  ]
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (404 Not Found):**
-```json
-{
-  "status": "error",
-  "statusCode": 404,
-  "message": "Not Found",
-  "error": "Hospital not found"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Error Response (500 Internal Server Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Error message"
-}
-```
-
-**Notes:**
-- Only Super Admins can create and delete hospitals
-- All endpoints are protected with user-based rate limiting
-- Hospital IDs must be valid UUIDs
+**Status:** ❌ **REMOVED** — the route is not registered (404).
 
 ---
 
 ## Mailer (`/mailer`)
 
-**⚠️ Multi-Tenancy Note:** The mailer endpoint automatically routes to the institution's database based on the `institutionId` in the JWT token.
-
-### Rate Limiting
-- **POST endpoint**: 50 requests per 15 minutes per user
-
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
----
-
 ### Send Email
 **POST** `/mailer/send`
 
-**Authentication Required:** Yes (Institute Admin or Super Admin)
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-Allows Institute Admins and Super Admins to send emails through the system. The email can be sent as plain text, HTML, or both.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
-**Request Body:**
-```json
-{
-  "to": "recipient@example.com",
-  "subject": "Test Email",
-  "text": "Plain text content",
-  "html": "<p>HTML content</p>",
-  "from": "sender@example.com"
-}
-```
-
-**Request Body Fields:**
-- `to` (required): Recipient email address (must be a valid email format)
-- `subject` (required): Email subject line (must be a non-empty string)
-- `text` (optional): Plain text email content (must be a string when provided)
-- `html` (optional): HTML email content (must be a string when provided)
-- `from` (optional): Sender email address (must be a valid email format when provided). If not provided, uses the default system email address.
-
-**Validation Rules:**
-- At least one of `text` or `html` must be provided (cannot be empty strings)
-- All email addresses (`to` and optional `from`) must be valid email formats
-- Subject must be a non-empty string
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "to": "recipient@example.com"
-  }
-}
-```
-
-**Error Response (400 Bad Request - Validation Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "'to' must be a valid email address",
-      "path": "to",
-      "location": "body"
-    }
-  ]
-}
-```
-
-**Error Response (400 Bad Request - Missing Content):**
-```json
-{
-  "status": "error",
-  "statusCode": 400,
-  "message": "Bad Request",
-  "error": [
-    {
-      "type": "field",
-      "msg": "Provide at least one of 'text' or 'html' in the request body.",
-      "path": "",
-      "location": "body"
-    }
-  ]
-}
-```
-
-**Error Response (401 Unauthorized):**
-```json
-{
-  "status": "error",
-  "statusCode": 401,
-  "message": "Unauthorized",
-  "error": "Unauthorized: No token provided"
-}
-```
-
-**Error Response (403 Forbidden):**
-```json
-{
-  "status": "error",
-  "statusCode": 403,
-  "message": "Forbidden",
-  "error": "Forbidden: Insufficient permissions"
-}
-```
-
-**Error Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests from this user, please try again later."
-}
-```
-
-**Error Response (500 Internal Server Error):**
-```json
-{
-  "status": "error",
-  "statusCode": 500,
-  "message": "Internal Server Error",
-  "error": "Failed to send email"
-}
-```
-
-**Notes:**
-- Only Institute Admins and Super Admins can send emails
-- Rate limiting: 50 requests per 15 minutes per authenticated user
-- At least one of `text` or `html` must be provided (cannot both be empty)
-- If `from` is not provided, the system uses the default email address from environment variables
-- Email addresses are validated for proper format
-- Subject is required and must be a non-empty string
-- All validation errors are returned in a standardized format
+**Status:** ❌ **DISABLED — always returns `410 Gone`** (2026-07 security audit, F10: caller-controlled from/to/html was a phishing vector, and the route had zero frontend usage). Transactional email (signup OTP codes, password-reset links) is sent server-side via Mailgun and needs no API route.
 
 ---
 
 ## External Service (`/external`)
 
+### Get Sheet Data
+**GET** `/external?spreadsheetName=<name>&sheetName=<name>[&row=<n>]`
+
+**Status:** 🔐 **Migration-key-gated** (operator tooling — not for app use)
+
+Requires the `X-Migration-Key` header matching `MIGRATION_API_KEY`; **503** when the env var is unset (the production default), **401** on a wrong key. No JWT. IP rate-limited (strict).
+
+Generic Google-Sheets read proxy used by the operator migration scripts (formerly documented as "Get Arab Procedure Data").
+
 ---
 
 ## Lectures (`/lecture`)
 
-**⚠️ Multi-Tenancy Note:** All lecture endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access lectures from their own institution.
-
-The Lectures module provides access to lecture data for Institute Admins to use when creating events.
+**Read-only** mirror of the hub's per-department curriculum (`departments → lecture_topics → lectures`). All write routes (`POST`, `PATCH /:id`, `DELETE /:id`, `POST /postBulk`) are **gone (404)**.
 
 ### Rate Limiting
-- **GET endpoints**: 200 requests per 15 minutes per user
-- **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
 
-Rate limiting uses the authenticated user's ID from the JWT token. If no valid token is available, rate limiting falls back to IP address tracking.
-
-**Rate Limit Response (429 Too Many Requests):**
-```json
-{
-  "status": "error",
-  "statusCode": 429,
-  "message": "Too Many Requests",
-  "error": "Too many requests, please try again later."
-}
-```
-
----
-
-### Authentication
-
-- **Requires:** Supervisor authentication for `GET /lecture` and `GET /lecture/:id` endpoints
-- Higher roles (Institute Admin, Super Admin) are also allowed via `requireSupervisor`
-- **Note:** POST, PATCH, DELETE endpoints require Super Admin authentication
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-OR
-```
-Cookie: auth_token=<token>
-```
-
----
+- 200 requests per 15 minutes per user
 
 ### Get All Lectures
-
 **GET** `/lecture`
 
-**Requires:** Supervisor, Institute Admin, or Super Admin authentication
+**Requires:** Supervisor, Clerk, Institute Admin, or Super Admin · department-scoped (`?deptCode` → JWT claim → NS)
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Description:**  
-Returns all lectures available in the system. This endpoint is accessible to supervisors and higher roles.
-
-**Response (200 OK):**
+**Response (200 OK):** array of:
 ```json
 {
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "lectureTitle": "1.2.1: Introduction to Neurosurgery",
-      "google_uid": "lecture-001",
-      "mainTopic": "neurosurgery basics",
-      "level": "msc",
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  ]
+  "id": "uuid",
+  "lectureTitle": "Anatomy of the skull base",
+  "mainTopic": "cns tumors",
+  "level": "msc",
+  "lectureNumber": "1.3.2",
+  "arTitle": "…"
 }
 ```
-
-**Response Fields:**
-- `_id` (string, required): Lecture UUID (use `id` in responses)
-- `lectureTitle` (string, required): Title of the lecture
-- `google_uid` (string, required): Google Sheets unique identifier
-- `mainTopic` (string, required): Main topic of the lecture
-- `level` (string, required): Level of the lecture - `"msc"` or `"md"`
-- `createdAt` (string, optional): ISO 8601 timestamp
-- `updatedAt` (string, optional): ISO 8601 timestamp
-
-**Error Responses:**
-- `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `supervisor`, `instituteAdmin`, or `superAdmin` role
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
-
----
+- `lectureTitle` / `mainTopic` are legacy-shape aliases of the scaled schema's lecture `title` and parent-topic title.
+- `level` ∈ `msc | md | null`.
+- `lectureNumber` + `arTitle` are additive fields used by the bilingual lecture pickers.
 
 ### Get Lecture by ID
-
 **GET** `/lecture/:id`
 
-**Requires:** Supervisor, Institute Admin, or Super Admin authentication
+**Requires:** Supervisor, Clerk, Institute Admin, or Super Admin
 
-**Rate Limit:** 200 requests per 15 minutes per user
-
-**Description:**  
-Returns a specific lecture by ID. The `id` parameter must be a valid UUID format.
-
-**URL Parameters:**
-- `id` (required): Lecture UUID
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "lectureTitle": "1.2.1: Introduction to Neurosurgery",
-    "google_uid": "lecture-001",
-    "mainTopic": "neurosurgery basics",
-    "level": "msc",
-    "createdAt": "2024-01-01T00:00:00.000Z",
-    "updatedAt": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
-**Error Responses:**
-- `400 Bad Request`: Invalid UUID format
-- `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `supervisor`, `instituteAdmin`, or `superAdmin` role
-- `404 Not Found`: Lecture not found
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
-
----
-
-### Create Lecture
-
-**POST** `/lecture`
-
-**Requires:** Super Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Description:**  
-Creates a new lecture in the system.
-
-**Request Body:**
-```json
-{
-  "lectureTitle": "1.2.1: Introduction to Neurosurgery",
-  "google_uid": "lecture-001",
-  "mainTopic": "neurosurgery basics",
-  "level": "msc"
-}
-```
-
-**Field Requirements:**
-- `lectureTitle` (required): Title of the lecture
-- `google_uid` (required): Google Sheets unique identifier
-- `mainTopic` (required): Main topic of the lecture
-- `level` (required): Level of the lecture - must be `"msc"` or `"md"`
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "lectureTitle": "1.2.1: Introduction to Neurosurgery",
-    "google_uid": "lecture-001",
-    "mainTopic": "neurosurgery basics",
-    "level": "msc",
-    "createdAt": "2024-01-01T00:00:00.000Z",
-    "updatedAt": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
-**Error Responses:**
-- `400 Bad Request`: Validation errors (missing required fields, invalid level value)
-- `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `superAdmin` role
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
-
----
-
-### Update Lecture
-
-**PATCH** `/lecture/:id`
-
-**Requires:** Super Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Description:**  
-Updates an existing lecture. The `id` parameter must be a valid UUID format. All fields in the request body are optional.
-
-**URL Parameters:**
-- `id` (required): Lecture UUID
-
-**Request Body:**
-```json
-{
-  "lectureTitle": "1.2.1: Introduction to Neurosurgery (Updated)",
-  "google_uid": "lecture-001-updated",
-  "mainTopic": "neurosurgery basics updated",
-  "level": "md"
-}
-```
-
-**Field Requirements:**
-- `lectureTitle` (optional): Title of the lecture
-- `google_uid` (optional): Google Sheets unique identifier
-- `mainTopic` (optional): Main topic of the lecture
-- `level` (optional): Level of the lecture - must be `"msc"` or `"md"` if provided
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "_id": "507f1f77bcf86cd799439011",
-    "lectureTitle": "1.2.1: Introduction to Neurosurgery (Updated)",
-    "google_uid": "lecture-001-updated",
-    "mainTopic": "neurosurgery basics updated",
-    "level": "md",
-    "createdAt": "2024-01-01T00:00:00.000Z",
-    "updatedAt": "2024-01-15T00:00:00.000Z"
-  }
-}
-```
-
-**Error Responses:**
-- `400 Bad Request`: Invalid UUID format or invalid level value
-- `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `superAdmin` role
-- `404 Not Found`: Lecture not found
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
-
----
-
-### Delete Lecture
-
-**DELETE** `/lecture/:id`
-
-**Requires:** Super Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Description:**  
-Deletes a lecture from the system. The `id` parameter must be a valid UUID format.
-
-**URL Parameters:**
-- `id` (required): Lecture UUID
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "message": "Lecture deleted successfully"
-  }
-}
-```
-
-**Error Responses:**
-- `400 Bad Request`: Invalid UUID format
-- `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `superAdmin` role
-- `404 Not Found`: Lecture not found
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
-
----
-
-### Bulk Create Lectures from External
-
-**POST** `/lecture/postBulk`
-
-**Requires:** Super Admin authentication
-
-**Rate Limit:** 50 requests per 15 minutes per user
-
-**Description:**  
-Bulk creates lectures from external data source (Google Sheets). The level (msc/md) is automatically detected from the data.
-
-**Request Body:**
-```json
-{
-  "spreadsheetName": "Lectures Spreadsheet",
-  "sheetName": "Sheet1",
-  "row": 1,
-  "mainTopic": "neurosurgery basics"
-}
-```
-
-**Field Requirements:**
-- `spreadsheetName` (optional): Name of the Google Spreadsheet
-- `sheetName` (optional): Name of the sheet within the spreadsheet
-- `row` (optional): Row number to start from (must be a positive integer, minimum 1)
-- `mainTopic` (required): Main topic for the lectures
-
-**Response (201 Created):**
-```json
-{
-  "status": "success",
-  "statusCode": 201,
-  "message": "Created",
-  "data": [
-    {
-      "_id": "507f1f77bcf86cd799439011",
-      "lectureTitle": "1.2.1: Introduction to Neurosurgery",
-      "google_uid": "lecture-001",
-      "mainTopic": "neurosurgery basics",
-      "level": "msc",
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-**Error Responses:**
-- `400 Bad Request`: Validation errors (missing mainTopic, invalid row number)
-- `401 Unauthorized`: Missing or invalid JWT token
-- `403 Forbidden`: User does not have `superAdmin` role
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error or external data source error
+**Response (200 OK):** `{ id, lectureTitle, mainTopic, arTitle, lectureNumber, sortOrder, level, topicId, google_uid: null, createdAt, updatedAt }`. **404** if not found.
 
 ---
 
 ## Journals (`/journal`)
 
-**⚠️ Multi-Tenancy Note:** All journal endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access journals from their own institution.
+**Note:** Single-institution server — all data belongs to the one KA institution (no institution routing). Department-scoped behavior, where present, is described per endpoint; see [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping).
 
 The Journals module provides access to journal data for candidates and higher roles to use when creating events.
 
@@ -12915,7 +7478,7 @@ Bulk creates journals from external data source (Google Sheets).
 
 ## Conferences (`/conf`)
 
-**⚠️ Multi-Tenancy Note:** All conference endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access conferences from their own institution.
+**Note:** Single-institution server — all data belongs to the one KA institution (no institution routing). Department-scoped behavior, where present, is described per endpoint; see [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping).
 
 The Conferences module provides access to conference data for candidates and higher roles to use when creating events.
 
@@ -13199,11 +7762,12 @@ Deletes a conference from the system. The `id` parameter must be a valid UUID fo
 
 ## Events (`/event`)
 
-**⚠️ Multi-Tenancy Note:** All event endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access events from their own institution.
+**Note:** Single-institution server — all data belongs to the one KA institution (no institution routing). Department-scoped behavior, where present, is described per endpoint; see [Single-Institution Architecture & Department Scoping](#single-institution-architecture--department-scoping).
 
-The Events module allows **Institute Admins** to schedule lectures, journals, and conferences on a shared calendar, with associated presenters and candidate attendance.
+The Events module lets clerks and admins schedule lectures, journals, and conferences on a shared calendar, with associated presenters and candidate attendance.
 
-**📋 Frontend Implementation Guide:** For comprehensive frontend requirements and implementation details, see `FRONTEND_EVENTS_CALENDAR_REQUIREMENTS.md`.
+**Department scoping:** `GET /event` and `GET /event/dashboard` return only the resolved department's events (JWT claim → `?deptCode` → NS default) and `POST /event` stamps the creator's department; by-presenter and by-id reads are unscoped. Event responses embed the lecture in legacy shape (`lecture.lectureTitle`, `lecture._id`) plus additive `arTitle` and `lectureNumber`.
+
 
 ### Rate Limiting
 - **GET endpoints**: 200 requests per 15 minutes per user
@@ -13605,7 +8169,6 @@ OR
 Cookie: auth_token=<token>
 ```
 
-**Institution context (required):** Include `X-Institution-Id` header so the backend resolves the correct institution database. Alternatively, institution is resolved from JWT if the user is logged in.
 
 **URL Parameters:**
 - `supervisorId` (required): Supervisor UUID. Must be a valid UUID format.
@@ -13998,11 +8561,13 @@ Same as **Get My Academic Points**, but for a specific candidate via `candidateI
 
 **GET** `/event/academicRanking`
 
+**Department-scoped:** ranks only candidates of the caller's department (JWT `departmentId` claim; NS default).
+
 **Authentication Required:** Yes (Candidate, Supervisor, Institute Admin, or Super Admin)
 
 **Rate Limit:** 200 requests per 15 minutes per user
 
-**Multi-Tenancy:** Institution is resolved from the JWT token or `X-Institution-Id` header (same as all authenticated endpoints). Ranking is scoped to the institution’s candidates and attendance.
+**Scope:** department-scoped — only candidates of the caller's department are ranked (JWT `departmentId` claim; NS default).
 
 Returns a **ranking** of academic (attendance) points. The endpoint returns **only**:
 - The **top 10** ranked candidates (by total points, descending), and  
@@ -14317,31 +8882,6 @@ Backend re-validates:
 ```
 
 
-### Get Arab Procedure Data
-**GET** `/external`
-
-Retrieves Arabic procedure data from external source.
-
-**Query Parameters:**
-- Various parameters (see validator)
-
-**Response (200 OK):**
-```json
-{
-  "status": "success",
-  "statusCode": 200,
-  "message": "OK",
-  "data": {
-    "success": true,
-    "data": {
-      "data": [...]
-    }
-  }
-}
-```
-
----
-
 ## WhatsApp Bot (`/waBot`)
 
 The `waBot` module exposes the Meta WhatsApp Cloud API webhook endpoints used as the **Callback URL** in the Meta App dashboard (`Customize use case > Configuration > Webhook`). Both endpoints are public (no JWT) because they are called server-to-server by Meta, but they are protected by request validation, IP rate limiting, and provider signature verification.
@@ -14474,6 +9014,22 @@ Meta delivers inbound message and message-status events here. The server:
 
 ---
 
+## Admin / Hub Webhook (`/admin/ref-resync`)
+
+### Trigger Reference Re-mirror
+**POST** `/admin/ref-resync`
+
+**Auth:** HMAC — header **`X-Hub-Signature`** = `sha256=<HMAC-SHA256(rawBody, HUB_WEBHOOK_SECRET)>` (constant-time compare). Not JWT — this is called by the central reference hub when reference data changes; it is not for frontend use.
+
+**Payload:** `{ "dataVersion": "…", "triggeredAt": "…" }`
+
+**Responses:**
+- **200** `{ "synced": true, …sync report }` — mirror re-sync ran
+- **401** invalid signature · **400** missing raw body
+- **503** `HUB_WEBHOOK_SECRET` not configured · **500** sync failure
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -14546,7 +9102,7 @@ Validation errors:
 
 ## PDF Report Generation Endpoints
 
-All PDF report endpoints require **Institute Admin authentication** via JWT token in Authorization header or httpOnly cookie.
+All PDF report endpoints require **Institute Admin** (or Super Admin) authentication via JWT token in Authorization header or httpOnly cookie; the main-diagnosis-links-map report requires **Super Admin**.
 
 ### Rate Limiting
 - **All endpoints**: 50 requests per 15 minutes per user
@@ -14803,7 +9359,7 @@ All PDF reports include MedScribe branding in the header:
 #### Main Diagnosis Links Map Report
 **GET** `/instituteAdmin/reports/main-diagnosis-links-map`
 
-**Requires:** Institute Admin authentication
+**Requires:** **Super Admin** authentication (the only report restricted above Institute Admin)
 
 **Rate Limit:** 50 requests per 15 minutes per user
 
@@ -14811,7 +9367,7 @@ All PDF reports include MedScribe branding in the header:
 
 **Request Parameters:** None.
 
-The institution is resolved from the authenticated Institute Admin's JWT (or `X-Institution-Id` header where applicable) using the standard institution routing, identical to the `/mainDiag` endpoints.
+Operates on the single KA institution's mirrored reference data.
 
 **PDF Content:**
 1. **Report Header** with MedScribe branding (logo, "MedScribe" text, report title, generated date/time)
@@ -15147,142 +9703,97 @@ The institution is resolved from the authenticated Institute Admin's JWT (or `X-
 
 ## Authentication Requirements Summary
 
-**⚠️ Multi-Tenancy Note:** All authenticated endpoints automatically route to the institution's database based on the `institutionId` in the JWT token. Users can only access data from their own institution. The `institutionId` is included in the JWT token after login/registration.
+All authenticated endpoints operate on the single KA institution. "Dept-scoped" = the effective department is resolved from the JWT `departmentId` claim / `?deptCode` override, defaulting to NS.
 
-| Endpoint Category | Authentication Required | Role Required |
-|-----------------|------------------------|---------------|
-| `/institutions` | No | - (Public endpoint) |
-| `/auth/login` | No | - (Shared login for Candidate and Supervisor, requires `institutionId` in request body) |
-| `/auth/superAdmin/login` | No | - (Super Admin login, requires `institutionId` in request body) |
-| `/auth/instituteAdmin/login` | No | - (Institute Admin login, requires `institutionId` in request body) |
-| `/auth/clerk/login` | No | - (Clerk login, requires `institutionId` in request body) |
-| `/auth/registerCand` | No | - (Requires `institutionId` in request body) |
-| `/auth/registerSupervisor` | No | - (Requires `institutionId`; IP rate limited) |
-| `/auth/get/all` | **DISABLED** | Returns 410 Gone. See [Disabled Routes](#disabled-routes). |
-| `/auth/resetCandPass` | **DISABLED** | Returns 410 Gone. See [Disabled Routes](#disabled-routes). |
-| `/auth/requestPasswordChangeEmail` | Yes | All user types (candidate, supervisor, superAdmin, instituteAdmin) |
-| `/auth/changePassword` | Yes | All user types (candidate, supervisor, superAdmin, instituteAdmin) |
-| `/auth/forgotPassword` | No | Unauthenticated; requires `institutionId` or `X-Institution-Id`. Available for candidate, supervisor, instituteAdmin, clerk; **not** for superAdmin. |
-| `/auth/resetPassword` | No | Unauthenticated; requires `institutionId` or `X-Institution-Id`; uses token from email. Same roles as forgot password (no superAdmin). |
-| `/superAdmin/*` | Yes | Super Admin |
-| `/instituteAdmin/*` | Yes | Super Admin (POST /, DELETE /:id) / Institute Admin or Super Admin (GET /, GET /:id, PUT /:id, dashboard endpoints) |
-| `/clerk/*` | Yes | Super Admin or Institute Admin (all endpoints) |
-| `/instituteAdmin/supervisors` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/supervisors/report` | Yes | Institute Admin or Super Admin (PDF download of all supervisors) |
-| `/instituteAdmin/supervisors/:supervisorId/report` | Yes | Institute Admin or Super Admin (PDF download of specific supervisor) |
-| `/instituteAdmin/supervisors/:supervisorId/submissions` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/candidates` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/candidates/:candidateId/submissions` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/calendarProcedures` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/hospitals` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/arabicProcedures` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/calendarProcedures/analysis/hospital` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/reports/*` | Yes | Institute Admin |
-| `/instituteAdmin/reports/supervisors/submission-count` | Yes | Institute Admin |
-| `/instituteAdmin/reports/candidates/submission-count` | Yes | Institute Admin |
-| `/instituteAdmin/reports/calendar-procedures/hospital-analysis` | Yes | Institute Admin |
-| `/instituteAdmin/reports/events/canceled/pdf` | Yes | Institute Admin |
-| `/instituteAdmin/candidates/:candidateId/submissions` | Yes | Institute Admin |
-| `/instituteAdmin/candidates/:candidateId/submissions/:submissionId` | Yes | Institute Admin |
-| `/instituteAdmin/submissions/:submissionId/report` | Yes | Institute Admin or Super Admin |
-| `/instituteAdmin/candidates/dashboard` | Yes | Institute Admin |
-| `/instituteAdmin/candidates/summary` | Yes | Institute Admin |
-| `/instituteAdmin/candidates/:candidateId/dashboard` | Yes | Institute Admin |
-| `/instituteAdmin/candidates/:candidateId/report` | Yes | Institute Admin |
-| `/event` (GET) | Yes | Candidate, Supervisor, Clerk, Institute Admin, or Super Admin |
-| `/event/dashboard` (GET) | Yes | Candidate, Supervisor, Clerk, Institute Admin, or Super Admin |
-| `/event/by-presenter/:supervisorId` (GET) | Yes | Supervisor (own ID only), Institute Admin, Super Admin (any supervisor ID) |
-| `/event/:id` (GET) | Yes | Candidate, Supervisor, Clerk, Institute Admin, or Super Admin |
-| `/event` (POST) | Yes | Clerk, Institute Admin, or Super Admin |
-| `/event/:id` (PATCH) | Yes | Clerk, Institute Admin, or Super Admin |
-| `/event/:id` (DELETE) | Yes | Clerk, Institute Admin, or Super Admin |
-| `/event/bulk-import-attendance` (POST) | Yes | Institute Admin or Super Admin |
-| `/event/candidate/points` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/event/candidate/:candidateId/points` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/event/academicRanking` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/event/:eventId/attendance/:candidateId` (POST) | Yes | Conditional (Candidate self, Institute Admin, Super Admin, Supervisor if presenter) |
-| `/event/:eventId/attendance/:candidateId` (DELETE) | Yes | Conditional (Institute Admin, Super Admin, Supervisor if presenter) |
-| `/event/:eventId/attendance/:candidateId/flag` (PATCH) | Yes | Conditional (Institute Admin, Super Admin, Supervisor if presenter) |
-| `/event/:eventId/attendance/:candidateId/unflag` (PATCH) | Yes | Conditional (Institute Admin, Super Admin, Supervisor if presenter) |
-| `/lecture` (GET) | Yes | Supervisor, Institute Admin, or Super Admin (via `requireSupervisor`) |
-| `/lecture/:id` (GET) | Yes | Supervisor, Institute Admin, or Super Admin (via `requireSupervisor`) |
-| `/lecture` (POST) | Yes | Super Admin only |
-| `/lecture/:id` (PATCH) | Yes | Super Admin only |
-| `/lecture/:id` (DELETE) | Yes | Super Admin only |
-| `/lecture/postBulk` (POST) | Yes | Super Admin only |
-| `/journal` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
-| `/journal/:id` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
-| `/journal` (POST) | Yes | Super Admin only |
-| `/journal/:id` (PATCH) | Yes | Super Admin only |
-| `/journal/:id` (DELETE) | Yes | Super Admin only |
-| `/journal/postBulk` (POST) | Yes | Super Admin only |
-| `/conf` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
-| `/conf/:id` (GET) | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (via `requireCandidate`) |
-| `/conf` (POST) | Yes | Institute Admin, Supervisor, Clerk, or Super Admin |
-| `/conf/:id` (PATCH) | Yes | Super Admin only |
-| `/conf/:id` (DELETE) | Yes | Super Admin only |
-| `/supervisor/*` | Yes | Super Admin (POST /, POST /resetPasswords, DELETE /:id) / Super Admin, Institute Admin, Supervisor, Candidate (GET /, GET /:id) / **Super Admin, Institute Admin only** (PUT /:id/approved – update supervisor approved status; institution-scoped) / Super Admin, Institute Admin, Supervisor (PUT /:id – Supervisor own profile only: phoneNum, position; admins full control) / Supervisor (GET /candidates) |
-| `/sub/*` | Yes / DISABLED | **DISABLED:** POST /postAllFromExternal, PATCH /updateStatusFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other routes: Super Admin (DELETE /:id) / Candidate, Supervisor, Institute Admin, Super Admin (GET /candidate/stats, GET /candidate/submissions, GET /candidate/submissions/:id, GET /cptAnalytics, GET /icdAnalytics, GET /supervisorAnalytics, GET /submissionRanking) / Supervisor (POST /supervisor/submissions, GET /supervisor/submissions, GET /supervisor/submissions/:id, GET /supervisor/own/submissions, GET /supervisor/candidates/:candidateId/submissions, PATCH /supervisor/submissions/:id/review) / Institute Admin, Super Admin (GET /supervisor/own/submissions) |
-| `/sub/candidate/stats` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/sub/candidate/submissions` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/sub/candidate/submissions/:id` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/sub/cptAnalytics` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/sub/icdAnalytics` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/sub/supervisorAnalytics` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `/sub/submissionRanking` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin |
-| `POST /sub/supervisor/submissions` | Yes | Supervisor (create supervisor's own surgical experience) |
-| `GET /sub/supervisor/submissions` | Yes | Supervisor (candidate submissions to review) |
-| `GET /sub/supervisor/own/submissions` | Yes | Supervisor, Institute Admin, or Super Admin (supervisor's own submissions) |
-| `/activityTimeline` | Yes | Candidate, Supervisor, Institute Admin, or Super Admin (data only for candidates) |
-| `/sub/supervisor/submissions/:id` | Yes | Supervisor |
-| `/sub/supervisor/submissions/:id/review` | Yes | Validator Supervisor only (canValidate: true) |
-| `/sub/supervisor/candidates/:candidateId/submissions` | Yes | Supervisor |
-| `/sub/submissions/:id/generateSurgicalNotes` | ⚠️ DISABLED | ~~Institute Admin or Super Admin~~ (Endpoint disabled) |
-| `/sub/:id` (DELETE) | Yes | Super Admin |
-| `/supervisor/candidates` | Yes | Supervisor |
-| `/cand/*` | Partial / DISABLED | **DISABLED:** POST /createCandsFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin or Institute Admin (GET /, GET /:id) / **Super Admin, Institute Admin only** (PUT /:id/approved – update candidate approved status; institution-scoped) / Super Admin, Institute Admin, Candidate (PUT /:id – Candidate own profile only: regDeg, regNum, phoneNum; admins full control) / Super Admin (PATCH /:id/resetPassword, DELETE /:id) |
-| `/calSurg/*` | Partial / DISABLED | **DISABLED:** POST /postAllFromExternal (410 Gone). See [Disabled Routes](#disabled-routes). Other: Super Admin, Institute Admin, Clerk, Supervisor, or Candidate (GET /dashboard, GET /getById, GET /getAll) / Super Admin, Institute Admin, or Clerk (POST /, PATCH /:id, DELETE /:id) |
-| `/diagnosis/*` | Partial | Super Admin or Institute Admin (GET /, POST /post, PATCH /:id, DELETE /:id) / Super Admin (POST /postBulk) |
-| `/procCpt/*` | Partial | Super Admin or Institute Admin (GET /, POST /upsert, DELETE /:id) / Super Admin (POST /postAllFromExternal) |
-| `/mainDiag/*` | Partial | Super Admin, Institute Admin, Supervisor, or Candidate (GET /, GET /:id) / Super Admin or Institute Admin (POST /, PUT /:id, POST /:id/procs/remove, POST /:id/diagnosis/remove, DELETE /:id) |
-| `/arabProc/*` | Partial | Super Admin, Institute Admin, or Clerk (GET /getAllArabProcs, GET /:id, POST /createArabProc, POST /createArabProcFromExternal, PUT /:id, DELETE /:id) |
-| `/hospital/*` | Partial | Super Admin (POST /create) / No (GET, PUT, DELETE) |
-| `/mailer/*` | Yes | Institute Admin or Super Admin |
-| `/mailer/send` | Yes | Institute Admin or Super Admin |
-| `/external/*` | No | - |
-| `/waBot/webhook` (GET) | No | - (Public, called by Meta. Verified via `WA_VERIFY_TOKEN`.) |
-| `/waBot/webhook` (POST) | No | - (Public, called by Meta. Verified via HMAC `X-Hub-Signature-256` against `WA_APP_SECRET`.) |
+| Endpoint | Auth | Roles / Notes |
+|---|---|---|
+| `GET /health`, `GET /institution`, `GET /departments` | No | Public, IP rate-limited |
+| `POST /auth/login`, `/auth/instituteAdmin/login`, `/auth/clerk/login` | No | Body `{email, password}`; strict IP rate limit |
+| `POST /auth/superAdmin/login` | No | **dev/staging only** (403 elsewhere) |
+| `POST /auth/registerCand`, `/auth/registerSupervisor` | No | OTP-staged; `departmentId` **required** |
+| `POST /auth/verifySignupOtp`, `/auth/resendSignupOtp` | No | `signupId` from the register response |
+| `GET /auth/validate` | JWT | Any role |
+| `POST /auth/refresh` / `POST /auth/logout` | Cookie / No | `refresh_token` cookie / clears cookies |
+| `POST /auth/requestPasswordChangeEmail`, `PATCH /auth/changePassword` | Yes | All roles |
+| `POST /auth/forgotPassword`, `/auth/resetPassword` | No | candidate, supervisor, instituteAdmin, clerk (**not** superAdmin) |
+| `GET /auth/get/all`, `POST /auth/resetCandPass` | — | **DISABLED (410)** |
+| `GET /superAdmin`, `GET /superAdmin/:id` | Yes | Super Admin (POST/PUT/DELETE **removed**) |
+| `POST /instituteAdmin` | Yes | Super Admin (`departmentId` optional; omitted = institution-wide admin) |
+| `GET /instituteAdmin`, `GET /instituteAdmin/:id` | Yes | Institute Admin or Super Admin |
+| `PUT /instituteAdmin/:id` | Yes | Super Admin, or Institute Admin (**own record only**); self dept-switch re-issues tokens |
+| `DELETE /instituteAdmin/:id` | Yes | **Super Admin only** |
+| `/instituteAdmin` dashboard reads (supervisors, candidates, summary, dashboards, calendarProcedures, hospitals, submission reports) | Yes | Institute Admin or Super Admin; **dept-scoped by the admin's DB-row department** (NULL = institution-wide); cross-dept by-id reads → 404 |
+| `GET /instituteAdmin/reports/*` (PDF) | Yes | Institute Admin or Super Admin; `main-diagnosis-links-map` **Super Admin only** |
+| `/clerk` (POST /, GET /, GET /:id, PUT /:id, DELETE /:id) | Yes | Super Admin or Institute Admin; responses password-stripped; create takes optional `departmentId` |
+| `POST /sub/postAllFromExternal`, `PATCH /sub/updateStatusFromExternal`, `POST /calSurg/postAllFromExternal`, `GET /external` | `X-Migration-Key` | 503 when `MIGRATION_API_KEY` unset; 401 on wrong key |
+| `POST /sub/candidate/submissions` | Yes | Candidate (candidate id forced from JWT) |
+| `POST /sub/supervisor/submissions` | Yes | Supervisor (own surgical experience; auto-approved) |
+| `GET /sub/candidate/stats`, `/sub/candidate/submissions`, `/sub/candidate/submissions/:id` | Yes | Candidate+ (own data; ownership-checked) |
+| `GET /sub/cptAnalytics`, `/sub/icdAnalytics`, `/sub/supervisorAnalytics` | Yes | Candidate, Supervisor, Institute Admin, Super Admin (scoped by caller role) |
+| `GET /sub/submissionRanking` | Yes | Candidate+; **dept-scoped** |
+| `GET /sub/supervisor/submissions[/:id]`, `/sub/supervisor/candidates/:candidateId/submissions` | Yes | Supervisor (own) |
+| `GET /sub/supervisor/own/submissions` | Yes | Supervisor, Institute Admin, Super Admin |
+| `PATCH /sub/supervisor/submissions/:id/review` | Yes | Validator supervisor only (`canValidate: true`) |
+| `POST /sub/calSurg/:calSurgId/generateSurgicalNotesFromVoice` | Yes | Candidate+; multipart `audio` ≤20 MB |
+| `DELETE /sub/:id` | Yes | Super Admin |
+| `/clinicalSub/*` | Yes | Role-scoped lists; by-id restricted to admin/owner/assigned; review (PUT) only by **assigned supervisor** or admin |
+| `GET /activityTimeline` | Yes | Candidate+ (data only for candidates) |
+| `GET /cand`, `GET /cand/:id` | Yes | All roles (censored for clerk/supervisor/candidate viewers) |
+| `PUT /cand/:id/approved` | Yes | Super Admin or Institute Admin |
+| `PUT /cand/:id` | Yes | Admins full control; candidate self-restricted (regDeg/regNum/phoneNum + dept switch); clerks/supervisors rejected |
+| `PATCH /cand/:id/resetPassword`, `DELETE /cand/:id` | Yes | Super Admin |
+| `POST /cand/createCandsFromExternal` | — | **DISABLED (410)** |
+| `GET /supervisor` | Yes | All roles; **dept-scoped**; censored for non-admins |
+| `GET /supervisor/:id` / `GET /supervisor/candidates` | Yes | All roles (censored) / Supervisor |
+| `PUT /supervisor/:id/approved` | Yes | Super Admin or Institute Admin |
+| `PUT /supervisor/:id` | Yes | Admins full control; supervisor self-restricted (phoneNum/position + dept switch) |
+| `POST /supervisor`, `POST /supervisor/resetPasswords`, `DELETE /supervisor/:id` | Yes | Super Admin |
+| `POST /calSurg` | Yes | Clerk, Institute Admin, Super Admin (`procedureText` learning pipeline) |
+| `GET /calSurg/getAll`, `GET /calSurg/dashboard` | Yes | All roles; **dept-scoped** |
+| `GET /calSurg/getById` | Yes | All roles (unscoped by-id) |
+| `GET /calSurg/clerkProcs` | Yes | Clerk, Institute Admin, Super Admin; **dept-scoped** typeahead |
+| `PATCH /calSurg/:id`, `DELETE /calSurg/:id` | Yes | Clerk (**own department only**), Institute Admin, Super Admin |
+| `GET /diagnosis` | Yes | Super Admin; **dept-scoped**; read-only |
+| `GET /procCpt` | Yes | Super Admin, Institute Admin, Clerk; **dept-scoped**; read-only |
+| `GET /mainDiag`, `GET /mainDiag/:id`, `GET /mainDiag/:mainDiagId/questions` | Yes | All roles; list dept-scoped; read-only |
+| `GET /consumables[/:id]`, `GET /equipment[/:id]` | Yes | All roles; **dept-scoped**; read-only (include `arName`) |
+| `GET /references` | Yes | All roles; `Cache-Control: private, no-cache` |
+| `GET /candidate/dashboard` | Yes | Candidate only; institution must have `isPractical` |
+| `GET /hospital`, `GET /hospital/:id` | Yes | All roles |
+| `POST /hospital/create`, `PUT /hospital/:id` | Yes | Super Admin (DELETE **removed**) |
+| `POST /mailer/send` | — | **DISABLED (410)** |
+| `GET /lecture`, `GET /lecture/:id` | Yes | Supervisor, Clerk, Institute Admin, Super Admin; **dept-scoped**; read-only |
+| `/journal` | Yes | Reads: Candidate+; writes (POST, PATCH, DELETE, postBulk): Super Admin |
+| `/conf` | Yes | Reads: Candidate+; create: Supervisor/Clerk/Institute Admin/Super Admin; update/delete: Super Admin |
+| `GET /event`, `GET /event/dashboard` | Yes | All roles; **dept-scoped** |
+| `GET /event/by-presenter/:supervisorId`, `GET /event/:id` | Yes | Supervisor (own id) / admins; all roles (unscoped) |
+| `POST /event`, `PATCH /event/:id`, `DELETE /event/:id` | Yes | Clerk, Institute Admin, Super Admin (create stamps the department) |
+| `POST /event/bulk-import-attendance` | Yes | Institute Admin or Super Admin |
+| `GET /event/candidate/points`, `GET /event/candidate/:candidateId/points` | Yes | Candidate+ |
+| `GET /event/academicRanking` | Yes | Candidate+; **dept-scoped** |
+| `/event/:eventId/attendance/:candidateId` (+ `/flag`, `/unflag`) | Yes | Conditional: candidate self (add only), admins, presenter supervisor |
+| `/waBot/webhook` (GET, POST) | No | Meta webhook (verify token / HMAC `X-Hub-Signature-256`) |
+| `POST /admin/ref-resync` | HMAC | `X-Hub-Signature` (reference-hub webhook) |
 
 ---
 
 ## Important Notes
 
-1. **JWT Token Structure**: All JWT tokens now include `_id` field. Use `res.locals.jwt._id` directly in your frontend after decoding the token.
+1. **JWT Token Structure**: tokens carry `id`/`_id` (the same UUID) and `departmentId` when the user has one; there is **no** `institutionId`. Tokens are delivered as httpOnly cookies, and the `auth_token` cookie wins over the `Authorization` header when both are present.
 
-2. **Token Usage**: Include the JWT token in the Authorization header for protected endpoints:
-   ```
-   Authorization: Bearer <token>
-   ```
+2. **Token Usage**: `Authorization: Bearer <token>` also works for API clients and testing.
 
-3. **User Roles**: The system supports four user roles:
-   - `candidate`: Medical candidates
-   - `supervisor`: Supervisors
-   - `superAdmin`: Super administrators (highest level)
-   - `instituteAdmin`: Institute administrators
+3. **User Roles** (five): `candidate`, `supervisor`, `clerk`, `instituteAdmin`, `superAdmin`. Most reads use hierarchical role checks ("this role or higher"); sensitive writes use explicit allowlists with ownership checks.
 
-4. **Admin Creation**: 
-   - Super Admins can only be created by existing Super Admins
-   - Institute Admins can only be created by Super Admins
-   - There is no public registration endpoint for admins
+4. **Admin Creation**: institute admins are created by super admins (`POST /instituteAdmin`, optional `departmentId`); clerks by super/institute admins (`POST /clerk`). Super admins have **no** API creation path (provisioned DB-side), and their login is environment-gated.
 
-5. **Data Formats**:
-   - All timestamps are in ISO 8601 format
-   - All IDs (UUIDs) are returned as strings
-   - Password fields are never returned in responses
+5. **Data Formats**: ISO 8601 timestamps; UUID ids as strings; password hashes are never returned in responses.
 
-6. **External Data Endpoints**: Endpoints with "FromExternal" pull data from configured Google Sheets. The `row` parameter is optional; if omitted, all rows are processed.
+6. **External/import endpoints** (`*FromExternal`, `GET /external`): operator migration tooling gated by the `X-Migration-Key` header; they fail closed (503) when `MIGRATION_API_KEY` is unset — which is the deliberate production state.
 
-7. **Response Format**: **ALL endpoints automatically wrap responses** in the standardized format with `status`, `statusCode`, `message`, and either `data` (success) or `error` (error) fields. See the [Response Format](#response-format) section for details.
+7. **Response Format**: all endpoints wrap responses in `{status, statusCode, message, data|error}` except the documented special cases (`/auth/validate`, refresh/logout, `GET /institution`, the candidate dashboard bundle, PDF endpoints, and the Meta/hub webhooks).
+
+8. **Reference data is a read-only mirror** synced from the central reference hub; all reference write routes were removed. Content updates arrive via the hub broadcast (`POST /admin/ref-resync`) and a periodic poll.
 
 ---
 
@@ -15404,6 +9915,7 @@ Use the `role` field from the decoded JWT token to conditionally render UI eleme
 - `supervisor`: Supervisors  
 - `superAdmin`: Super administrators (highest level)
 - `instituteAdmin`: Institute administrators
+- `clerk`: Calendar/data clerks
 
 ### Example: Complete API Call
 
