@@ -36,6 +36,14 @@ export class LoginEventEntity {
   @Column({ type: "uuid", nullable: true })
   departmentId!: string | null;
 
+  /** Client IP at login (trust proxy 1 → real client). For tracing suspicious logins. */
+  @Column({ type: "varchar", length: 64, nullable: true })
+  ip!: string | null;
+
+  /** Client user-agent at login (device/browser fingerprint). */
+  @Column({ type: "varchar", length: 512, nullable: true })
+  userAgent!: string | null;
+
   @Column({ type: "timestamp", default: () => "now()" })
   loggedInAt!: Date;
 

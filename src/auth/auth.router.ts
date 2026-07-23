@@ -285,7 +285,7 @@ export class AuthRouter {
             // Log login attempt
             console.log(`[AuthRouter] 🔐 LOGIN ATTEMPT - Email: ${payload.email}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
-            const resp = await (this.authController as any).candidateSupervisorLogin(payload, dataSource);
+            const resp = await (this.authController as any).candidateSupervisorLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
             console.log(`[AuthRouter] ✅ LOGIN SUCCESS - User: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
@@ -355,7 +355,7 @@ export class AuthRouter {
               });
             }
 
-            const resp = await (this.authController as any).superAdminLogin(payload, dataSource);
+            const resp = await (this.authController as any).superAdminLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
             console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Super Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
@@ -403,7 +403,7 @@ export class AuthRouter {
               });
             }
 
-            const resp = await (this.authController as any).instituteAdminLogin(payload, dataSource);
+            const resp = await (this.authController as any).instituteAdminLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
             console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Institute Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
@@ -451,7 +451,7 @@ export class AuthRouter {
               });
             }
 
-            const resp = await (this.authController as any).clerkLogin(payload, dataSource);
+            const resp = await (this.authController as any).clerkLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
             console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Clerk: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);

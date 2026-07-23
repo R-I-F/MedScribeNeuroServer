@@ -159,7 +159,7 @@ export class ActiveUsersProvider {
     const w: ActiveWindow = WINDOW_INTERVAL[q.window] ? q.window : "quarter";
     const interval = WINDOW_INTERVAL[w];
     const rows = (await dataSource.query(
-      `SELECT "activityType" AS activity_type, "occurredAt" AS occurred_at
+      `SELECT "activityType" AS activity_type, "occurredAt" AS occurred_at, "ip", "userAgent" AS user_agent
          FROM "activity_read_model"
         WHERE "actorId" = $1
           AND ($2::text IS NULL OR "actorRole" = $2)
@@ -167,7 +167,7 @@ export class ActiveUsersProvider {
           AND "occurredAt" >= now() - ($4)::interval
         ORDER BY "occurredAt" DESC`,
       [q.actorId, q.role ?? null, EXCLUDE_ROLE, interval]
-    )) as Array<{ activity_type: string; occurred_at: string }>;
+    )) as Array<{ activity_type: string; occurred_at: string; ip: string | null; user_agent: string | null }>;
 
     const byType: Record<string, number> = {};
     for (const r of rows) byType[r.activity_type] = (byType[r.activity_type] ?? 0) + 1;
@@ -181,6 +181,8 @@ export class ActiveUsersProvider {
       recent: rows.slice(0, 50).map((r) => ({
         activityType: r.activity_type,
         occurredAt: r.occurred_at,
+        ip: r.ip ?? null,
+        userAgent: r.user_agent ?? null,
       })),
     };
   }

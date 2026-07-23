@@ -382,6 +382,17 @@ Note: the deprecated + unrouted `adminLogin` was deliberately NOT instrumented (
 | H7 | backend `GET /activeUsers/user?actorId=&role=&window=` (per-user drill-down) | VERIFIED | getUserActivity: that user's byType breakdown + total + capped recent timeline in the window. E2E on prod: candidate 42a7c7fe -> {submission:23, event_attendance:7, clinical_submission:1}, total 31 (matches list activityCount). |
 | H8 | frontend expandable user row (breakdown + recent timeline) | DONE | click a list row -> lazy-loaded detail (activity-type bars + recent-activity list); Fragment-keyed rows, chevron, RTL-safe; api.getUserActivity + useUserActivityQuery + 2 i18n keys EN+AR. tsc + vite build clean. |
 
+### Stage I - Login IP + user-agent capture (enhancement, user-requested 2026-07-24)
+Prompted by the ElBaroody review: `login_events` recorded who/when but not from where, so a suspicious login could not be traced to a device/location. Added.
+| # | Sub-step | Status | Note |
+|---|----------|--------|------|
+| I1 | migration `1783782610220` (+ip/+userAgent on login_events; recreate view to carry them) | VERIFIED | throwaway PG17: apply -> cols + view carry ip/userAgent for login rows (NULL for other sources); revert -> cols dropped + view reverts + still selects; re-apply clean. |
+| I2 | entity + LoginEventService.record capture ip/userAgent (UA capped 512) | DONE | |
+| I3 | thread ip (`req.ip \|\| socket.remoteAddress`) + user-agent from all 4 login routes -> controller -> record | DONE | trust proxy 1 already set, so req.ip is the real client |
+| I4 | surface in per-user drill-down: getUserActivity returns ip/userAgent on recent events; UI shows `ip · device` on login rows (full UA in tooltip) | DONE | shortUA() derives a compact browser/OS label |
+| I5 | tsc (backend + frontend) + vite build clean | VERIFIED | |
+| I6 | deploy: apply migration 220 to prod + push both repos to main | PENDING user go-ahead | historical logins stay IP-less (predate capture); only new logins are traced |
+
 ## 11. Decisions & deviations (append-only, dated)
 > Record anything that changes the plan mid-build: a gotcha, a rejected approach, a schema surprise, a scope change, and why.
 

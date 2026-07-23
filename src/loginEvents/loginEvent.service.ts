@@ -14,7 +14,13 @@ import { LoginEventEntity } from "./loginEvent.mDbSchema";
 export class LoginEventService {
   async record(
     dataSource: DataSource,
-    entry: { userId: string; userRole: string; departmentId?: string | null }
+    entry: {
+      userId: string;
+      userRole: string;
+      departmentId?: string | null;
+      ip?: string | null;
+      userAgent?: string | null;
+    }
   ): Promise<void> {
     try {
       const repo = dataSource.getRepository(LoginEventEntity);
@@ -22,6 +28,8 @@ export class LoginEventService {
         userId: entry.userId,
         userRole: entry.userRole,
         departmentId: entry.departmentId ?? null,
+        ip: entry.ip ?? null,
+        userAgent: entry.userAgent ? entry.userAgent.slice(0, 512) : null,
       });
     } catch (err: any) {
       // Never fail a login because the audit write failed.

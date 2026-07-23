@@ -25,6 +25,9 @@ import {
 } from "../pendingSignup/pendingSignup.provider";
 import { LoginEventService } from "../loginEvents/loginEvent.service";
 
+/** Client info captured at login for tracing (IP + user-agent). */
+export type LoginClient = { ip?: string | null; userAgent?: string | null };
+
 @injectable()
 export class AuthController {
   constructor(
@@ -117,7 +120,7 @@ export class AuthController {
    * Candidate and Supervisor login - shared endpoint
    * REQUIRES institutionId since each institution has its own candidates and supervisors
    */
-  public async candidateSupervisorLogin(payload: IAuth, dataSource: DataSource) {
+  public async candidateSupervisorLogin(payload: IAuth, dataSource: DataSource, client?: LoginClient) {
     const { email, password } = payload;
     try {
       // DataSource is REQUIRED (must be provided from router)
@@ -169,6 +172,8 @@ export class AuthController {
         userId,
         userRole,
         departmentId: user.departmentId ?? null,
+        ip: client?.ip ?? null,
+        userAgent: client?.userAgent ?? null,
       });
 
       const tokenPayload: any = {
@@ -199,7 +204,7 @@ export class AuthController {
    * Super Admin login - isolated endpoint
    * REQUIRES institutionId since each institution has its own super admins
    */
-  public async superAdminLogin(payload: IAuth, dataSource: DataSource) {
+  public async superAdminLogin(payload: IAuth, dataSource: DataSource, client?: LoginClient) {
     const { email, password } = payload;
     try {
       // DataSource is REQUIRED (must be provided from router)
@@ -240,6 +245,8 @@ export class AuthController {
         userId,
         userRole: UserRole.SUPER_ADMIN,
         departmentId: (user as any).departmentId ?? null,
+        ip: client?.ip ?? null,
+        userAgent: client?.userAgent ?? null,
       });
 
       const tokenPayload: any = {
@@ -268,7 +275,7 @@ export class AuthController {
    * Institute Admin login - isolated endpoint
    * REQUIRES institutionId since each institution has its own institute admins
    */
-  public async instituteAdminLogin(payload: IAuth, dataSource: DataSource) {
+  public async instituteAdminLogin(payload: IAuth, dataSource: DataSource, client?: LoginClient) {
     const { email, password } = payload;
     try {
       // DataSource is REQUIRED (must be provided from router)
@@ -309,6 +316,8 @@ export class AuthController {
         userId,
         userRole: UserRole.INSTITUTE_ADMIN,
         departmentId: user.departmentId ?? null,
+        ip: client?.ip ?? null,
+        userAgent: client?.userAgent ?? null,
       });
 
       const tokenPayload: any = {
@@ -414,7 +423,7 @@ export class AuthController {
    * This is a separate endpoint from regular user login for security purposes
    * REQUIRES institutionId since each institution has its own clerks
    */
-  public async clerkLogin(payload: IAuth, dataSource: DataSource) {
+  public async clerkLogin(payload: IAuth, dataSource: DataSource, client?: LoginClient) {
     const { email, password } = payload;
     try {
       // DataSource is REQUIRED (must be provided from router)
@@ -455,6 +464,8 @@ export class AuthController {
         userId,
         userRole: UserRole.CLERK,
         departmentId: user.departmentId ?? null,
+        ip: client?.ip ?? null,
+        userAgent: client?.userAgent ?? null,
       });
 
       const tokenPayload: any = {
