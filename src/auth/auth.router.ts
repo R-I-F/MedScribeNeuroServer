@@ -92,6 +92,11 @@ export class AuthRouter {
 
             // OTP-verified signup: stages the registration + emails a 6-digit code.
             const resp = await this.authController.registerCand(payload, dataSource);
+            if (resp.status === "signups_closed") {
+              return res.status(StatusCodes.FORBIDDEN).json({
+                error: "Registrations are currently closed. Please check back later.",
+              });
+            }
             if (resp.status === "email_exists") {
               return res.status(StatusCodes.CONFLICT).json({
                 error: "An account with this email already exists. Try signing in instead.",
@@ -128,6 +133,11 @@ export class AuthRouter {
 
             // OTP-verified signup: stages the registration + emails a 6-digit code.
             const resp = await this.authController.registerSupervisor(payload, dataSource);
+            if (resp.status === "signups_closed") {
+              return res.status(StatusCodes.FORBIDDEN).json({
+                error: "Registrations are currently closed. Please check back later.",
+              });
+            }
             if (resp.status === "email_exists") {
               return res.status(StatusCodes.CONFLICT).json({
                 error: "An account with this email already exists. Try signing in instead.",

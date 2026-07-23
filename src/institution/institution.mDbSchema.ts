@@ -40,6 +40,13 @@ export class InstitutionEntity {
   @Column({ type: "boolean", default: true })
   isClinical!: boolean;
 
+  // Active-Users signup cap (docs/ACTIVE_USERS_ANALYTICS_PLAN.md). NULL = unlimited.
+  // When set, signups lock while the rolling quarterly distinct active-users count
+  // meets/exceeds it, and unlock automatically below it. The open/closed state is
+  // derived live, never stored.
+  @Column({ type: "int", nullable: true })
+  maxActiveUsers!: number | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

@@ -9,6 +9,7 @@ import { PendingSignupEntity, TPendingSignupRole } from "./pendingSignup.mDbSche
 import { CandidateEntity } from "../cand/cand.mDbSchema";
 import { SupervisorEntity } from "../supervisor/supervisor.mDbSchema";
 import { UserRole } from "../types/role.types";
+import { ActiveUsersProvider } from "../activeUsers/activeUsers.provider";
 
 const OTP_TTL_MS = 15 * 60 * 1000; // 15 minutes, fixed — resend does NOT extend
 const MAX_ATTEMPTS = 5;
@@ -17,7 +18,8 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 
 export type StartSignupResult =
   | { status: "started"; signupId: string; expiresAt: string; email: string }
-  | { status: "email_exists" };
+  | { status: "email_exists" }
+  | { status: "signups_closed" };
 
 export type VerifyOtpResult =
   | { status: "verified"; user: Record<string, unknown> }
@@ -43,7 +45,8 @@ export type ResendOtpResult =
 export class PendingSignupProvider {
   constructor(
     @inject(PendingSignupService) private pendingSignupService: PendingSignupService,
-    @inject(MailerService) private mailerService: MailerService
+    @inject(MailerService) private mailerService: MailerService,
+    @inject(ActiveUsersProvider) private activeUsersProvider: ActiveUsersProvider
   ) {}
 
   // ── start ────────────────────────────────────────────────────────────────
@@ -61,6 +64,24 @@ export class PendingSignupProvider {
     // Reject if a REAL account already exists for this email+role.
     if (await this.accountEmailExists(role, email, dataSource)) {
       return { status: "email_exists" };
+    }
+
+    // Active-Users cap (docs/ACTIVE_USERS_ANALYTICS_PLAN.md): when the rolling quarterly
+    // distinct active-users count is at/over the cap, new signups are closed. Self-regulating:
+    // it reopens automatically once the count falls below the cap. Checked here (the single
+    // funnel for both candidate + supervisor signup); no verifyOtp re-check is needed because
+    // verifying an OTP does not make an account "active" - only acting/logging in does.
+    // FAIL-OPEN: a cap-check error (e.g. the read model not yet migrated) must never block
+    // registration, so on any error we let the signup proceed.
+    try {
+      const gate = await this.activeUsersProvider.getSignupGate(dataSource);
+      if (!gate.signupsOpen) {
+        return { status: "signups_closed" };
+      }
+    } catch (err: any) {
+      console.warn(
+        `[Signup] active-users cap check failed, allowing signup (fail-open): ${err?.message ?? err}`
+      );
     }
 
     // One active pending per (email, role): a fresh signup replaces any prior attempt.

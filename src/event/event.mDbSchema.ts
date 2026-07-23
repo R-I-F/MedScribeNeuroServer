@@ -66,6 +66,15 @@ export class EventEntity {
   @Column({ type: "uuid", nullable: true })
   departmentId?: string;
 
+  // Creator attribution (docs/ACTIVE_USERS_ANALYTICS_PLAN.md). Stamped from the JWT at
+  // POST /event so CM/clerk event-creation can be counted as activity. Legacy rows stay
+  // NULL and are excluded from the event_create signal (never guessed).
+  @Column({ type: "uuid", nullable: true })
+  createdBy?: string;
+
+  @Column({ type: "varchar", length: 32, nullable: true })
+  createdByRole?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

@@ -391,9 +391,10 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 28. [WhatsApp Bot](#whatsapp-bot-wabot)
 29. [Admin / Hub Webhook](#admin--hub-webhook-adminref-resync)
 30. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
-31. [Error Responses](#error-responses)
-32. [Authentication Requirements Summary](#authentication-requirements-summary)
-33. [Load testing](#load-testing)
+31. [Active Users Analytics](#active-users-analytics-activeusers)
+32. [Error Responses](#error-responses)
+33. [Authentication Requirements Summary](#authentication-requirements-summary)
+34. [Load testing](#load-testing)
 
 ---
 
@@ -415,9 +416,12 @@ Returns the single institution's identity and feature flags. The frontend fetche
   "department": "neurosurgery",
   "isAcademic": true,
   "isPractical": true,
-  "isClinical": true
+  "isClinical": true,
+  "signupsOpen": true
 }
 ```
+
+`signupsOpen` is derived live from the Active-Users cap (see [Active Users Analytics](#active-users-analytics-activeusers)): it is `false` when the rolling quarterly distinct active-users count meets or exceeds the configured `maxActiveUsers`, and `true` otherwise (or when no cap is set). It is computed fail-open (any internal error yields `true`), and only the boolean is exposed here (never the count or cap). The public signup pages use it to show a "registrations closed" state.
 
 ### Get All Departments
 **GET** `/departments`
@@ -671,6 +675,8 @@ Registration is **staged**: this endpoint does **NOT** create the account. It st
 
 **Response (409 Conflict):** the email already belongs to an existing account.
 
+**Response (403 Forbidden):** `{ "error": "Registrations are currently closed. Please check back later." }`. New signups are closed because the rolling quarterly active-users count has reached the configured cap (see [Active Users Analytics](#active-users-analytics-activeusers)). This gate is fail-open (a cap-check error never blocks registration), and it reopens automatically when the count falls below the cap.
+
 ---
 
 ### Register Supervisor (OTP-verified)
@@ -687,7 +693,7 @@ Same staged OTP flow as candidate registration (no account row until the code is
 - `departmentId` (string UUID, **required**): from `GET /departments`.
 - `position` (string, optional): one of `Professor`, `Assistant Professor`, `Lecturer`, `Assistant Lecturer`, `Guest Doctor`, `Consultant`, `unknown` (default `unknown`).
 
-**Response (201 Created):** same staged shape as Register Candidate (`signupId`, `expiresAt`, `email`). **409** if the email already exists.
+**Response (201 Created):** same staged shape as Register Candidate (`signupId`, `expiresAt`, `email`). **409** if the email already exists. **403** if signups are closed by the active-users cap (see Register Candidate above).
 
 ---
 
@@ -9077,6 +9083,93 @@ Meta delivers inbound message and message-status events here. The server:
 
 ---
 
+## Active Users Analytics (`/activeUsers`)
+
+**All routes require a Super Admin JWT** (chain: `extractJWT → institutionResolver → userBasedRateLimiter → requireSuperAdmin`). Non-super-admin tokens get **403**; no token gets **401**.
+
+**What "active" means.** A user is *active* in a period if they performed at least one tracked action in it:
+- **Candidate:** submission created, event attendance recorded, clinical submission created, login
+- **Supervisor:** surgical review/approval, clinical review, login
+- **Calendar Manager (clerk):** calSurg created, event created, login
+- **Institute Admin:** login
+
+**Data model (single source of truth preserved).** These figures are computed from a read-only Postgres **view** `activity_read_model` that unifies the existing operational tables (`submissions`, `event_attendance`, `clinical_sub`, `cal_surgs`, `events`) plus one new append-only table, **`login_events`** (logins are recorded nowhere else). Nothing is duplicated: the operational tables stay authoritative and are read live. **superAdmin activity is excluded** from every count and from the cap (the owner viewing the dashboard must not inflate the user base). Logins accrue only from deployment forward (they had no history), surfaced via `loginTrackingStartedAt`. Two supporting writes were added: every successful login appends a `login_events` row (fail-open), and `POST /event` now stamps `createdBy`/`createdByRole` so event creation can be attributed.
+
+- **Active Users** = `COUNT(DISTINCT actor)` in the period (distinct people; NOT additive across sub-periods).
+- **Activity Volume** = `COUNT(events)` in the period (additive; the by-type breakdown).
+
+### Get Analytics
+**GET** `/activeUsers/analytics`
+
+**Query params:** `granularity` = `daily|weekly|monthly|quarterly` (default `monthly`) · `scope` = `institution|department` (default `institution`) · `deptCode` (required when `scope=department`; validated against `departments`, defaults to `REF_DEPT_CODE`/NS).
+
+**Response (200 OK)** (standard wrapper; `data` contains):
+```json
+{
+  "granularity": "monthly",
+  "scope": "institution",
+  "deptCode": null,
+  "dataStartDate": "2025-11-08",
+  "loginTrackingStartedAt": null,
+  "summary": { "daily": 3, "weekly": 8, "monthly": 48, "quarterly": 82 },
+  "series": [ { "bucket": "2026-07-01", "activeUsers": 25, "byRole": { "candidate": 20, "supervisor": 4, "clerk": 1 } } ],
+  "byActivityType": { "calsurg_create": 5703, "submission": 3664, "event_attendance": 1264, "surgical_review": 1222, "clinical_submission": 88 },
+  "byDepartment": [ { "deptCode": "NS", "name": "Neurosurgery", "arName": "جراحة المخ والأعصاب", "activeUsers": 82 } ],
+  "cap": { "maxActiveUsers": null, "currentCount": 82, "signupsOpen": true }
+}
+```
+- `summary`: distinct active users over fixed trailing windows (1 day / 7 days / 30 days / 3 months).
+- `series`: gap-filled buckets for the selected granularity (daily=30, weekly=12, monthly=12, quarterly=8), each with a per-role breakdown.
+- `byActivityType`: event volume in the granularity window.
+- `byDepartment`: distinct active users per department over the trailing 3 months (institution scope only; rows with no department are excluded).
+- `cap`: the live signup gate (see below).
+
+### List Active Users (drill-down)
+**GET** `/activeUsers/list`
+
+**Query params:** `window` = `today|week|month|quarter` (default `quarter`, mapping to 1 day / 7 days / 30 days / 3 months) · `scope` · `deptCode` (as above).
+
+Returns every distinct active user in the window, resolved to their person (name/email via role-specific joins), most-recently-active first.
+
+**Response (200 OK):** `data` =
+```json
+{
+  "window": "quarter", "scope": "institution", "deptCode": null, "count": 82,
+  "users": [
+    { "actorId": "uuid", "role": "candidate", "name": "…", "email": "…",
+      "deptCode": "NS", "deptName": "Neurosurgery", "deptArName": "…",
+      "activityCount": 31, "lastActive": "2026-07-23T06:37:39.442Z" }
+  ]
+}
+```
+
+### Get One User's Activity (drill-down)
+**GET** `/activeUsers/user`
+
+**Query params:** `actorId` (required) · `role` (optional; scopes the lookup) · `window` (as above).
+
+Returns that user's activity breakdown by type, the total, and a capped recent timeline (last 50, newest first).
+
+**Response (200 OK):** `data` =
+```json
+{
+  "actorId": "uuid", "role": "candidate", "window": "quarter", "total": 31,
+  "byType": { "submission": 23, "event_attendance": 7, "clinical_submission": 1 },
+  "recent": [ { "activityType": "submission", "occurredAt": "2026-07-23T06:37:39.442Z" } ]
+}
+```
+
+### Set the Signup Cap
+**PATCH** `/activeUsers/cap`
+
+**Request Body:** `{ "maxActiveUsers": number | null }` (a non-negative integer to cap, or `null`/blank to remove the cap and go unlimited). Invalid values → **400**.
+
+The cap watches the **rolling quarterly** distinct active-users count (trailing 3 months, institution-wide, superAdmin excluded). When that count meets or exceeds the cap, new signups **lock**; when it falls below, they **unlock automatically** (self-regulating). The open/closed state is derived live, never stored, and surfaced publicly as the `signupsOpen` boolean on `GET /institution`. Because verifying an OTP does not make an account "active" (only acting/logging in does), the gate lives only at signup-start; there is no verify-time race.
+
+**Response (200 OK):** `data` = `{ "maxActiveUsers": 500, "currentCount": 82, "signupsOpen": true }`.
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -9765,6 +9858,7 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `POST /auth/forgotPassword`, `/auth/resetPassword` | No | candidate, supervisor, instituteAdmin, clerk (**not** superAdmin) |
 | `GET /auth/get/all`, `POST /auth/resetCandPass` | — | **DISABLED (410)** |
 | `GET /superAdmin`, `GET /superAdmin/:id` | Yes | Super Admin (POST/PUT/DELETE **removed**) |
+| `GET /activeUsers/analytics`, `/activeUsers/list`, `/activeUsers/user`, `PATCH /activeUsers/cap` | Yes | **Super Admin only**; active-users analytics + signup cap |
 | `POST /instituteAdmin` | Yes | Super Admin (`departmentId` optional; omitted = institution-wide admin) |
 | `GET /instituteAdmin`, `GET /instituteAdmin/:id` | Yes | Institute Admin or Super Admin |
 | `PUT /instituteAdmin/:id` | Yes | Super Admin, or Institute Admin (**own record only**); self dept-switch re-issues tokens |

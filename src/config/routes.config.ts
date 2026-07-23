@@ -90,6 +90,18 @@ export function addRoutes(app: Application) {
   app.get("/institution", apiRateLimiter, async (_req: any, res: any) => {
     try {
       const inst = await getInstitution();
+      // signupsOpen: derived live from the Active-Users cap vs the rolling quarterly count
+      // (docs/ACTIVE_USERS_ANALYTICS_PLAN.md). Fail-open: never block this public endpoint on
+      // a gate error, and never expose the count/cap here (only the boolean).
+      let signupsOpen = true;
+      try {
+        const { ActiveUsersProvider } = require("../activeUsers/activeUsers.provider");
+        const { AppDataSource } = require("./database.config");
+        const gate = await (container.get(ActiveUsersProvider) as any).getSignupGate(AppDataSource);
+        signupsOpen = gate.signupsOpen;
+      } catch {
+        signupsOpen = true;
+      }
       res.status(200).json({
         id: inst.id,
         code: inst.code,
@@ -98,6 +110,7 @@ export function addRoutes(app: Application) {
         isAcademic: inst.isAcademic,
         isPractical: inst.isPractical,
         isClinical: inst.isClinical,
+        signupsOpen,
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message ?? "Failed to load institution" });
@@ -131,6 +144,11 @@ export function addRoutes(app: Application) {
   const { DemoRequestRouter } = require("../demoRequest/demoRequest.router");
   const demoRequestRouter = container.get(DemoRequestRouter) as any;
   app.use("/demoRequest", demoRequestRouter.router);
+
+  // Active-Users analytics, super-admin only (docs/ACTIVE_USERS_ANALYTICS_PLAN.md).
+  const { ActiveUsersRouter } = require("../activeUsers/activeUsers.router");
+  const activeUsersRouter = container.get(ActiveUsersRouter) as any;
+  app.use("/activeUsers", activeUsersRouter.router);
 
   // Reference reads (mirror-backed) mounted at the ORIGINAL paths: /mainDiag, /mainDiag/:id,
   // /diagnosis, /procCpt, /lecture, /lecture/:id. Writes on these paths are gone (404).

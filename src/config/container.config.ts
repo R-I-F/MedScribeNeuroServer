@@ -61,6 +61,13 @@ import { AuthRouter } from "../auth/auth.router";
 import { AuthTokenService } from "../auth/authToken.service";
 // import { AuthService } from "../auth/auth.service";
 
+import { LoginEventService } from "../loginEvents/loginEvent.service";
+
+import { ActiveUsersController } from "../activeUsers/activeUsers.controller";
+import { ActiveUsersRouter } from "../activeUsers/activeUsers.router";
+import { ActiveUsersService } from "../activeUsers/activeUsers.service";
+import { ActiveUsersProvider } from "../activeUsers/activeUsers.provider";
+
 import { SuperAdminController } from "../superAdmin/superAdmin.controller";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -203,6 +210,15 @@ container.bind(AuthController).toSelf().inTransientScope();
 container.bind(AuthRouter).toSelf().inTransientScope();
 container.bind(AuthTokenService).toSelf().inTransientScope();
 // container.bind(AuthService).toSelf().inTransientScope();
+
+// Active-Users login recording (docs/ACTIVE_USERS_ANALYTICS_PLAN.md)
+container.bind(LoginEventService).toSelf().inTransientScope();
+
+// Active-Users analytics (super-admin only)
+container.bind(ActiveUsersController).toSelf().inTransientScope();
+container.bind(ActiveUsersRouter).toSelf().inTransientScope();
+container.bind(ActiveUsersService).toSelf().inTransientScope();
+container.bind(ActiveUsersProvider).toSelf().inTransientScope();
 
 container.bind(SuperAdminController).toSelf().inTransientScope();
 container.bind(SuperAdminRouter).toSelf().inTransientScope();

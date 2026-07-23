@@ -31,7 +31,11 @@ export class EventController {
       }
       // Events are department-scoped: stamp from the creating user's department.
       const departmentId = await this.resolveDept(req, res, dataSource);
-      return await this.eventProvider.createEvent(validatedReq, dataSource, departmentId);
+      // Creator attribution (Active-Users): who created this event, from the JWT.
+      const jwt = (res as any).locals?.jwt;
+      const creatorId = jwt?.id || jwt?._id;
+      const creator = creatorId ? { id: creatorId, role: jwt?.role } : null;
+      return await this.eventProvider.createEvent(validatedReq, dataSource, departmentId, creator);
     } catch (err: any) {
       throw new Error(err);
     }

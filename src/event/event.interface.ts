@@ -44,6 +44,10 @@ export interface IEvent {
 
   /** Department the event belongs to (stamped at creation; dept-scoped reads). */
   departmentId?: string;
+
+  /** Creator attribution (Active-Users). Stamped from the JWT at creation; legacy rows NULL. */
+  createdBy?: string;
+  createdByRole?: string;
 }
 
 export interface IEventDoc extends IEvent {

@@ -64,7 +64,7 @@ export class EventProvider {
     return departmentId;
   }
 
-  public async createEvent(validatedReq: IEventInput, dataSource: DataSource, departmentId?: string | null): Promise<IEventDoc> | never {
+  public async createEvent(validatedReq: IEventInput, dataSource: DataSource, departmentId?: string | null, creator?: { id: string; role: string } | null): Promise<IEventDoc> | never {
     try {
       // Validate type and referenced document
       this.validateTypeAndRefs(validatedReq);
@@ -120,6 +120,10 @@ export class EventProvider {
         status: validatedReq.status || "booked", // Default to "booked" when created
         // Events are department-scoped: stamped at creation (caller's dept resolution).
         departmentId: departmentId ?? undefined,
+        // Creator attribution (Active-Users): stamped from the JWT so CM/clerk event
+        // creation counts as activity. Absent on legacy rows.
+        createdBy: creator?.id,
+        createdByRole: creator?.role,
       };
 
       // Add attendance as separate property for service to handle

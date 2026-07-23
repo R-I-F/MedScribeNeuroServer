@@ -23,6 +23,7 @@ import {
   VerifyOtpResult,
   ResendOtpResult,
 } from "../pendingSignup/pendingSignup.provider";
+import { LoginEventService } from "../loginEvents/loginEvent.service";
 
 @injectable()
 export class AuthController {
@@ -33,7 +34,8 @@ export class AuthController {
     @inject(InstituteAdminService) private instituteAdminService: InstituteAdminService,
     @inject(ClerkService) private clerkService: ClerkService,
     @inject(AuthTokenService) private authTokenService: AuthTokenService,
-    @inject(PendingSignupProvider) private pendingSignupProvider: PendingSignupProvider
+    @inject(PendingSignupProvider) private pendingSignupProvider: PendingSignupProvider,
+    @inject(LoginEventService) private loginEventService: LoginEventService
   ){}
 
   public validationToken(tokenPayload: JwtPayload | string | undefined) {
@@ -162,6 +164,13 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
+      // Record the login as an activity signal (Active-Users; fail-open, never blocks login).
+      await this.loginEventService.record(targetDataSource, {
+        userId,
+        userRole,
+        departmentId: user.departmentId ?? null,
+      });
+
       const tokenPayload: any = {
         email: user.email,
         role: userRole,
@@ -226,6 +235,13 @@ export class AuthController {
         throw new Error("User ID not found");
       }
 
+      // Record the login as an activity signal (Active-Users; fail-open, never blocks login).
+      await this.loginEventService.record(targetDataSource, {
+        userId,
+        userRole: UserRole.SUPER_ADMIN,
+        departmentId: (user as any).departmentId ?? null,
+      });
+
       const tokenPayload: any = {
         email: user.email,
         role: UserRole.SUPER_ADMIN,
@@ -287,6 +303,13 @@ export class AuthController {
       if (!userId) {
         throw new Error("User ID not found");
       }
+
+      // Record the login as an activity signal (Active-Users; fail-open, never blocks login).
+      await this.loginEventService.record(targetDataSource, {
+        userId,
+        userRole: UserRole.INSTITUTE_ADMIN,
+        departmentId: user.departmentId ?? null,
+      });
 
       const tokenPayload: any = {
         email: user.email,
@@ -426,6 +449,13 @@ export class AuthController {
       if (!userId) {
         throw new Error("User ID not found");
       }
+
+      // Record the login as an activity signal (Active-Users; fail-open, never blocks login).
+      await this.loginEventService.record(targetDataSource, {
+        userId,
+        userRole: UserRole.CLERK,
+        departmentId: user.departmentId ?? null,
+      });
 
       const tokenPayload: any = {
         email: user.email,
