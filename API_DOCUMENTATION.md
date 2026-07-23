@@ -9093,7 +9093,7 @@ Meta delivers inbound message and message-status events here. The server:
 - **Calendar Manager (clerk):** calSurg created, event created, login
 - **Institute Admin:** login
 
-**Data model (single source of truth preserved).** These figures are computed from a read-only Postgres **view** `activity_read_model` that unifies the existing operational tables (`submissions`, `event_attendance`, `clinical_sub`, `cal_surgs`, `events`) plus one new append-only table, **`login_events`** (logins are recorded nowhere else). Nothing is duplicated: the operational tables stay authoritative and are read live. **superAdmin activity is excluded** from every count and from the cap (the owner viewing the dashboard must not inflate the user base). Logins accrue only from deployment forward (they had no history), surfaced via `loginTrackingStartedAt`. Two supporting writes were added: every successful login appends a `login_events` row (fail-open), and `POST /event` now stamps `createdBy`/`createdByRole` so event creation can be attributed.
+**Data model (single source of truth preserved).** These figures are computed from a read-only Postgres **view** `activity_read_model` that unifies the existing operational tables (`submissions`, `event_attendance`, `clinical_sub`, `cal_surgs`, `events`) plus one new append-only table, **`login_events`** (logins are recorded nowhere else). Nothing is duplicated: the operational tables stay authoritative and are read live. **superAdmin activity is excluded** from every count and from the cap (the owner viewing the dashboard must not inflate the user base). Logins accrue only from deployment forward (they had no history), surfaced via `loginTrackingStartedAt`. Two supporting writes were added: every successful login appends a `login_events` row (fail-open) that also records the client **IP** and **user-agent** for tracing, and `POST /event` now stamps `createdBy`/`createdByRole` so event creation can be attributed. NB: IP/user-agent capture only accrues from the deploy that added it; earlier logins carry NULL `ip`/`userAgent`.
 
 - **Active Users** = `COUNT(DISTINCT actor)` in the period (distinct people; NOT additive across sub-periods).
 - **Activity Volume** = `COUNT(events)` in the period (additive; the by-type breakdown).
@@ -9148,14 +9148,17 @@ Returns every distinct active user in the window, resolved to their person (name
 
 **Query params:** `actorId` (required) · `role` (optional; scopes the lookup) · `window` (as above).
 
-Returns that user's activity breakdown by type, the total, and a capped recent timeline (last 50, newest first).
+Returns that user's activity breakdown by type, the total, and a capped recent timeline (last 50, newest first). On `login` events the recent items also carry `ip` and `userAgent` (both NULL for other activity types, and for logins that predate IP capture); the super-admin drill-down surfaces these to trace a suspicious login to a device/location.
 
 **Response (200 OK):** `data` =
 ```json
 {
   "actorId": "uuid", "role": "candidate", "window": "quarter", "total": 31,
   "byType": { "submission": 23, "event_attendance": 7, "clinical_submission": 1 },
-  "recent": [ { "activityType": "submission", "occurredAt": "2026-07-23T06:37:39.442Z" } ]
+  "recent": [
+    { "activityType": "submission", "occurredAt": "2026-07-23T06:37:39.442Z", "ip": null, "userAgent": null },
+    { "activityType": "login", "occurredAt": "2026-07-24T05:10:02.113Z", "ip": "196.221.5.9", "userAgent": "Mozilla/5.0 (Windows NT 10.0) ... Chrome/120" }
+  ]
 }
 ```
 
