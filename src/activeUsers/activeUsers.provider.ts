@@ -149,8 +149,10 @@ export class ActiveUsersProvider {
   }
 
   /**
-   * One user's activity within a window: the by-type breakdown, total, and a capped
-   * recent timeline (most recent first). Powers the per-user drill-down.
+   * One user's activity within a window: the user's identity (name/email/department),
+   * the by-type breakdown, and the FULL event timeline (each event carries ip/userAgent
+   * where available; NULL on non-login rows and pre-capture logins). Ordered most recent
+   * first, capped at 1000 events. Powers the dedicated per-user activity page.
    */
   public async getUserActivity(
     dataSource: DataSource,
@@ -158,16 +160,38 @@ export class ActiveUsersProvider {
   ) {
     const w: ActiveWindow = WINDOW_INTERVAL[q.window] ? q.window : "quarter";
     const interval = WINDOW_INTERVAL[w];
-    const rows = (await dataSource.query(
+
+    // Resolve the person once (role-agnostic join across the 4 user tables).
+    const identityP = dataSource.query(
+      `SELECT COALESCE(c."fullName", s."fullName", cl."fullName", ia."fullName") AS name,
+              COALESCE(c."email", s."email", cl."email", ia."email") AS email,
+              d."code" AS dept_code, d."name" AS dept_name, d."arName" AS dept_ar_name
+         FROM (SELECT $1::uuid AS id) x
+         LEFT JOIN "candidates" c        ON c."id"  = x.id
+         LEFT JOIN "supervisors" s       ON s."id"  = x.id
+         LEFT JOIN "clerks" cl           ON cl."id" = x.id
+         LEFT JOIN "institute_admins" ia ON ia."id" = x.id
+         LEFT JOIN "departments" d       ON d."id" = COALESCE(c."departmentId", s."departmentId", cl."departmentId", ia."departmentId")`,
+      [q.actorId]
+    );
+
+    const eventsP = dataSource.query(
       `SELECT "activityType" AS activity_type, "occurredAt" AS occurred_at, "ip", "userAgent" AS user_agent
          FROM "activity_read_model"
         WHERE "actorId" = $1
           AND ($2::text IS NULL OR "actorRole" = $2)
           AND "actorRole" <> $3
           AND "occurredAt" >= now() - ($4)::interval
-        ORDER BY "occurredAt" DESC`,
+        ORDER BY "occurredAt" DESC
+        LIMIT 1000`,
       [q.actorId, q.role ?? null, EXCLUDE_ROLE, interval]
-    )) as Array<{ activity_type: string; occurred_at: string; ip: string | null; user_agent: string | null }>;
+    );
+
+    const [identityRows, rows] = (await Promise.all([identityP, eventsP])) as [
+      Array<{ name: string | null; email: string | null; dept_code: string | null; dept_name: string | null; dept_ar_name: string | null }>,
+      Array<{ activity_type: string; occurred_at: string; ip: string | null; user_agent: string | null }>
+    ];
+    const id = identityRows[0] ?? ({} as any);
 
     const byType: Record<string, number> = {};
     for (const r of rows) byType[r.activity_type] = (byType[r.activity_type] ?? 0) + 1;
@@ -176,9 +200,14 @@ export class ActiveUsersProvider {
       actorId: q.actorId,
       role: q.role ?? null,
       window: w,
+      name: id.name ?? null,
+      email: id.email ?? null,
+      deptCode: id.dept_code ?? null,
+      deptName: id.dept_name ?? null,
+      deptArName: id.dept_ar_name ?? null,
       total: rows.length,
       byType,
-      recent: rows.slice(0, 50).map((r) => ({
+      events: rows.map((r) => ({
         activityType: r.activity_type,
         occurredAt: r.occurred_at,
         ip: r.ip ?? null,

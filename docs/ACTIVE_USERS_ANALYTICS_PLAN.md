@@ -393,6 +393,17 @@ Prompted by the ElBaroody review: `login_events` recorded who/when but not from 
 | I5 | tsc (backend + frontend) + vite build clean | VERIFIED | |
 | I6 | deploy: apply migration 220 to prod + push both repos to main | PENDING user go-ahead | historical logins stay IP-less (predate capture); only new logins are traced |
 
+### Stage J - Dedicated per-user activity page (enhancement, user-requested 2026-07-24)
+Replaced the inline click-to-expand dropdown with a full per-user page.
+| # | Sub-step | Status | Note |
+|---|----------|--------|------|
+| J1 | backend getUserActivity: + user identity (name/email/dept) + FULL event timeline (was capped-50 `recent`; now `events`, LIMIT 1000, each with ip/userAgent) | VERIFIED | E2E on prod: Ibrahim Elkony / NS / 12 events with ip/userAgent |
+| J2 | new page `SuperAdminUserActivityPage` (/active-users/user): header (name/role/dept/email), window filter (today/week/month/quarter), byType breakdown, full timeline table Time/Activity/IP/Device | DONE | route + pageTitles + shared `lib/activityFormat.ts` (formatDateTime + shortUA) |
+| J3 | list rows now NAVIGATE to the user page (carry window+scope+dept); removed the inline dropdown + UserActivityDetail | DONE | chevron affordance kept |
+| J4 | i18n (+activityTimeline/colTime/colIp/colDevice/backToList EN+AR) | DONE | |
+| J5 | tsc (backend + frontend) + vite build clean | VERIFIED | |
+| J6 | deploy: commit + push both repos to main | PENDING user go-ahead | no migration needed (code-only) |
+
 ## 11. Decisions & deviations (append-only, dated)
 > Record anything that changes the plan mid-build: a gotcha, a rejected approach, a schema surprise, a scope change, and why.
 

@@ -9148,14 +9148,17 @@ Returns every distinct active user in the window, resolved to their person (name
 
 **Query params:** `actorId` (required) · `role` (optional; scopes the lookup) · `window` (as above).
 
-Returns that user's activity breakdown by type, the total, and a capped recent timeline (last 50, newest first). On `login` events the recent items also carry `ip` and `userAgent` (both NULL for other activity types, and for logins that predate IP capture); the super-admin drill-down surfaces these to trace a suspicious login to a device/location.
+Returns the user's identity (name/email/department, resolved across the four user tables), the activity breakdown by type, and the **full event timeline** for the window (newest first, capped at 1000). Each event carries `ip`/`userAgent` where available (both NULL on non-login events and on logins that predate IP capture). Powers the dedicated per-user activity page, where the super-admin can filter by window and trace a suspicious login to a device/location.
 
 **Response (200 OK):** `data` =
 ```json
 {
-  "actorId": "uuid", "role": "candidate", "window": "quarter", "total": 31,
+  "actorId": "uuid", "role": "candidate", "window": "quarter",
+  "name": "Ibrahim Elkony", "email": "…@example.com",
+  "deptCode": "NS", "deptName": "Neurosurgery", "deptArName": "جراحة المخ والأعصاب",
+  "total": 31,
   "byType": { "submission": 23, "event_attendance": 7, "clinical_submission": 1 },
-  "recent": [
+  "events": [
     { "activityType": "submission", "occurredAt": "2026-07-23T06:37:39.442Z", "ip": null, "userAgent": null },
     { "activityType": "login", "occurredAt": "2026-07-24T05:10:02.113Z", "ip": "196.221.5.9", "userAgent": "Mozilla/5.0 (Windows NT 10.0) ... Chrome/120" }
   ]
