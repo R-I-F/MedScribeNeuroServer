@@ -393,9 +393,10 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 30. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
 31. [Active Users Analytics](#active-users-analytics-activeusers)
 32. [Public Semantic Search](#public-semantic-search-publicsearch)
-33. [Error Responses](#error-responses)
-34. [Authentication Requirements Summary](#authentication-requirements-summary)
-35. [Load testing](#load-testing)
+33. [In-App Semantic Search](#in-app-semantic-search-inappsearch)
+34. [Error Responses](#error-responses)
+35. [Authentication Requirements Summary](#authentication-requirements-summary)
+36. [Load testing](#load-testing)
 
 ---
 
@@ -9210,6 +9211,37 @@ Diagnoses instead carry `diagnosis: { icdCode, icdName, icdArName }`. **The AMA-
 
 ---
 
+## In-App Semantic Search (`/inAppSearch`)
+
+**Authenticated (JWT).** The optional AI assist inside the submission form (`/dashboard/submissions/new/:procId`), shown before Q11 (Main Diagnosis). A logged-in candidate or supervisor describes a procedure or diagnosis in natural language; the top-5 semantic matches come back scoped to **their own department** (auto-detected from the JWT `departmentId` claim, resolving JWT claim -> `departments` mirror row -> `REF_DEPT_CODE`/NS default, exactly like `/mainDiag`). Because the search is scoped to the same department the form's reference tree was loaded from, every result maps back cleanly, so picking one auto-fills the Main Diagnosis and the matching leaf. This reuses the shared `SearchService`; the spoke proxies the embedding search to the reference hub server-to-server (hub URL + key never reach the browser). See docs/IN_FORM_SEMANTIC_SEARCH_PLAN.md.
+
+**Quota:** **5 searches per user per UTC day**, counted in a dedicated `in_app_search_events` append log (the IP rate limiter alone cannot bind a per-user cap). Env override `IN_APP_SEARCH_MAX_PER_DAY` (default 5). The per-IP `userBasedRateLimiter` also applies.
+
+Unlike the public tool, the in-app caller **does receive the CPT `numCode`** (`includeCpt: true`) because it is an authenticated in-app surface, not the public landing page.
+
+### Run a search
+**POST** `/inAppSearch/query` -- middleware chain `extractJWT -> institutionResolver -> userBasedRateLimiter -> requireCandidate` (admits candidate, supervisor, and admins). Body `{ query (2-500), type: procedure|diagnosis }` (no department field: it is auto-detected). `data` is either:
+```json
+{ "status": "ok", "results": [ /* up to 5 */ ], "remaining": 4 }
+```
+or, once the daily quota is spent:
+```json
+{ "status": "quota_exhausted", "remaining": 0 }
+```
+Each result mirrors the public shape, plus `procedure.numCode`:
+```json
+{
+  "kind": "procedure",
+  "department": { "code": "NS", "name": "Neurosurgery", "arName": "جراحة المخ والأعصاب" },
+  "mainDiagnosis": { "title": "cranial trauma", "arTitle": "..." },
+  "procedure": { "title": "evacuation", "arTitle": "...", "alphaCode": "CRAN", "numCode": "61313-00" },
+  "description": "...", "arDescription": "...", "similarity": 0.686
+}
+```
+Diagnoses instead carry `diagnosis: { icdCode, icdName, icdArName }`. **401** if the JWT carries no user id; **400** on validation; **429** from the IP limiter. A successful (non-exhausted) search spends one daily credit and records a row in `in_app_search_events`.
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -9900,6 +9932,7 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /superAdmin`, `GET /superAdmin/:id` | Yes | Super Admin (POST/PUT/DELETE **removed**) |
 | `GET /activeUsers/analytics`, `/activeUsers/list`, `/activeUsers/user`, `PATCH /activeUsers/cap` | Yes | **Super Admin only**; active-users analytics + signup cap |
 | `POST /publicSearch/session`, `/verify`, `/resend`, `/query`, `/explain` | No | Public data-explorer; soft email+OTP gate; 5 free queries/email; proxies search to the hub |
+| `POST /inAppSearch/query` | Yes | Candidate, Supervisor, or Admin; in-form AI assist; department auto from JWT; 5 searches/user/UTC-day; returns CPT numCode |
 | `POST /instituteAdmin` | Yes | Super Admin (`departmentId` optional; omitted = institution-wide admin) |
 | `GET /instituteAdmin`, `GET /instituteAdmin/:id` | Yes | Institute Admin or Super Admin |
 | `PUT /instituteAdmin/:id` | Yes | Super Admin, or Institute Admin (**own record only**); self dept-switch re-issues tokens |

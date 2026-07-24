@@ -155,6 +155,11 @@ export function addRoutes(app: Application) {
   const publicSearchRouter = container.get(PublicSearchRouter) as any;
   app.use("/publicSearch", publicSearchRouter.router);
 
+  // Authenticated in-form semantic search (docs/IN_FORM_SEMANTIC_SEARCH_PLAN.md).
+  const { InAppSearchRouter } = require("../inAppSearch/inAppSearch.router");
+  const inAppSearchRouter = container.get(InAppSearchRouter) as any;
+  app.use("/inAppSearch", inAppSearchRouter.router);
+
   // Reference reads (mirror-backed) mounted at the ORIGINAL paths: /mainDiag, /mainDiag/:id,
   // /diagnosis, /procCpt, /lecture, /lecture/:id. Writes on these paths are gone (404).
   app.use("/", referenceReadRouter.router);

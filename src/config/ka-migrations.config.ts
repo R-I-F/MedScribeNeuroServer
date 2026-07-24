@@ -35,6 +35,7 @@ import { PendingSignupEntity } from "../pendingSignup/pendingSignup.mDbSchema";
 import { DemoRequestEntity } from "../demoRequest/demoRequest.mDbSchema";
 import { LoginEventEntity } from "../loginEvents/loginEvent.mDbSchema";
 import { PublicSearchSessionEntity } from "../publicSearch/publicSearchSession.mDbSchema";
+import { InAppSearchEventEntity } from "../inAppSearch/inAppSearchEvent.mDbSchema";
 
 dotenv.config();
 
@@ -104,6 +105,7 @@ function getKaMigrationsConfig(): DataSourceOptions {
       DemoRequestEntity,
       LoginEventEntity,
       PublicSearchSessionEntity,
+      InAppSearchEventEntity,
     ],
     migrations: [__dirname + "/../migrations-ka/*.ts"],
     subscribers: [],

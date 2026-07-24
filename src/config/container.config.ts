@@ -74,6 +74,11 @@ import { PublicSearchController } from "../publicSearch/publicSearch.controller"
 import { PublicSearchRouter } from "../publicSearch/publicSearch.router";
 import { SearchService } from "../publicSearch/search.service";
 
+import { InAppSearchService } from "../inAppSearch/inAppSearch.service";
+import { InAppSearchProvider } from "../inAppSearch/inAppSearch.provider";
+import { InAppSearchController } from "../inAppSearch/inAppSearch.controller";
+import { InAppSearchRouter } from "../inAppSearch/inAppSearch.router";
+
 import { SuperAdminController } from "../superAdmin/superAdmin.controller";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -232,6 +237,12 @@ container.bind(PublicSearchService).toSelf().inTransientScope();
 container.bind(PublicSearchProvider).toSelf().inTransientScope();
 container.bind(PublicSearchController).toSelf().inTransientScope();
 container.bind(PublicSearchRouter).toSelf().inTransientScope();
+
+// Authenticated in-form semantic search (docs/IN_FORM_SEMANTIC_SEARCH_PLAN.md)
+container.bind(InAppSearchService).toSelf().inTransientScope();
+container.bind(InAppSearchProvider).toSelf().inTransientScope();
+container.bind(InAppSearchController).toSelf().inTransientScope();
+container.bind(InAppSearchRouter).toSelf().inTransientScope();
 
 container.bind(SuperAdminController).toSelf().inTransientScope();
 container.bind(SuperAdminRouter).toSelf().inTransientScope();
