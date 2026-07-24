@@ -68,6 +68,12 @@ import { ActiveUsersRouter } from "../activeUsers/activeUsers.router";
 import { ActiveUsersService } from "../activeUsers/activeUsers.service";
 import { ActiveUsersProvider } from "../activeUsers/activeUsers.provider";
 
+import { PublicSearchService } from "../publicSearch/publicSearch.service";
+import { PublicSearchProvider } from "../publicSearch/publicSearch.provider";
+import { PublicSearchController } from "../publicSearch/publicSearch.controller";
+import { PublicSearchRouter } from "../publicSearch/publicSearch.router";
+import { SearchService } from "../publicSearch/search.service";
+
 import { SuperAdminController } from "../superAdmin/superAdmin.controller";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -219,6 +225,13 @@ container.bind(ActiveUsersController).toSelf().inTransientScope();
 container.bind(ActiveUsersRouter).toSelf().inTransientScope();
 container.bind(ActiveUsersService).toSelf().inTransientScope();
 container.bind(ActiveUsersProvider).toSelf().inTransientScope();
+
+// Public semantic-search tool (docs/PUBLIC_SEMANTIC_SEARCH_TOOL_PLAN.md)
+container.bind(SearchService).toSelf().inTransientScope();
+container.bind(PublicSearchService).toSelf().inTransientScope();
+container.bind(PublicSearchProvider).toSelf().inTransientScope();
+container.bind(PublicSearchController).toSelf().inTransientScope();
+container.bind(PublicSearchRouter).toSelf().inTransientScope();
 
 container.bind(SuperAdminController).toSelf().inTransientScope();
 container.bind(SuperAdminRouter).toSelf().inTransientScope();

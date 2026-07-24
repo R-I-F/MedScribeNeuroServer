@@ -16,6 +16,7 @@ import { getAllActiveInstitutions } from "./institution/institution.service";
 import { container } from "./config/container.config";
 import { RefDataService } from "./refApi/refData.service";
 import { PendingSignupProvider } from "./pendingSignup/pendingSignup.provider";
+import { PublicSearchProvider } from "./publicSearch/publicSearch.provider";
 import { Server } from "http";
 
 dotenv.config();
@@ -132,6 +133,9 @@ async function bootstrap() {
     // OTP-verified signup: purge expired pending signups periodically (+30s boot sweep).
     // Expiry is also enforced at read time — this is hygiene, not correctness.
     container.get(PendingSignupProvider).startPurgeSweep(AppDataSource);
+
+    // Public semantic-search: purge expired soft-registration sessions (docs/PUBLIC_SEMANTIC_SEARCH_TOOL_PLAN.md).
+    container.get(PublicSearchProvider).startPurgeSweep(AppDataSource);
 
     console.log("[App] Database connected, binding port...");
     server = app.listen(port, () => {

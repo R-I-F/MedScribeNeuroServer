@@ -392,9 +392,10 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 29. [Admin / Hub Webhook](#admin--hub-webhook-adminref-resync)
 30. [PDF Report Generation Endpoints](#pdf-report-generation-endpoints)
 31. [Active Users Analytics](#active-users-analytics-activeusers)
-32. [Error Responses](#error-responses)
-33. [Authentication Requirements Summary](#authentication-requirements-summary)
-34. [Load testing](#load-testing)
+32. [Public Semantic Search](#public-semantic-search-publicsearch)
+33. [Error Responses](#error-responses)
+34. [Authentication Requirements Summary](#authentication-requirements-summary)
+35. [Load testing](#load-testing)
 
 ---
 
@@ -9176,6 +9177,39 @@ The cap watches the **rolling quarterly** distinct active-users count (trailing 
 
 ---
 
+## Public Semantic Search (`/publicSearch`)
+
+**All routes are PUBLIC (no JWT).** The landing-page data explorer: a visitor picks a type (procedure or diagnosis) and 1-2 departments, describes what they want in natural language, and gets the top-5 semantic matches with their place in the tree. Gated by a soft email + OTP registration with a small free-query quota. The frontend calls only these spoke routes; the spoke proxies the actual embedding search to the reference hub (`RefApiClient`) server-to-side, so the hub URL + key never reach the browser. See docs/PUBLIC_SEMANTIC_SEARCH_TOOL_PLAN.md.
+
+**Anti-abuse:** `POST /session` is anti-oracle (honeypot `website`, `elapsedMs` min-fill, per-email + per-IP daily caps, a global daily OTP-email budget; every accepted/discarded path returns the identical `{sessionId, expiresAt, email}` shape so emails cannot be enumerated). OTP: 6-digit, bcrypt, 15-min TTL, 60s resend x max 3, 5-attempt lock. The **free quota (default 5) is enforced per verified email** (a DB sum). Dedicated IP limiter `publicSearchRateLimiter` (10/15min) on `/session`; `strictRateLimiter` on the rest. Env knobs `PUBLIC_SEARCH_*`.
+
+### Request an access code
+**POST** `/publicSearch/session` -- Body `{ email, website?, elapsedMs? }`. Always **200** with `data` = `{ sessionId, expiresAt, email }` (a throwaway id on any silent discard). Emails a 6-digit code. **429** from the limiter; **400** on validation.
+
+### Verify the code
+**POST** `/publicSearch/verify` -- Body `{ sessionId, code }`. `data.status` is one of `verified` (with `remaining`), `wrong` (with `attemptsRemaining`), `expired`, `rejected`, `not_found`. On `verified` the session is valid for reads for 24h.
+
+### Resend the code
+**POST** `/publicSearch/resend` -- Body `{ sessionId }`. `data.status`: `sent` (with `sendsRemaining`), `cooldown` (with `retryInSeconds`), `exhausted`, `expired`, `not_found`.
+
+### Run a search
+**POST** `/publicSearch/query` -- Body `{ sessionId, query (2-500), type: procedure|diagnosis, deptCodes: [1-2 codes] }`. Requires a verified, unexpired session with quota remaining (spends one credit). `data` is `{ status: "ok", results, remaining }`, `{ status: "quota_exhausted" }`, or `{ status: "invalid_session" }`. Each result:
+```json
+{
+  "kind": "procedure",
+  "department": { "code": "NS", "name": "Neurosurgery", "arName": "جراحة المخ والأعصاب" },
+  "mainDiagnosis": { "title": "cranial trauma", "arTitle": "..." },
+  "procedure": { "title": "evacuation", "arTitle": "...", "alphaCode": "CRAN" },
+  "description": "...", "arDescription": "...", "similarity": 0.686
+}
+```
+Diagnoses instead carry `diagnosis: { icdCode, icdName, icdArName }`. **The AMA-licensed CPT `numCode` is deliberately omitted** on the public surface (only the department's own ALPHA code is shown); a future authenticated in-app caller of the shared `SearchService` receives `numCode`.
+
+### Explain a result (opt-in AI)
+**POST** `/publicSearch/explain` -- Body `{ sessionId, kind, name, code?, departmentName?, description?, language? }`. Requires a verified session. Sends only the DB-sourced result fields (never the raw user query) to Gemini `generateText` for a 2-3 sentence plain-language explanation. `data` = `{ explanation }`.
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -9865,6 +9899,7 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /auth/get/all`, `POST /auth/resetCandPass` | — | **DISABLED (410)** |
 | `GET /superAdmin`, `GET /superAdmin/:id` | Yes | Super Admin (POST/PUT/DELETE **removed**) |
 | `GET /activeUsers/analytics`, `/activeUsers/list`, `/activeUsers/user`, `PATCH /activeUsers/cap` | Yes | **Super Admin only**; active-users analytics + signup cap |
+| `POST /publicSearch/session`, `/verify`, `/resend`, `/query`, `/explain` | No | Public data-explorer; soft email+OTP gate; 5 free queries/email; proxies search to the hub |
 | `POST /instituteAdmin` | Yes | Super Admin (`departmentId` optional; omitted = institution-wide admin) |
 | `GET /instituteAdmin`, `GET /instituteAdmin/:id` | Yes | Institute Admin or Super Admin |
 | `PUT /instituteAdmin/:id` | Yes | Super Admin, or Institute Admin (**own record only**); self dept-switch re-issues tokens |

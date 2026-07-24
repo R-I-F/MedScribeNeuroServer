@@ -96,6 +96,17 @@ export interface IRefProcSearchHit {
   mainDiagnoses: IRefProcSearchMainDiag[];
 }
 
+/** One hit from the hub's POST /v1/diagnosis-search (pgvector cosine, dept-scoped). */
+export interface IRefDiagnosisSearchHit {
+  icdCode: string;
+  icdName: string;
+  icdArName: string;
+  description: string;
+  arDescription: string;
+  similarity: number;
+  mainDiagnoses: IRefProcSearchMainDiag[];
+}
+
 export interface IRefQuestionOption {
   id: string;
   value: string;

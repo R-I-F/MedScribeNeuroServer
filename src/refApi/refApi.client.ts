@@ -13,6 +13,7 @@ import {
   IRefConsumable,
   IRefQuestion,
   IRefProcSearchHit,
+  IRefDiagnosisSearchHit,
 } from "./refApi.types";
 
 dotenv.config();
@@ -128,6 +129,15 @@ export class RefApiClient {
     limit = 3
   ): Promise<IRefProcSearchHit[]> {
     return this.post<IRefProcSearchHit[]>("/v1/procedure-search", { deptCode, query, limit });
+  }
+
+  /** Semantic diagnosis search (hub embeds the query; pgvector cosine, dept-scoped). */
+  public diagnosisSearch(
+    query: string,
+    deptCode: string = this.deptCode,
+    limit = 3
+  ): Promise<IRefDiagnosisSearchHit[]> {
+    return this.post<IRefDiagnosisSearchHit[]>("/v1/diagnosis-search", { deptCode, query, limit });
   }
 
   public getDepartments(): Promise<IRefDepartment[]> {

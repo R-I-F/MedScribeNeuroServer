@@ -150,6 +150,11 @@ export function addRoutes(app: Application) {
   const activeUsersRouter = container.get(ActiveUsersRouter) as any;
   app.use("/activeUsers", activeUsersRouter.router);
 
+  // Public semantic-search tool, no auth (docs/PUBLIC_SEMANTIC_SEARCH_TOOL_PLAN.md).
+  const { PublicSearchRouter } = require("../publicSearch/publicSearch.router");
+  const publicSearchRouter = container.get(PublicSearchRouter) as any;
+  app.use("/publicSearch", publicSearchRouter.router);
+
   // Reference reads (mirror-backed) mounted at the ORIGINAL paths: /mainDiag, /mainDiag/:id,
   // /diagnosis, /procCpt, /lecture, /lecture/:id. Writes on these paths are gone (404).
   app.use("/", referenceReadRouter.router);
