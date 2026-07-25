@@ -150,6 +150,18 @@ export function addRoutes(app: Application) {
   const activeUsersRouter = container.get(ActiveUsersRouter) as any;
   app.use("/activeUsers", activeUsersRouter.router);
 
+  // AI Search Usage analytics, super-admin only (docs/SEARCH_USAGE_ANALYTICS_PLAN.md).
+  // Reads only in_app_search_events; separate from activity_read_model (a search is not an activity).
+  const { SearchAnalyticsRouter } = require("../searchAnalytics/searchAnalytics.router");
+  const searchAnalyticsRouter = container.get(SearchAnalyticsRouter) as any;
+  app.use("/searchAnalytics", searchAnalyticsRouter.router);
+
+  // Public Search Usage analytics, super-admin only (docs/PUBLIC_SEARCH_USAGE_ANALYTICS_PLAN.md).
+  // Read-only over public_search_sessions; the public /explore tool is untouched.
+  const { PublicSearchAnalyticsRouter } = require("../publicSearchAnalytics/publicSearchAnalytics.router");
+  const publicSearchAnalyticsRouter = container.get(PublicSearchAnalyticsRouter) as any;
+  app.use("/publicSearchAnalytics", publicSearchAnalyticsRouter.router);
+
   // Public semantic-search tool, no auth (docs/PUBLIC_SEMANTIC_SEARCH_TOOL_PLAN.md).
   const { PublicSearchRouter } = require("../publicSearch/publicSearch.router");
   const publicSearchRouter = container.get(PublicSearchRouter) as any;

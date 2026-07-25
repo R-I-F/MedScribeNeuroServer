@@ -79,6 +79,16 @@ import { InAppSearchProvider } from "../inAppSearch/inAppSearch.provider";
 import { InAppSearchController } from "../inAppSearch/inAppSearch.controller";
 import { InAppSearchRouter } from "../inAppSearch/inAppSearch.router";
 
+import { SearchAnalyticsProvider } from "../searchAnalytics/searchAnalytics.provider";
+import { SearchAnalyticsService } from "../searchAnalytics/searchAnalytics.service";
+import { SearchAnalyticsController } from "../searchAnalytics/searchAnalytics.controller";
+import { SearchAnalyticsRouter } from "../searchAnalytics/searchAnalytics.router";
+
+import { PublicSearchAnalyticsProvider } from "../publicSearchAnalytics/publicSearchAnalytics.provider";
+import { PublicSearchAnalyticsService } from "../publicSearchAnalytics/publicSearchAnalytics.service";
+import { PublicSearchAnalyticsController } from "../publicSearchAnalytics/publicSearchAnalytics.controller";
+import { PublicSearchAnalyticsRouter } from "../publicSearchAnalytics/publicSearchAnalytics.router";
+
 import { SuperAdminController } from "../superAdmin/superAdmin.controller";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -243,6 +253,16 @@ container.bind(InAppSearchService).toSelf().inTransientScope();
 container.bind(InAppSearchProvider).toSelf().inTransientScope();
 container.bind(InAppSearchController).toSelf().inTransientScope();
 container.bind(InAppSearchRouter).toSelf().inTransientScope();
+
+container.bind(SearchAnalyticsProvider).toSelf().inTransientScope();
+container.bind(SearchAnalyticsService).toSelf().inTransientScope();
+container.bind(SearchAnalyticsController).toSelf().inTransientScope();
+container.bind(SearchAnalyticsRouter).toSelf().inTransientScope();
+
+container.bind(PublicSearchAnalyticsProvider).toSelf().inTransientScope();
+container.bind(PublicSearchAnalyticsService).toSelf().inTransientScope();
+container.bind(PublicSearchAnalyticsController).toSelf().inTransientScope();
+container.bind(PublicSearchAnalyticsRouter).toSelf().inTransientScope();
 
 container.bind(SuperAdminController).toSelf().inTransientScope();
 container.bind(SuperAdminRouter).toSelf().inTransientScope();

@@ -394,9 +394,11 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 31. [Active Users Analytics](#active-users-analytics-activeusers)
 32. [Public Semantic Search](#public-semantic-search-publicsearch)
 33. [In-App Semantic Search](#in-app-semantic-search-inappsearch)
-34. [Error Responses](#error-responses)
-35. [Authentication Requirements Summary](#authentication-requirements-summary)
-36. [Load testing](#load-testing)
+34. [AI Search Usage Analytics](#ai-search-usage-analytics-searchanalytics)
+35. [Public Search Usage Analytics](#public-search-usage-analytics-publicsearchanalytics)
+36. [Error Responses](#error-responses)
+37. [Authentication Requirements Summary](#authentication-requirements-summary)
+38. [Load testing](#load-testing)
 
 ---
 
@@ -9242,6 +9244,99 @@ Diagnoses instead carry `diagnosis: { icdCode, icdName, icdArName }`. **401** if
 
 ---
 
+## AI Search Usage Analytics (`/searchAnalytics`)
+
+**Super-admin only** (chain `extractJWT -> institutionResolver -> userBasedRateLimiter -> requireSuperAdmin`, identical to Active Users). A read-only breakdown of who uses the in-form AI semantic search, how much, and how it trends. It reads ONLY the `in_app_search_events` table and is deliberately SEPARATE from Active Users: a search is NOT counted as user activity (a submission already counts, so counting a search too would double-count the same user), and superAdmin rows are excluded from every count. See docs/SEARCH_USAGE_ANALYTICS_PLAN.md.
+
+Two filter axes match Active Users: `scope` = `institution` (all departments) or `department` (one, via `deptCode`, resolved case-insensitively, default NS); period = analytics `granularity` (daily/weekly/monthly/quarterly) and list `window` (today/week/month/quarter), both rolling trailing intervals.
+
+### Analytics summary
+**GET** `/searchAnalytics/analytics?granularity=daily|weekly|monthly|quarterly&scope=&deptCode=`
+```jsonc
+{
+  "granularity": "monthly", "scope": "institution", "deptCode": null,
+  "dataStartDate": "2026-06-15",
+  "summary": {                                  // trailing windows, two metrics each
+    "daily":     { "users": 2, "searches": 5 },
+    "weekly":    { "users": 3, "searches": 7 },
+    "monthly":   { "users": 3, "searches": 7 },
+    "quarterly": { "users": 3, "searches": 8 }
+  },
+  "series": [ { "bucket": "2026-06", "searches": 40, "users": 12, "byType": { "procedure": 25, "diagnosis": 15 } } ],
+  "byType":  { "procedure": 5, "diagnosis": 3 },   // search volume, trailing granularity lookback
+  "byRole":  { "candidate": 7, "supervisor": 1 },  // search volume by role
+  "byDepartment": [ { "deptCode": "NS", "name": "Neurosurgery", "arName": "...", "users": 2, "searches": 6 } ]
+}
+```
+`byDepartment` is present only for `scope=institution` (trailing 3 months); department scope filters every figure by the resolved dept and returns an empty `byDepartment`.
+
+### Usage list (drill-down)
+**GET** `/searchAnalytics/list?window=today|week|month|quarter&scope=&deptCode=`
+```jsonc
+{
+  "window": "quarter", "scope": "institution", "deptCode": null, "count": 3,
+  "users": [
+    { "actorId": "...", "role": "candidate", "name": "...", "email": "...",
+      "deptCode": "NS", "deptName": "Neurosurgery", "deptArName": "...",
+      "searchCount": 5, "procedureCount": 4, "diagnosisCount": 1, "lastSearch": "2026-07-25T..." }
+  ]
+}
+```
+Ordered by `searchCount` desc, then most recent.
+
+### Per-user drill-down
+**GET** `/searchAnalytics/user?actorId=&role=&window=`
+```jsonc
+{
+  "actorId": "...", "role": "candidate", "window": "quarter",
+  "name": "...", "email": "...", "deptCode": "NS", "deptName": "...", "deptArName": "...",
+  "total": 5, "byType": { "procedure": 4, "diagnosis": 1 },
+  "events": [ { "type": "procedure", "occurredAt": "2026-07-25T...", "deptCode": "NS" } ]   // LIMIT 1000
+}
+```
+
+No migration is needed (the `in_app_search_events` table already exists). **401** unauthenticated, **403** for non-super roles.
+
+---
+
+## Public Search Usage Analytics (`/publicSearchAnalytics`)
+
+**Super-admin only** (same chain as Active Users). A read-only breakdown of who uses the PUBLIC landing-page `/explore` semantic search. It reads ONLY `public_search_sessions`, which records an aggregate `queryCount` per session (no per-search type, department, or timestamp), so this reports **people and searches** (plus a registered/verified/searched funnel), over time, but NOT by type or department. Because it reads historical session rows, FULL history is covered (no forward-only caveat). No migration. See docs/PUBLIC_SEARCH_USAGE_ANALYTICS_PLAN.md.
+
+Filter is period only: analytics `granularity` (daily/weekly/monthly/quarterly) and list `window` (today/week/month/quarter), rolling trailing intervals over the session `createdAt`. Identity is the verified email (public visitors have no account/role). "People" = distinct emails that ran at least one search (`queryCount > 0`); "searches" = SUM(`queryCount`).
+
+### Analytics summary
+**GET** `/publicSearchAnalytics/analytics?granularity=daily|weekly|monthly|quarterly`
+```jsonc
+{
+  "granularity": "monthly", "dataStartDate": "2026-07-24",
+  "summary": {
+    "daily":     { "people": 2, "searches": 7 },
+    "weekly":    { "people": 2, "searches": 9 },
+    "monthly":   { "people": 2, "searches": 9 },
+    "quarterly": { "people": 3, "searches": 10 }
+  },
+  "series": [ { "bucket": "2026-07", "searches": 110, "people": 30 } ],   // gap-filled by createdAt
+  "conversion": { "registered": 5, "verified": 4, "searchers": 3 },      // distinct emails, trailing 3 months
+  "allTime": { "people": 3, "searches": 10 }                             // lifetime totals
+}
+```
+
+### Usage list (drill-down)
+**GET** `/publicSearchAnalytics/list?window=today|week|month|quarter`
+```jsonc
+{
+  "window": "quarter", "count": 3,
+  "people": [
+    { "email": "user@example.com", "verified": true, "searchCount": 5,
+      "sessions": 2, "firstSeen": "2026-07-10T...", "lastSeen": "2026-07-25T..." }
+  ]
+}
+```
+Each email aggregates its sessions created within the window (searchCount = SUM(queryCount), only emails with a search shown), ordered by searchCount desc. **401** unauthenticated, **403** for non-super roles. The public `/explore` tool is never modified by this feature.
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -9933,6 +10028,8 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /activeUsers/analytics`, `/activeUsers/list`, `/activeUsers/user`, `PATCH /activeUsers/cap` | Yes | **Super Admin only**; active-users analytics + signup cap |
 | `POST /publicSearch/session`, `/verify`, `/resend`, `/query`, `/explain` | No | Public data-explorer; soft email+OTP gate; 5 free queries/email; proxies search to the hub |
 | `POST /inAppSearch/query` | Yes | Candidate, Supervisor, or Admin; in-form AI assist; department auto from JWT; 5 searches/user/UTC-day; returns CPT numCode |
+| `GET /searchAnalytics/analytics`, `/list`, `/user` | Yes | Super Admin only; AI search-usage breakdown (reads in_app_search_events; separate from activity; superAdmin excluded) |
+| `GET /publicSearchAnalytics/analytics`, `/list` | Yes | Super Admin only; public /explore usage (reads public_search_sessions; people/searches/funnel, session-only) |
 | `POST /instituteAdmin` | Yes | Super Admin (`departmentId` optional; omitted = institution-wide admin) |
 | `GET /instituteAdmin`, `GET /instituteAdmin/:id` | Yes | Institute Admin or Super Admin |
 | `PUT /instituteAdmin/:id` | Yes | Super Admin, or Institute Admin (**own record only**); self dept-switch re-issues tokens |
