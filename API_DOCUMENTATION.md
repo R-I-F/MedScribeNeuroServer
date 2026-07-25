@@ -7539,6 +7539,8 @@ Bulk creates journals from external data source (Google Sheets).
 
 The Conferences module provides access to conference data for candidates and higher roles to use when creating events.
 
+**Casing note:** `confTitle` is stored trimmed + lowercased. The frontend title-cases conference titles for display (calendar, attendance, event lists/details); lecture and journal titles keep their stored casing.
+
 ### Rate Limiting
 - **GET endpoints**: 200 requests per 15 minutes per user
 - **POST/PATCH/DELETE endpoints**: 50 requests per 15 minutes per user
