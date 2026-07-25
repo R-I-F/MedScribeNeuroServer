@@ -7678,21 +7678,20 @@ Returns a specific conference by ID. The `id` parameter must be a valid UUID for
 **Rate Limit:** 50 requests per 15 minutes per user
 
 **Description:**  
-Creates a new conference in the system.
+Creates a new conference in the system. The **Calendar Manager (clerk)** can create a conference inline while building a conference-type event (the event form lets a CM type a new title instead of only picking from the list; this is conferences only, not lectures or journals).
 
 **Request Body:**
 ```json
 {
   "confTitle": "Annual Neurosurgery Conference 2024",
-  "google_uid": "conf-001",
   "presenter": "6905e9dc719e11e810a0453c",
   "date": "2024-06-15T00:00:00.000Z"
 }
 ```
 
 **Field Requirements:**
-- `confTitle` (required): Title of the conference
-- `google_uid` (required): Google Sheets unique identifier
+- `confTitle` (required): Title of the conference (stored trimmed + lowercased)
+- `google_uid` (**optional**): legacy Google-Sheets import id. Omit it for CM-created conferences: the server auto-generates a unique `local-conf-<uuid>`. When provided, it must be unique (duplicate `google_uid` is rejected).
 - `presenter` (required): Supervisor UUID (must be a valid UUID format)
 - `date` (required): Date of the conference (must be a valid ISO 8601 date)
 

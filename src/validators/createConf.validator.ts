@@ -8,10 +8,11 @@ export const createConfValidator = checkSchema({
     errorMessage: "confTitle is required.",
     trim: true,
   },
+  // Optional: legacy Google-Sheets import id. Calendar-manager-created conferences omit it,
+  // and the provider auto-generates a unique local id when it is absent.
   google_uid: {
     in: ["body"],
-    notEmpty: true,
-    errorMessage: "google_uid is required.",
+    optional: { options: { checkFalsy: true } },
     trim: true,
   },
   presenter: {

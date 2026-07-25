@@ -1,5 +1,6 @@
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
+import { randomUUID } from "crypto";
 import { ConfService } from "./conf.service";
 import { IConf, IConfDoc, IConfInput, IConfUpdateInput } from "./conf.interface";
 import { UtilService } from "../utils/utils.service";
@@ -22,16 +23,24 @@ export class ConfProvider {
       // Validate that presenter is a valid Supervisor
       await this.validateSupervisorExists(presenterId, dataSource);
 
+      // google_uid is a legacy Google-Sheets import id. Calendar-manager-created conferences do not
+      // have one, so auto-generate a unique local id when it is absent (duplicate check only applies
+      // to an explicitly-provided id).
+      const providedUid = (validatedReq.google_uid ?? "").trim();
+      const google_uid = providedUid || `local-conf-${randomUUID()}`;
+
       // Business logic: Process and transform data
       const processedData: IConf = {
         confTitle: this.utilService.stringToLowerCaseTrim(validatedReq.confTitle),
-        google_uid: validatedReq.google_uid.trim(),
+        google_uid,
         presenterId: presenterId, // Use presenterId for MariaDB
         date: validatedReq.date,
       };
 
-      // Check for duplicate google_uid
-      await this.checkForDuplicateGoogleUid(processedData.google_uid, dataSource);
+      // Check for duplicate google_uid only when it was explicitly provided (generated ids are unique).
+      if (providedUid) {
+        await this.checkForDuplicateGoogleUid(processedData.google_uid, dataSource);
+      }
 
       // Call service to create conf
       return await this.confService.createConf(processedData, dataSource);
