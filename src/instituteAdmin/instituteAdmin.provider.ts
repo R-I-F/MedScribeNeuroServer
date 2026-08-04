@@ -1,5 +1,5 @@
 import { injectable, inject } from "inversify";
-import { DataSource, Repository, In } from "typeorm";
+import { DataSource, Repository, In, IsNull } from "typeorm";
 import PDFDocument from "pdfkit";
 import { IInstituteAdmin, IInstituteAdminDoc } from "./instituteAdmin.interface";
 import { InstituteAdminEntity } from "./instituteAdmin.mDbSchema";
@@ -566,8 +566,10 @@ export class InstituteAdminProvider {
       let candidates: any[];
       if (search === "") {
         candidates = await candRepo.find({
-          // Optional department scope (dept-scoped institute admins); null = institution-wide
-          where: { ...(departmentId ? { departmentId } : {}) },
+          // Optional department scope (dept-scoped institute admins); null = institution-wide.
+          // archivedAt IS NULL drops candidates promoted to supervisor (their history stays
+          // reachable through the by-id dashboard/report, they just leave the roster).
+          where: { archivedAt: IsNull(), ...(departmentId ? { departmentId } : {}) },
           order: { createdAt: "DESC" },
         });
       } else {
@@ -575,9 +577,15 @@ export class InstituteAdminProvider {
         const qb = candRepo
           .createQueryBuilder("c")
           .where(
-            "(c.fullName LIKE :term OR c.regNum LIKE :term OR c.rank LIKE :term OR c.regDeg LIKE :term OR c.email LIKE :term)",
+            // `rank` and `regDeg` are Postgres ENUM columns: comparing them with LIKE
+            // raises `operator does not exist: candidates_rank_enum ~~ text` and 500s the
+            // whole search, so both are cast to text first. They must be written as fully
+            // quoted identifiers: TypeORM only rewrites bare `alias.property` tokens, so
+            // `c.regDeg::text` would reach Postgres as unquoted (lowercased) `c.regdeg`.
+            `(c.fullName LIKE :term OR c.regNum LIKE :term OR "c"."rank"::text LIKE :term OR "c"."regDeg"::text LIKE :term OR c.email LIKE :term)`,
             { term }
-          );
+          )
+          .andWhere("c.archivedAt IS NULL");
         if (departmentId) {
           qb.andWhere("c.departmentId = :departmentId", { departmentId });
         }
@@ -714,8 +722,9 @@ export class InstituteAdminProvider {
 
       const candRepo: Repository<any> = dataSource.getRepository(CandidateEntity);
       const [candidates, totalItems] = await candRepo.findAndCount({
-        // Optional department scope (dept-scoped institute admins); null = institution-wide
-        where: { approved: true, ...(departmentId ? { departmentId } : {}) },
+        // Optional department scope (dept-scoped institute admins); null = institution-wide.
+        // Candidates promoted to supervisor are archived and leave the dashboards.
+        where: { approved: true, archivedAt: IsNull(), ...(departmentId ? { departmentId } : {}) },
         order: { createdAt: "DESC" },
         skip: (page - 1) * pageSize,
         take: pageSize,

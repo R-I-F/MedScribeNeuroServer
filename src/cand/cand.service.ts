@@ -4,9 +4,13 @@ import { IExternalRow } from "../types/externalRow.interface";
 import { ICand, ICandDoc } from "./cand.interface";
 import { AppDataSource } from "../config/database.config";
 import { CandidateEntity } from "./cand.mDbSchema";
-import { CandProvider } from "./cand.provider";
+import {
+  CandProvider,
+  PromoteCandidateOptions,
+  PromoteCandidateResult,
+} from "./cand.provider";
 import bcryptjs from "bcryptjs";
-import { Repository, In } from "typeorm";
+import { Repository, In, IsNull } from "typeorm";
 
 @injectable()
 export class CandService {
@@ -94,6 +98,8 @@ export class CandService {
         .createQueryBuilder("c")
         // Postgres needs the 'g' flag to strip ALL non-digit runs (without it, only the first is removed).
         .where("REGEXP_REPLACE(c.phoneNum, '[^0-9]+', '', 'g') = :digits", { digits })
+        // Promoted candidates are archived and are no longer a candidate identity.
+        .andWhere("c.archivedAt IS NULL")
         .getOne();
       return cand as unknown as ICandDoc | null;
     } catch (err: any) {
@@ -111,10 +117,16 @@ export class CandService {
         .createQueryBuilder("c")
         // Postgres: split_part(str,'@',1)=local, split_part(str,'@',2)=domain
         // (was MySQL SUBSTRING_INDEX(...,'@',1)/(...,'@',-1), which Postgres has no equivalent of).
+        // The OUTER parentheses matter: TypeORM concatenates where-strings verbatim, so
+        // without them the `AND` below would bind tighter than this `OR` and the archived
+        // filter would only apply to the canonical-email branch.
         .where(
-          "LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(split_part(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', split_part(LOWER(TRIM(c.email)), '@', 2)) = :canonical)",
+          "(LOWER(TRIM(c.email)) = :normalized OR (CONCAT(REPLACE(split_part(LOWER(TRIM(c.email)), '@', 1), '.', ''), '@', split_part(LOWER(TRIM(c.email)), '@', 2)) = :canonical))",
           { normalized, canonical }
         )
+        // Promoted candidates are archived: forgot-password must fall through to the
+        // supervisors table, exactly like login does.
+        .andWhere("c.archivedAt IS NULL")
         .getOne();
       return cand as unknown as ICandDoc | null;
     } catch (err: any) {
@@ -155,12 +167,24 @@ export class CandService {
     }
   }
 
-  public async getAllCandidates(dataSource: DataSource, departmentId?: string | null): Promise<ICandDoc[]> | never {
+  /**
+   * Active candidates. Candidates promoted to supervisor are archived and excluded by
+   * default (they are no longer a candidate identity); pass `includeArchived` for the
+   * rare historical read that needs them.
+   */
+  public async getAllCandidates(
+    dataSource: DataSource,
+    departmentId?: string | null,
+    options?: { includeArchived?: boolean }
+  ): Promise<ICandDoc[]> | never {
     try {
       const candRepository = dataSource.getRepository(CandidateEntity);
       const allCandidates = await candRepository.find({
         // Optional department scope (dept-scoped institute admins); null = institution-wide
-        where: { ...(departmentId ? { departmentId } : {}) },
+        where: {
+          ...(options?.includeArchived ? {} : { archivedAt: IsNull() }),
+          ...(departmentId ? { departmentId } : {}),
+        },
         order: { createdAt: "DESC" },
       });
       return allCandidates as unknown as ICandDoc[];
@@ -245,6 +269,27 @@ export class CandService {
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * Promote a candidate to supervisor (docs/CANDIDATE_TO_SUPERVISOR_PROMOTION_PLAN.md).
+   * Transactional: creates the supervisors row and archives + links the candidate row.
+   */
+  public async promoteToSupervisor(
+    candidateId: string,
+    options: PromoteCandidateOptions,
+    dataSource: DataSource,
+    adminDepartmentId?: string | null
+  ): Promise<PromoteCandidateResult> {
+    return this.candProvider.promoteToSupervisor(candidateId, options, dataSource, adminDepartmentId);
+  }
+
+  /** The archived candidate row a supervisor was promoted from (null if never a candidate). */
+  public async getPromotedFromCandidate(
+    supervisorId: string,
+    dataSource: DataSource
+  ): Promise<ICandDoc | null> {
+    return this.candProvider.getPromotedFromCandidate(supervisorId, dataSource);
   }
 
   public async deleteCand(id: string, dataSource: DataSource): Promise<boolean> | never {

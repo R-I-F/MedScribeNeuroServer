@@ -4,6 +4,7 @@ import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
 import bcryptjs from "bcryptjs";
 import { CandService } from "./cand.service";
+import { PromoteCandidateOptions, PromoteCandidateResult } from "./cand.provider";
 import { ICand, ICandDoc, ICandCensoredDoc } from "./cand.interface";
 import { AppDataSource } from "../config/database.config";
 import { toCensoredCand } from "../utils/censored.mapper";
@@ -195,6 +196,48 @@ export class CandController {
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * Promote a candidate to supervisor after a real-life promotion
+   * (docs/CANDIDATE_TO_SUPERVISOR_PROMOTION_PLAN.md).
+   *
+   * superAdmin: institution-wide. instituteAdmin: only its own department (the scope is
+   * read from the admin's DB ROW, never the JWT claim, for stale-token safety, same rule
+   * as the rest of the institute-admin read surface).
+   */
+  public async handlePromoteCand(
+    req: Request,
+    res: Response
+  ): Promise<PromoteCandidateResult> | never {
+    const id = req.params.id;
+    const validatedReq = matchedData(req) as PromoteCandidateOptions;
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const callerRole = jwtPayload?.role as UserRole | undefined;
+    const callerId = jwtPayload?.id ?? jwtPayload?._id;
+
+    let adminDepartmentId: string | null = null;
+    if (callerRole === UserRole.INSTITUTE_ADMIN && callerId) {
+      const rows = await dataSource.query(
+        `SELECT "departmentId" FROM "institute_admins" WHERE "id" = $1`,
+        [callerId]
+      );
+      // NULL on the admin row means an institution-wide admin, so no scope restriction.
+      adminDepartmentId = rows[0]?.departmentId ?? null;
+    }
+
+    const result = await this.candService.promoteToSupervisor(
+      id,
+      {
+        ...(validatedReq.position !== undefined && { position: validatedReq.position }),
+        ...(validatedReq.canValidate !== undefined && { canValidate: validatedReq.canValidate }),
+        ...(validatedReq.canValClin !== undefined && { canValClin: validatedReq.canValClin }),
+      },
+      dataSource,
+      adminDepartmentId
+    );
+    return { ...result, supervisor: stripPassword(result.supervisor) as any };
   }
 
   public async handleDeleteCand(

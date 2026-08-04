@@ -106,6 +106,28 @@ export class SupervisorRouter {
       }
     );
 
+    // Read-only logbook the caller built while he was still a candidate (promotion).
+    // Self only, resolved from the JWT. MUST stay above /:id or it would be swallowed by it.
+    this.router.get(
+      "/previousLogbook",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSupervisor,
+      async (req: Request, res: Response) => {
+        try {
+          const resp = await this.supervisorController.handleGetPreviousLogbook(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          if (err?.message?.includes("Unauthorized")) {
+            res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
+          } else {
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
+          }
+        }
+      }
+    );
+
     // Get supervisor by ID
     // Accessible to: superAdmin, instituteAdmin, supervisors, candidates
     this.router.get(

@@ -6060,6 +6060,93 @@ Deletes a candidate from the system. The `id` parameter must be a valid UUID for
 
 ---
 
+### Promote Candidate to Supervisor
+**POST** `/cand/:id/promote`
+
+**Requires:** Super Admin (institution-wide) or Institute Admin (own department only)
+
+For a candidate who was promoted in real life. The candidate row is **never deleted or
+repointed**: `submissions.candDocId` and `clinical_sub.candDocId` reference it with
+`ON DELETE RESTRICT` and `event_attendance.candidateId` with `ON DELETE CASCADE`, so it is
+the anchor of his entire logbook. Instead the endpoint creates a **new `supervisors` row**
+(same email and same password hash, so he keeps his credentials) and **archives** the
+candidate row (`archivedAt`), linking the two through `candidates.promotedToSupervisorId`.
+
+**Request Body (all fields optional):**
+```json
+{
+  "position": "Lecturer",
+  "canValidate": true,
+  "canValClin": false
+}
+```
+Defaults: `canValidate: true`, `canValClin: false`, `position: "unknown"`. Email, password
+hash, full name, phone number and department are inherited from the candidate row.
+
+**Response (201 Created):**
+```json
+{
+  "supervisor": {
+    "id": "9f1c8e2a-...",
+    "email": "resident@example.com",
+    "fullName": "dr ahmed hassan",
+    "phoneNum": "+201234567890",
+    "departmentId": "3b2e...",
+    "approved": true,
+    "role": "supervisor",
+    "canValidate": true,
+    "canValClin": false,
+    "position": "Lecturer"
+  },
+  "archivedCandidateId": "7e86dc6f-...",
+  "carriedOver": {
+    "submissions": 42,
+    "clinicalSubmissions": 5,
+    "eventAttendance": 18
+  },
+  "autoApproved": {
+    "submissions": 3,
+    "clinicalSubmissions": 1
+  }
+}
+```
+
+**Error responses:**
+
+| Status | `code` | Meaning |
+|---|---|---|
+| 404 | `not_found` | No candidate with that id |
+| 403 | `out_of_scope` | Institute admin scoped to a different department |
+| 409 | `already_promoted` | The candidate is already archived / linked to a supervisor |
+| 409 | `supervisor_email_exists` | A supervisor row already holds that email |
+| 409 | `supervisor_phone_exists` | A supervisor row already holds that phone number |
+
+**Notes:**
+- The password is **not** re-hashed or reset: the bcrypt hash is copied, so the user signs
+  in with the credentials he already has, now as a supervisor.
+- Login and forgot-password check `candidates` before `supervisors`, so both skip archived
+  candidate rows. Without that, the archived row would keep winning the lookup.
+- The promoted person disappears from the candidate list, the institute-admin dashboards
+  and **both rankings** (surgical and academic). His by-id candidate dashboard and report
+  stay reachable for admins, and his history stays queryable.
+- **The promotion closes out his candidate logbook.** Every still-`pending` submission and
+  clinical submission is approved inside the same transaction, and the counts come back
+  under `autoApproved`. He is no longer a candidate, so nothing of his is left sitting in a
+  supervisor's review queue.
+- **`rejected` rows are deliberately left alone.** A supervisor made that call, and the
+  promotion does not silently reverse it.
+- Approved rows carry the note `Auto-approved on promotion to supervisor.` in `review`
+  (existing review text is preserved). On submissions, `reviewedAt` is filled only where it
+  was empty; **`reviewedBy` is never stamped**, and clinical `reviewedAt` is left NULL,
+  because `activity_read_model` derives supervisor review activity from those columns and
+  stamping them would fabricate reviews that never happened, inflating that supervisor's
+  active-user counts.
+- The Active-Users **signup cap** counts him as one person, not two, by folding his
+  candidate-era activity onto the supervisor identity. The Active-Users analytics
+  breakdowns keep the historical per-role attribution.
+
+---
+
 ### Create Supervisor
 **POST** `/supervisor`
 
@@ -6179,6 +6266,49 @@ interface ISupervisorCensoredDoc {
   role?: string;
 }
 ```
+
+---
+
+### Get Previous Logbook (promoted supervisors)
+**GET** `/supervisor/previousLogbook`
+
+**Requires:** Authentication (Supervisor role or higher)
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+Read-only history a supervisor built **while he was still a candidate**, for accounts
+created by `POST /cand/:id/promote`. The archived candidate row is resolved from the
+**caller's own JWT id** through `candidates.promotedToSupervisorId`. There is no id
+parameter, so one supervisor can never read another's history through this route.
+
+**Response (200 OK), supervisor who was never a candidate:**
+```json
+{ "promoted": false }
+```
+
+**Response (200 OK), promoted supervisor:**
+```json
+{
+  "promoted": true,
+  "candidate": {
+    "id": "7e86dc6f-...",
+    "fullName": "dr ahmed hassan",
+    "regNum": "123456",
+    "rank": "resident",
+    "regDeg": "msc",
+    "departmentId": "3b2e...",
+    "archivedAt": "2026-08-04T10:12:31.000Z"
+  },
+  "submissions": [],
+  "clinicalSubmissions": [],
+  "academic": { "events": [], "totalPoints": 0 }
+}
+```
+
+`submissions` uses the same shape as `GET /sub/candidate/:id`, `clinicalSubmissions` the
+censored clinical shape, and `academic` the `GET /event/candidatePoints` shape, so existing
+renderers can be reused. Everything here is **read-only**: these rows still belong to the
+archived candidate identity and are not re-counted in any supervisor metric.
 
 ---
 
@@ -10055,9 +10185,11 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `PUT /cand/:id/approved` | Yes | Super Admin or Institute Admin |
 | `PUT /cand/:id` | Yes | Admins full control; candidate self-restricted (regDeg/regNum/phoneNum + dept switch); clerks/supervisors rejected |
 | `PATCH /cand/:id/resetPassword`, `DELETE /cand/:id` | Yes | Super Admin |
+| `POST /cand/:id/promote` | Yes | Super Admin (institution-wide) or Institute Admin (**own department only**) |
 | `POST /cand/createCandsFromExternal` | — | **DISABLED (410)** |
 | `GET /supervisor` | Yes | All roles; **dept-scoped**; censored for non-admins |
 | `GET /supervisor/:id` / `GET /supervisor/candidates` | Yes | All roles (censored) / Supervisor |
+| `GET /supervisor/previousLogbook` | Yes | Supervisor; **self only** (archived candidate resolved from the JWT) |
 | `PUT /supervisor/:id/approved` | Yes | Super Admin or Institute Admin |
 | `PUT /supervisor/:id` | Yes | Admins full control; supervisor self-restricted (phoneNum/position + dept switch) |
 | `POST /supervisor`, `DELETE /supervisor/:id` | Yes | Super Admin |

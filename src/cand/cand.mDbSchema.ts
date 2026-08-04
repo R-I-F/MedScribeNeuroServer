@@ -62,6 +62,18 @@ export class CandidateEntity {
   @Column({ type: "uuid" })
   departmentId!: string;
 
+  // Promotion to supervisor (docs/CANDIDATE_TO_SUPERVISOR_PROMOTION_PLAN.md).
+  // The row is never deleted (the whole logbook FKs to it), it is archived instead:
+  // `archivedAt IS NULL` is the active-candidate predicate for login, forgot-password,
+  // the candidate lists and both rankings.
+  @Column({ type: "timestamp", nullable: true })
+  archivedAt?: Date | null;
+
+  // The supervisors row this candidate was promoted into. UNIQUE, so two candidates can
+  // never collapse into one supervisor. Resolves the read-only previous-logbook view.
+  @Column({ type: "uuid", nullable: true })
+  promotedToSupervisorId?: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

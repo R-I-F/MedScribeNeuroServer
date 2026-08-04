@@ -12,13 +12,66 @@ import { UserRole } from "../types/role.types";
 import { JwtPayload } from "../middleware/authorize.middleware";
 import { AuthTokenService } from "../auth/authToken.service";
 import { setAuthCookies } from "../utils/cookie.utils";
+import { CandService } from "../cand/cand.service";
+import { SubService } from "../sub/sub.service";
+import { ClinicalSubProvider } from "../clinicalSub/clinicalSub.provider";
+import { EventProvider } from "../event/event.provider";
 
 @injectable()
 export class SupervisorController {
   constructor(
     @inject(SupervisorService) private supervisorService: SupervisorService,
-    @inject(AuthTokenService) private authTokenService: AuthTokenService
+    @inject(AuthTokenService) private authTokenService: AuthTokenService,
+    @inject(CandService) private candService: CandService,
+    @inject(SubService) private subService: SubService,
+    @inject(ClinicalSubProvider) private clinicalSubProvider: ClinicalSubProvider,
+    @inject(EventProvider) private eventProvider: EventProvider
   ) {}
+
+  /**
+   * Read-only logbook a supervisor built while he was still a candidate
+   * (docs/CANDIDATE_TO_SUPERVISOR_PROMOTION_PLAN.md).
+   *
+   * Self only: the archived candidate row is resolved from the CALLER's JWT id via
+   * `promotedToSupervisorId`, never from a parameter, so one supervisor can never read
+   * another's history here. A supervisor who was never a candidate gets
+   * `{ promoted: false }`, not an error.
+   */
+  public async handleGetPreviousLogbook(req: Request, res: Response) {
+    const dataSource = (req as any).institutionDataSource || AppDataSource;
+    const jwtPayload = res.locals.jwt as JwtPayload | undefined;
+    const supervisorId = jwtPayload?.id ?? jwtPayload?._id;
+    if (!supervisorId) {
+      throw new Error("Unauthorized: missing supervisor id");
+    }
+
+    const candidate = await this.candService.getPromotedFromCandidate(supervisorId, dataSource);
+    if (!candidate) {
+      return { promoted: false as const };
+    }
+
+    const [submissions, clinicalSubmissions, academic] = await Promise.all([
+      this.subService.getSubsByCandidateId(candidate.id, dataSource),
+      this.clinicalSubProvider.getMineOrAll(dataSource, { callerCandidateId: candidate.id }),
+      this.eventProvider.getCandidateEventPoints(candidate.id, dataSource),
+    ]);
+
+    return {
+      promoted: true as const,
+      candidate: {
+        id: candidate.id,
+        fullName: candidate.fullName,
+        regNum: candidate.regNum,
+        rank: candidate.rank,
+        regDeg: candidate.regDeg ?? null,
+        departmentId: candidate.departmentId ?? null,
+        archivedAt: candidate.archivedAt ?? null,
+      },
+      submissions,
+      clinicalSubmissions,
+      academic,
+    };
+  }
 
   /** Reject department ids that don't exist in the mirror `departments` table. */
   private async assertDepartmentExists(departmentId: string, dataSource: DataSource): Promise<void> {

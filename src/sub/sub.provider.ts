@@ -1364,7 +1364,12 @@ export class SubProvider {
       departmentId = rows[0]?.id ?? null;
     }
     if (!departmentId) return null;
-    const rows = await dataSource.query(`SELECT "id" FROM "candidates" WHERE "departmentId" = $1`, [departmentId]);
+    // archivedAt IS NULL: a candidate promoted to supervisor stops competing in the
+    // candidate ranking (his historical submissions stay on his archived candidate row).
+    const rows = await dataSource.query(
+      `SELECT "id" FROM "candidates" WHERE "departmentId" = $1 AND "archivedAt" IS NULL`,
+      [departmentId]
+    );
     return new Set<string>(rows.map((r: any) => r.id));
   }
 

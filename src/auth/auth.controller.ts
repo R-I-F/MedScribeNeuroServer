@@ -1,6 +1,6 @@
 import bcryptjs from "bcryptjs";
 import { inject, injectable } from "inversify";
-import { DataSource } from "typeorm";
+import { DataSource, IsNull } from "typeorm";
 import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -133,16 +133,19 @@ export class AuthController {
       const targetDataSource = dataSource;
 
       // Helper function to query user by email from DataSource
-      const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
+      const findUserByEmail = async (entityClass: any, email: string, where: object = {}): Promise<any> => {
         const repository = targetDataSource.getRepository(entityClass);
-        return await repository.findOne({ where: { email } });
+        return await repository.findOne({ where: { email, ...where } });
       };
 
-      // Try candidate first, then supervisor
+      // Try candidate first, then supervisor.
+      // A candidate promoted to supervisor keeps his candidate row (the logbook FKs to it)
+      // but is archived: without the IsNull() filter the archived row would keep winning
+      // this candidate-first lookup and he could never log in as a supervisor.
       let user: any = null;
       let userRole: UserRole | undefined;
 
-      user = await findUserByEmail(CandidateEntity, email);
+      user = await findUserByEmail(CandidateEntity, email, { archivedAt: IsNull() });
       if (user) {
         userRole = UserRole.CANDIDATE;
       } else {

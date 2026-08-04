@@ -63,11 +63,21 @@ export class ActiveUsersProvider {
    * derived, never stored - it flips automatically as the rolling count crosses the cap.
    */
   public async getSignupGate(dataSource: DataSource): Promise<SignupGate> {
+    // A candidate promoted to supervisor has TWO actor ids (his archived candidate row and
+    // his new supervisor row) and would otherwise be billed twice against the cap for a
+    // whole trailing quarter. COALESCE folds his candidate-era activity onto the supervisor
+    // identity for THIS count only; the analytics breakdowns keep the historical
+    // attribution, which is what actually happened.
     const rows = await dataSource.query(
       `SELECT
          (SELECT "maxActiveUsers" FROM "institutions" ORDER BY "createdAt" LIMIT 1) AS max_active_users,
-         (SELECT count(DISTINCT "actorId")::int FROM "activity_read_model"
-           WHERE "actorRole" <> $1 AND "occurredAt" >= now() - interval '3 months') AS current_count`,
+         (SELECT count(DISTINCT COALESCE(c."promotedToSupervisorId", arm."actorId"))::int
+            FROM "activity_read_model" arm
+            LEFT JOIN "candidates" c
+              ON arm."actorRole" = 'candidate'
+             AND c."id" = arm."actorId"
+             AND c."promotedToSupervisorId" IS NOT NULL
+           WHERE arm."actorRole" <> $1 AND arm."occurredAt" >= now() - interval '3 months') AS current_count`,
       [EXCLUDE_ROLE]
     );
     const rawMax = rows[0]?.max_active_users ?? null;

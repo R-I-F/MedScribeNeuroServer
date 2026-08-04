@@ -589,7 +589,11 @@ export class EventProvider {
       const departmentId = await this.resolveDepartmentId(dataSource, jwtDepartmentId);
       let departmentCandidateIds: Set<string> | null = null;
       if (departmentId) {
-        const rows = await dataSource.query(`SELECT "id" FROM "candidates" WHERE "departmentId" = $1`, [departmentId]);
+        // archivedAt IS NULL: a candidate promoted to supervisor leaves the academic ranking.
+        const rows = await dataSource.query(
+          `SELECT "id" FROM "candidates" WHERE "departmentId" = $1 AND "archivedAt" IS NULL`,
+          [departmentId]
+        );
         departmentCandidateIds = new Set<string>(rows.map((r: any) => r.id));
       }
       const sorted = Array.from(pointsMap.entries())

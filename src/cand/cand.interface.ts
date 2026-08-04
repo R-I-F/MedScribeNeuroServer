@@ -32,6 +32,14 @@ export interface ICand extends User {
   termsAcceptedAt?: Date;
   /** Department (mirror `departments` UUID) — drives dept-scoped reads and stamping. */
   departmentId?: string;
+  /**
+   * Set when the candidate was promoted to supervisor. The row is kept (the logbook FKs
+   * to it) but stops being an active candidate: login, forgot-password, the candidate
+   * lists and both rankings filter on `archivedAt IS NULL`.
+   */
+  archivedAt?: Date | null;
+  /** The supervisors row this candidate was promoted into (UNIQUE). */
+  promotedToSupervisorId?: string | null;
 }
 
 export interface ICandDoc extends ICand {

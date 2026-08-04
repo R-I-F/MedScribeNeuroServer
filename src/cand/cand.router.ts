@@ -7,6 +7,7 @@ import { getCandByIdValidator } from "../validators/getCandById.validator";
 import { deleteCandValidator } from "../validators/deleteCand.validator";
 import { updateCandValidator } from "../validators/updateCand.validator";
 import { updateCandidateApprovedValidator } from "../validators/updateCandidateApproved.validator";
+import { promoteCandidateValidator } from "../validators/promoteCandidate.validator";
 import { validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
@@ -124,6 +125,45 @@ export class CandRouter{
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Promote a candidate to supervisor (real-life promotion).
+    // Accessible to: superAdmin (institution-wide), instituteAdmin (own department only).
+    // Creates a supervisors row and archives the candidate row; the candidate's logbook is
+    // never moved or deleted. See docs/CANDIDATE_TO_SUPERVISOR_PROMOTION_PLAN.md.
+    this.router.post(
+      "/:id/promote",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireSuperAdminOrInstituteAdmin,
+      promoteCandidateValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        try {
+          const resp = await this.candController.handlePromoteCand(req, res);
+          return res.status(StatusCodes.CREATED).json(resp);
+        } catch (err: any) {
+          const code = err?.code;
+          if (code === "not_found") {
+            return res.status(StatusCodes.NOT_FOUND).json({ error: err.message, code });
+          }
+          if (code === "out_of_scope") {
+            return res.status(StatusCodes.FORBIDDEN).json({ error: err.message, code });
+          }
+          if (
+            code === "already_promoted" ||
+            code === "supervisor_email_exists" ||
+            code === "supervisor_phone_exists"
+          ) {
+            return res.status(StatusCodes.CONFLICT).json({ error: err.message, code });
+          }
+          return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });
         }
       }
     );
