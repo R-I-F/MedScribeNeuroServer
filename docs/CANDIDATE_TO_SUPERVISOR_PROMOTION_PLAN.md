@@ -108,7 +108,7 @@ submissions and attendance/points. Read-only, nothing editable, nothing re-count
 | D | Auth paths skip archived candidates | ✅ done (login + forgot-password + WA-bot phone lookup) |
 | E | Read exclusions (lists, rankings, cap) | ✅ done |
 | F | Previous-logbook endpoint | ✅ done |
-| G | Frontend (admin promote action + supervisor previous-logbook view) | ✅ built, tsc + vite clean; **user click-test pending** |
+| G | Frontend (admin promote action + supervisor previous-logbook view) | ✅ SHIPPED, confirmed working in production by the user |
 | H | tsc + E2E on throwaway PG17 | ✅ **52 passed / 0 failed**, tsc clean, DI resolves |
 | J | Auto-approve pending work on promotion + enum-LIKE search fix | ✅ done |
 | I | API_DOCUMENTATION.md + CLAUDE.md "Where we stopped" | ✅ done |
@@ -236,6 +236,19 @@ and re-applied cleanly; columns + `IDX_cand_active` + FK + UNIQUE all created; c
 111/111 still ACTIVE (`archivedAt IS NULL`, so the migration archives nobody); and
 candidates / submissions / clinical_sub / event_attendance / activity_read_model counts were
 byte-identical before, after up, after down and after re-up.
+
+## LIVE IN PRODUCTION (2026-08-04)
+
+This feature existed because a **real promotion request came in on the live app**, and it
+has now been used for it. Backend `d60d9a7` and frontend `becc0d9` are on `main`
+(Railway + Netlify auto-deployed); migration 250 is applied to `ka-institute`.
+
+Post-promotion read-only verification of the two promoted accounts (a tester plus the real
+request): both archived and linked to their new supervisor row, same email, **same bcrypt
+hash**, same department, account approved; **0 submissions and 0 clinical entries left
+pending**; history fully intact (114 submissions, 3 clinical, 16 attendance rows still
+resolving to the archived candidate rows). Candidates 111 -> 109 (the two promotions),
+supervisors 56 -> 59 (two promotions plus one ordinary signup).
 
 ## Open decisions
 
