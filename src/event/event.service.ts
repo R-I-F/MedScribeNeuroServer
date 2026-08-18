@@ -12,6 +12,13 @@ export interface IAttendanceWithEvent {
   event: EventEntity;
 }
 
+/** The three numbers the academic-insights card renders for one candidate. */
+export interface IAcademicStats {
+  totalPoints: number;
+  attendanceCount: number;
+  flaggedCount: number;
+}
+
 @injectable()
 export class EventService {
   private uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -728,24 +735,34 @@ export class EventService {
    * (e.g. "my points", activity timeline) that filter by candidateId.
    */
   public async getAcademicPointsPerCandidate(dataSource: DataSource): Promise<Map<string, number>> {
-    return this.computeAcademicPointsPerCandidate(dataSource);
+    const stats = await this.getAcademicStatsPerCandidate(dataSource);
+    const map = new Map<string, number>();
+    for (const [cid, s] of stats) map.set(cid, s.totalPoints);
+    return map;
   }
 
   /**
-   * Full scan: all attendance + events, compute points per candidate. Used by getAcademicPointsPerCandidate.
+   * Same single full scan as getAcademicPointsPerCandidate, but keeps the attendance and
+   * flagged counts alongside the points. The candidate-facing academic card shows all three
+   * (points / attendance count / flagged), so any surface that renders that card from a
+   * precomputed map (e.g. the institute-admin candidate snapshot) needs the counts too.
    */
-  private async computeAcademicPointsPerCandidate(dataSource: DataSource): Promise<Map<string, number>> {
+  public async getAcademicStatsPerCandidate(dataSource: DataSource): Promise<Map<string, IAcademicStats>> {
     const attRepo = dataSource.getRepository(EventAttendanceEntity);
     const records = await attRepo.find({
       relations: ["event"],
       order: { createdAt: "DESC" },
     });
-    const map = new Map<string, number>();
+    const map = new Map<string, IAcademicStats>();
     for (const r of records) {
       const cid = r.candidateId;
       const ev = r.event as EventEntity;
       const pts = this.computePointsForAttendance(r, ev, cid);
-      map.set(cid, (map.get(cid) ?? 0) + pts);
+      const entry = map.get(cid) ?? { totalPoints: 0, attendanceCount: 0, flaggedCount: 0 };
+      entry.totalPoints += pts;
+      entry.attendanceCount += 1;
+      if (r.flagged) entry.flaggedCount += 1;
+      map.set(cid, entry);
     }
     return map;
   }

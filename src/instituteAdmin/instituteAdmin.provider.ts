@@ -15,7 +15,7 @@ import { ICalSurgDoc } from "../calSurg/calSurg.interface";
 import { IHospitalDoc } from "../hospital/hospital.interface";
 import { CandidateEntity } from "../cand/cand.mDbSchema";
 import { SubProvider } from "../sub/sub.provider";
-import { EventService } from "../event/event.service";
+import { EventService, IAcademicStats } from "../event/event.service";
 import { EventProvider } from "../event/event.provider";
 import { EventEntity } from "../event/event.mDbSchema";
 import { EventAttendanceEntity } from "../event/eventAttendance.mDbSchema";
@@ -518,7 +518,7 @@ export class InstituteAdminProvider {
     cand: any,
     candSubs: ISubDoc[],
     institution: IInstitution,
-    academicPoints: Map<string, number> | null,
+    academicStats: Map<string, IAcademicStats> | null,
     clinicalByCandidate: Map<string, unknown[]> | null
   ): any {
     const cid = cand.id;
@@ -539,8 +539,15 @@ export class InstituteAdminProvider {
       supervisorAnalytics,
     };
 
-    if (institution.isAcademic && academicPoints) {
-      snapshot.points = { totalPoints: academicPoints.get(cid) ?? 0 };
+    if (institution.isAcademic && academicStats) {
+      // attendanceCount/flaggedCount ride along with the points: the academic card the admin
+      // sees is the same component the candidate sees, and it renders all three numbers.
+      const s = academicStats.get(cid);
+      snapshot.points = {
+        totalPoints: s?.totalPoints ?? 0,
+        attendanceCount: s?.attendanceCount ?? 0,
+        flaggedCount: s?.flaggedCount ?? 0,
+      };
     }
     if (institution.isClinical && clinicalByCandidate) {
       snapshot.clinicalSubCand = clinicalByCandidate.get(cid) ?? [];
@@ -678,9 +685,9 @@ export class InstituteAdminProvider {
 
       const candSubs = await this.subService.getSubsByCandidateId(candidateId, dataSource);
 
-      let academicPoints: Map<string, number> | null = null;
+      let academicStats: Map<string, IAcademicStats> | null = null;
       if (institution.isAcademic) {
-        academicPoints = await this.eventService.getAcademicPointsPerCandidate(dataSource);
+        academicStats = await this.eventService.getAcademicStatsPerCandidate(dataSource);
       }
 
       let clinicalByCandidate: Map<string, unknown[]> | null = null;
@@ -700,7 +707,7 @@ export class InstituteAdminProvider {
         }
       }
 
-      return this.buildDashboardSnapshot(cand, candSubs, institution, academicPoints, clinicalByCandidate);
+      return this.buildDashboardSnapshot(cand, candSubs, institution, academicStats, clinicalByCandidate);
     } catch (err: any) {
       throw new Error(err.message || err);
     }
@@ -745,9 +752,9 @@ export class InstituteAdminProvider {
         });
       }
 
-      let academicPoints: Map<string, number> | null = null;
+      let academicStats: Map<string, IAcademicStats> | null = null;
       if (institution.isAcademic) {
-        academicPoints = await this.eventService.getAcademicPointsPerCandidate(dataSource);
+        academicStats = await this.eventService.getAcademicStatsPerCandidate(dataSource);
       }
 
       let clinicalByCandidate: Map<string, unknown[]> | null = null;
@@ -769,7 +776,7 @@ export class InstituteAdminProvider {
 
       const items = candidates.map((cand: any) => {
         const candSubs = subsByCandidate.get(cand.id) ?? [];
-        return this.buildDashboardSnapshot(cand, candSubs, institution, academicPoints, clinicalByCandidate);
+        return this.buildDashboardSnapshot(cand, candSubs, institution, academicStats, clinicalByCandidate);
       });
 
       return {
@@ -880,12 +887,24 @@ export class InstituteAdminProvider {
     if (institution.isAcademic) {
       const pointsResponse = await this.eventProvider.getCandidateEventPoints(candidateId, dataSource);
       totalAcademicPoints = pointsResponse.totalPoints;
-      academicEvents = pointsResponse.events.map((e) => ({
-        topic: e.event?.title ?? "—",
-        lecturer: e.presenter?.name ?? "—",
-        points: e.points,
-        date: e.date ?? "—",
-      }));
+      // getCandidateEventPoints falls back to a dash when an event carries no linked
+      // lecture/journal/conference row. A dash in the Topic column reads as a broken table,
+      // so name the event by its type instead ("Lecture", "Journal club", "Conference").
+      const EVENT_TYPE_LABEL: Record<string, string> = {
+        lecture: "Lecture",
+        journal: "Journal club",
+        conference: "Conference",
+      };
+      const isPlaceholder = (t: string) => t === "" || t === "-" || t === "—";
+      academicEvents = pointsResponse.events.map((e) => {
+        const title = String(e.event?.title ?? "").trim();
+        return {
+          topic: isPlaceholder(title) ? EVENT_TYPE_LABEL[e.type] ?? "Academic event" : title,
+          lecturer: e.presenter?.name ?? "-",
+          points: e.points,
+          date: e.date ?? "-",
+        };
+      });
     }
 
     let clinicalTotal = 0;
@@ -1354,34 +1373,48 @@ export class InstituteAdminProvider {
         doc.text(`Total academic points: ${data.totalAcademicPoints}`, left, doc.y);
         doc.moveDown(0.5);
         if (data.academicEvents.length > 0) {
-          const tableHeaderY = doc.y;
           const lecturerWidth = 140;
           const dateWidth = 72;
+          // Gutter between columns: without it a truncated topic runs straight into the
+          // lecturer name, which is what made long journal titles look glued together.
+          const colGap = 10;
           const topicWidth = right - left - lecturerWidth - dateWidth;
           const lecturerStart = left + topicWidth;
           const dateStart = right - dateWidth;
           const truncateToWidth = (text: string, maxW: number): string => {
             if (!text || doc.widthOfString(text) <= maxW) return text;
-            const ellipsis = "…";
+            const ellipsis = "...";
             let s = text;
             while (s.length && doc.widthOfString(s + ellipsis) > maxW) s = s.slice(0, -1);
             return s ? s + ellipsis : ellipsis;
           };
-          doc.fontSize(REPORT_TYPO.bodySize).font("Helvetica-Bold").fillColor(CHART_COLORS.bodyTextDark);
-          doc.text("Topic", left, tableHeaderY);
-          doc.text("Lecturer", lecturerStart, tableHeaderY);
-          doc.text("Date", dateStart, tableHeaderY);
-          doc.moveTo(left, tableHeaderY + 12).lineTo(right, tableHeaderY + 12).strokeColor(REPORT_LAYOUT.dividerColor).lineWidth(REPORT_LAYOUT.dividerLineWidth).stroke();
-          doc.y = tableHeaderY + 14;
-          doc.moveDown(0.2);
-          doc.font("Helvetica").fontSize(REPORT_TYPO.bodySize).fillColor(CHART_COLORS.bodyText);
+          // lineBreak:false + an explicit width keep every cell on its own single line:
+          // a value that somehow escapes truncation is clipped, never wrapped into the row below.
+          const cell = (text: string, x: number, y: number, w: number) =>
+            doc.text(truncateToWidth(text, w - colGap), x, y, { width: w, lineBreak: false });
+          const drawTableHeader = () => {
+            const headerY = doc.y;
+            doc.fontSize(REPORT_TYPO.bodySize).font("Helvetica-Bold").fillColor(CHART_COLORS.bodyTextDark);
+            cell("Topic", left, headerY, topicWidth);
+            cell("Lecturer", lecturerStart, headerY, lecturerWidth);
+            cell("Date", dateStart, headerY, dateWidth);
+            doc.moveTo(left, headerY + 12).lineTo(right, headerY + 12).strokeColor(REPORT_LAYOUT.dividerColor).lineWidth(REPORT_LAYOUT.dividerLineWidth).stroke();
+            doc.y = headerY + 14;
+            doc.moveDown(0.2);
+            doc.font("Helvetica").fontSize(REPORT_TYPO.bodySize).fillColor(CHART_COLORS.bodyText);
+          };
+          drawTableHeader();
           for (const row of data.academicEvents) {
+            const pageBefore = pageNumber;
             ensureSpace(20);
+            // Rows that spill onto a new page get the column header repeated there,
+            // otherwise the continuation reads as three unlabelled columns.
+            if (pageNumber !== pageBefore) drawTableHeader();
             doc.font("Helvetica").fontSize(REPORT_TYPO.bodySize).fillColor(CHART_COLORS.bodyText);
             const rowY = doc.y;
-            doc.text(truncateToWidth((row.topic || "—").trim(), topicWidth), left, rowY);
-            doc.text(truncateToWidth((row.lecturer || "—").trim(), lecturerWidth), lecturerStart, rowY);
-            doc.text(truncateToWidth(String(row.date ?? "—"), dateWidth), dateStart, rowY);
+            cell((row.topic || "-").trim(), left, rowY, topicWidth);
+            cell((row.lecturer || "-").trim(), lecturerStart, rowY, lecturerWidth);
+            cell(String(row.date ?? "-"), dateStart, rowY, dateWidth);
             doc.y = rowY + 14;
             doc.moveDown(0.3);
           }
