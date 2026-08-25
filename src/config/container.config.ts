@@ -56,6 +56,11 @@ import { DemoRequestProvider } from "../demoRequest/demoRequest.provider";
 import { DemoRequestController } from "../demoRequest/demoRequest.controller";
 import { DemoRequestRouter } from "../demoRequest/demoRequest.router";
 
+import { EliminatorService } from "../eliminator/eliminator.service";
+import { EliminatorProvider } from "../eliminator/eliminator.provider";
+import { EliminatorController } from "../eliminator/eliminator.controller";
+import { EliminatorRouter } from "../eliminator/eliminator.router";
+
 import { AuthController } from "../auth/auth.controller";
 import { AuthRouter } from "../auth/auth.router";
 import { AuthTokenService } from "../auth/authToken.service";
@@ -285,6 +290,12 @@ container.bind(DemoRequestProvider).toSelf().inTransientScope();
 container.bind(DemoRequestController).toSelf().inTransientScope();
 container.bind(DemoRequestRouter).toSelf().inTransientScope();
 container.bind(PasswordResetController).toSelf().inTransientScope();
+
+// NS lecture-eliminator campaign (public, no-login booking form)
+container.bind(EliminatorService).toSelf().inTransientScope();
+container.bind(EliminatorProvider).toSelf().inTransientScope();
+container.bind(EliminatorController).toSelf().inTransientScope();
+container.bind(EliminatorRouter).toSelf().inTransientScope();
 
 container.bind(ReportsController).toSelf().inTransientScope();
 container.bind(ReportsRouter).toSelf().inTransientScope();

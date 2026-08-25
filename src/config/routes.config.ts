@@ -145,6 +145,11 @@ export function addRoutes(app: Application) {
   const demoRequestRouter = container.get(DemoRequestRouter) as any;
   app.use("/demoRequest", demoRequestRouter.router);
 
+  // Public, no-login NS lecture-eliminator booking form (reachable only via its campaign UUID).
+  const { EliminatorRouter } = require("../eliminator/eliminator.router");
+  const eliminatorRouter = container.get(EliminatorRouter) as any;
+  app.use("/eliminator", eliminatorRouter.router);
+
   // Active-Users analytics, super-admin only (docs/ACTIVE_USERS_ANALYTICS_PLAN.md).
   const { ActiveUsersRouter } = require("../activeUsers/activeUsers.router");
   const activeUsersRouter = container.get(ActiveUsersRouter) as any;

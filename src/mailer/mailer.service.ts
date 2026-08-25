@@ -35,7 +35,7 @@ export class MailerService {
   }
 
   public async sendMail(params: SendMailParams): Promise<{ messageId?: string }> {
-    const { from, to, subject, text, html } = params;
+    const { from, to, subject, text, html, cc } = params;
     const apiKey = process.env.MAILGUN_API_KEY;
     const domainRaw = process.env.MAILGUN_DOMAIN;
     if (!apiKey || !domainRaw) {
@@ -55,6 +55,7 @@ export class MailerService {
         subject,
         text: text ?? "",
         html,
+        ...(cc ? { cc: [cc] } : {}),
       };
       const data = await mg.messages.create(domain, messageData);
       const id = (data as { id?: string })?.id;

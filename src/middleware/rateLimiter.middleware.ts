@@ -215,6 +215,35 @@ export const publicSearchRateLimiter = rateLimit({
 });
 
 /**
+ * Lecture-eliminator reservation rate limiter (IP-based) for POST
+ * /eliminator/:campaignId/reservations only. Public + unauthenticated, but a
+ * legitimate supervisor submits a handful of times at most (initial pick +
+ * any conflict retries) - 20/15min per IP is generous headroom without being
+ * an open door for scripted claiming.
+ */
+export const eliminatorReserveRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  skip: skipRateLimit,
+  message: {
+    status: "error",
+    statusCode: StatusCodes.TOO_MANY_REQUESTS,
+    message: "Too Many Requests",
+    error: "Too many requests from this IP, please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    res.status(StatusCodes.TOO_MANY_REQUESTS).json({
+      status: "error",
+      statusCode: StatusCodes.TOO_MANY_REQUESTS,
+      message: "Too Many Requests",
+      error: "Too many requests from this IP, please try again later.",
+    });
+  },
+});
+
+/**
  * User-based API rate limiter (for authenticated endpoints)
  * Limits requests to 200 requests per 15 minutes per user
  * Uses JWT token to identify user, falls back to IP if no token

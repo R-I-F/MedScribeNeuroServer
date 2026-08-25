@@ -36,6 +36,9 @@ import { DemoRequestEntity } from "../demoRequest/demoRequest.mDbSchema";
 import { LoginEventEntity } from "../loginEvents/loginEvent.mDbSchema";
 import { PublicSearchSessionEntity } from "../publicSearch/publicSearchSession.mDbSchema";
 import { InAppSearchEventEntity } from "../inAppSearch/inAppSearchEvent.mDbSchema";
+import { EliminatorCampaignEntity } from "../eliminator/eliminatorCampaign.mDbSchema";
+import { EliminatorSlotEntity } from "../eliminator/eliminatorSlot.mDbSchema";
+import { EliminatorReservationEntity } from "../eliminator/eliminatorReservation.mDbSchema";
 
 dotenv.config();
 
@@ -131,6 +134,9 @@ function getDbConfig(): DataSourceOptions {
       LoginEventEntity,
       PublicSearchSessionEntity,
       InAppSearchEventEntity,
+      EliminatorCampaignEntity,
+      EliminatorSlotEntity,
+      EliminatorReservationEntity,
     ],
     migrations: [
       __dirname + "/../migrations-ka/*.ts",

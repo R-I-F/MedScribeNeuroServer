@@ -4,6 +4,7 @@ export type SendMailParams = {
   text?: string;
   html?: string;
   from?: string;
+  cc?: string;
 };
 
 export type SendMailPayload = SendMailParams;
