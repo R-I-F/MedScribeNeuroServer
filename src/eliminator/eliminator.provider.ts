@@ -32,12 +32,17 @@ export class EliminatorProvider {
     @inject(MailerService) private mailerService: MailerService
   ) {}
 
-  public async getState(campaignId: string, dataSource: DataSource): Promise<IEliminatorState> {
+  public async getState(
+    campaignId: string,
+    dataSource: DataSource,
+    excludeLectureIds: string[] = []
+  ): Promise<IEliminatorState> {
     const campaign = await this.mustGetActiveCampaign(campaignId, dataSource);
     const { topics, lectures } = await this.eliminatorService.getOpenTopicsAndLectures(
       campaign.id,
       campaign.departmentId,
-      dataSource
+      dataSource,
+      excludeLectureIds
     );
     const slots = await this.eliminatorService.getOpenSlots(campaign.id, dataSource);
     return {
@@ -56,6 +61,44 @@ export class EliminatorProvider {
   public async getSupervisors(campaignId: string, dataSource: DataSource): Promise<IEliminatorSupervisorOption[]> {
     const campaign = await this.mustGetActiveCampaign(campaignId, dataSource);
     return this.eliminatorService.getSupervisorOptions(campaign.departmentId, dataSource);
+  }
+
+  // ── Form-scoped variants: a form is just a named view (+ static lecture exclusion list)
+  // onto a campaign's SHARED pool of dates and reservations. Nothing about the pool itself
+  // is per-form - a lecture or date taken through any form is gone from every form pointing
+  // at the same campaign, because they all read/write the one underlying campaignId.
+
+  public async getStateForForm(formId: string, dataSource: DataSource): Promise<IEliminatorState> {
+    const form = await this.mustGetForm(formId, dataSource);
+    const excluded = await this.eliminatorService.getFormExcludedLectureIds(form.id, dataSource);
+    const state = await this.getState(form.campaignId, dataSource, excluded);
+    // Show the form's own label (e.g. "... - New Lectures Only"), not the shared campaign's
+    // generic one, so a supervisor can tell which entry point they're actually on.
+    return { ...state, campaign: { ...state.campaign, label: form.label } };
+  }
+
+  public async getSupervisorsForForm(formId: string, dataSource: DataSource): Promise<IEliminatorSupervisorOption[]> {
+    const form = await this.mustGetForm(formId, dataSource);
+    return this.getSupervisors(form.campaignId, dataSource);
+  }
+
+  public async getSupervisorStatusForForm(
+    formId: string,
+    supervisorId: string,
+    dataSource: DataSource
+  ): Promise<IEliminatorSupervisorStatus> {
+    const form = await this.mustGetForm(formId, dataSource);
+    return this.getSupervisorStatus(form.campaignId, supervisorId, dataSource);
+  }
+
+  public async reserveForForm(
+    formId: string,
+    input: IEliminatorReserveInput,
+    dataSource: DataSource
+  ): Promise<{ reservations: IEliminatorReservationSummary[]; remainingCap: number }> {
+    const form = await this.mustGetForm(formId, dataSource);
+    const excluded = await this.eliminatorService.getFormExcludedLectureIds(form.id, dataSource);
+    return this.reserve(form.campaignId, input, dataSource, excluded);
   }
 
   public async getSupervisorStatus(
@@ -85,9 +128,11 @@ export class EliminatorProvider {
   public async reserve(
     campaignId: string,
     input: IEliminatorReserveInput,
-    dataSource: DataSource
+    dataSource: DataSource,
+    excludeLectureIds: string[] = []
   ): Promise<{ reservations: IEliminatorReservationSummary[]; remainingCap: number }> {
     const campaign = await this.mustGetActiveCampaign(campaignId, dataSource);
+    const excludedSet = new Set(excludeLectureIds);
 
     const selections = input.selections ?? [];
     if (selections.length === 0) {
@@ -129,7 +174,8 @@ export class EliminatorProvider {
         const { lectures } = await this.eliminatorService.getOpenTopicsAndLectures(
           campaign.id,
           campaign.departmentId,
-          manager as unknown as DataSource
+          manager as unknown as DataSource,
+          excludeLectureIds
         );
         const openSlots = await this.eliminatorService.getOpenSlots(campaign.id, manager as unknown as DataSource);
         const openSeats = openSlots.reduce((sum, s) => sum + s.remaining, 0);
@@ -148,6 +194,14 @@ export class EliminatorProvider {
       // reservation rows already touched in this loop are automatically undone, so
       // there is nothing to manually unwind here.
       for (const selection of selections) {
+        // Defense in depth: reject an excluded lecture even if a stale client submits it
+        // anyway (the picker already hides it, so this only fires against a stale page).
+        if (excludedSet.has(selection.lectureId)) {
+          throw new EliminatorConflictError("LECTURE_EXCLUDED", "That lecture is not offered on this form", {
+            lectureId: selection.lectureId,
+          });
+        }
+
         const belongs = await this.eliminatorService.lectureBelongsToDepartment(
           selection.lectureId,
           campaign.departmentId,
@@ -386,6 +440,17 @@ export class EliminatorProvider {
       throw new Error("Campaign not found");
     }
     return campaign;
+  }
+
+  private async mustGetForm(
+    formId: string,
+    dataSource: DataSource
+  ): Promise<{ id: string; campaignId: string; label: string }> {
+    const form = await this.eliminatorService.getFormById(formId, dataSource);
+    if (!form) {
+      throw new Error("Form not found");
+    }
+    return form;
   }
 
   /**

@@ -100,6 +100,69 @@ export class EliminatorRouter {
         }
       }
     );
+
+    // ── Form-scoped routes: a different public entry point onto the SAME campaign's pool
+    // (shared dates/reservations), offering a static subset of lectures. Route shape
+    // deliberately has an extra "/form/" segment so it can never collide with the plain
+    // "/:campaignId/..." routes above, whatever order these are registered in.
+
+    this.router.get("/form/:formId/state", apiRateLimiter, async (req: Request, res: Response) => {
+      try {
+        const ds = await this.getDataSource();
+        const state = await this.eliminatorController.handleGetStateForForm(req.params.formId, ds);
+        res.status(StatusCodes.OK).json(state);
+      } catch (err: any) {
+        this.handleError(err, res);
+      }
+    });
+
+    this.router.get("/form/:formId/supervisors", apiRateLimiter, async (req: Request, res: Response) => {
+      try {
+        const ds = await this.getDataSource();
+        const supervisors = await this.eliminatorController.handleGetSupervisorsForForm(req.params.formId, ds);
+        res.status(StatusCodes.OK).json(supervisors);
+      } catch (err: any) {
+        this.handleError(err, res);
+      }
+    });
+
+    this.router.get(
+      "/form/:formId/supervisor/:supervisorId/status",
+      apiRateLimiter,
+      async (req: Request, res: Response) => {
+        try {
+          const ds = await this.getDataSource();
+          const status = await this.eliminatorController.handleGetSupervisorStatusForForm(
+            req.params.formId,
+            req.params.supervisorId,
+            ds
+          );
+          res.status(StatusCodes.OK).json(status);
+        } catch (err: any) {
+          this.handleError(err, res);
+        }
+      }
+    );
+
+    this.router.post(
+      "/form/:formId/reservations",
+      eliminatorReserveRateLimiter,
+      eliminatorReserveValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          return res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+        try {
+          const payload = matchedData(req, { locations: ["body"] }) as IEliminatorReserveInput;
+          const ds = await this.getDataSource();
+          const outcome = await this.eliminatorController.handleReserveForForm(req.params.formId, payload, ds);
+          res.status(StatusCodes.CREATED).json(outcome);
+        } catch (err: any) {
+          this.handleError(err, res);
+        }
+      }
+    );
   }
 
   private handleError(err: any, res: Response) {
@@ -113,7 +176,7 @@ export class EliminatorRouter {
         slotId: err.slotId,
       });
     }
-    if (err?.message === "Campaign not found") {
+    if (err?.message === "Campaign not found" || err?.message === "Form not found") {
       return res.status(StatusCodes.NOT_FOUND).json({ error: err.message });
     }
     console.error("[Eliminator] error:", err?.message ?? err);

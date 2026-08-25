@@ -27,11 +27,16 @@ export class EliminatorService {
     return dataSource.getRepository(EliminatorCampaignEntity).findOne({ where: { id } });
   }
 
-  /** Open topics + lectures for a campaign's department, minus lectures already reserved. */
+  /**
+   * Open topics + lectures for a campaign's department, minus lectures already reserved
+   * (shared across every form on this campaign) and minus `excludeLectureIds` (a single
+   * form's own static exclusion list, e.g. "already held last year" - never shared).
+   */
   public async getOpenTopicsAndLectures(
     campaignId: string,
     departmentId: string,
-    dataSource: DataSource
+    dataSource: DataSource,
+    excludeLectureIds: string[] = []
   ): Promise<{ topics: IEliminatorTopicOption[]; lectures: IEliminatorLectureOption[] }> {
     const topics = await dataSource.query(
       `SELECT "id", "title", "sortOrder"
@@ -50,11 +55,33 @@ export class EliminatorService {
             SELECT 1 FROM "eliminator_reservations" r
              WHERE r."campaignId" = $2 AND r."lectureId" = l."id"
           )
+          AND NOT (l."id" = ANY($3::uuid[]))
         ORDER BY t."sortOrder", l."sortOrder", l."title"`,
-      [departmentId, campaignId]
+      [departmentId, campaignId, excludeLectureIds]
     );
 
     return { topics, lectures };
+  }
+
+  /** Resolves a public form to its campaign + label. */
+  public async getFormById(
+    formId: string,
+    dataSource: DataSource
+  ): Promise<{ id: string; campaignId: string; label: string } | null> {
+    const rows = await dataSource.query(
+      `SELECT "id", "campaignId", "label" FROM "eliminator_forms" WHERE "id" = $1`,
+      [formId]
+    );
+    return rows[0] ?? null;
+  }
+
+  /** A form's static "never offer this lecture" list. */
+  public async getFormExcludedLectureIds(formId: string, dataSource: DataSource): Promise<string[]> {
+    const rows = await dataSource.query(
+      `SELECT "lectureId" FROM "eliminator_form_excluded_lectures" WHERE "formId" = $1`,
+      [formId]
+    );
+    return rows.map((r: { lectureId: string }) => r.lectureId);
   }
 
   /** Open dates for a campaign (remaining capacity > 0). */

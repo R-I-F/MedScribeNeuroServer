@@ -84,7 +84,8 @@ export type TEliminatorConflictCode =
   | "LECTURE_TAKEN"
   | "SLOT_FULL"
   | "LECTURE_NOT_FOUND"
-  | "SLOT_NOT_FOUND";
+  | "SLOT_NOT_FOUND"
+  | "LECTURE_EXCLUDED";
 
 export class EliminatorConflictError extends Error {
   public code: TEliminatorConflictCode;

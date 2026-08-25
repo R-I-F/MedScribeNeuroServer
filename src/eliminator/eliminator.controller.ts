@@ -23,4 +23,20 @@ export class EliminatorController {
   public handleReserve(campaignId: string, input: IEliminatorReserveInput, dataSource: DataSource) {
     return this.eliminatorProvider.reserve(campaignId, input, dataSource);
   }
+
+  public handleGetStateForForm(formId: string, dataSource: DataSource) {
+    return this.eliminatorProvider.getStateForForm(formId, dataSource);
+  }
+
+  public handleGetSupervisorsForForm(formId: string, dataSource: DataSource) {
+    return this.eliminatorProvider.getSupervisorsForForm(formId, dataSource);
+  }
+
+  public handleGetSupervisorStatusForForm(formId: string, supervisorId: string, dataSource: DataSource) {
+    return this.eliminatorProvider.getSupervisorStatusForForm(formId, supervisorId, dataSource);
+  }
+
+  public handleReserveForForm(formId: string, input: IEliminatorReserveInput, dataSource: DataSource) {
+    return this.eliminatorProvider.reserveForForm(formId, input, dataSource);
+  }
 }
