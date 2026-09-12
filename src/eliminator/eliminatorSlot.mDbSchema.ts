@@ -33,6 +33,17 @@ export class EliminatorSlotEntity {
   @Column({ type: "int", default: 0 })
   reservedCount!: number;
 
+  /**
+   * Journal-club capacity for this same date, counted separately from the lecture
+   * `capacity` above: one Thursday holds its lectures AND its journal club. Claimed
+   * by the same conditional-UPDATE trick, see journalEliminator.service.ts.
+   */
+  @Column({ type: "int", default: 1 })
+  journalCapacity!: number;
+
+  @Column({ type: "int", default: 0 })
+  journalReservedCount!: number;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

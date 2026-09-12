@@ -39,6 +39,7 @@ import { InAppSearchEventEntity } from "../inAppSearch/inAppSearchEvent.mDbSchem
 import { EliminatorCampaignEntity } from "../eliminator/eliminatorCampaign.mDbSchema";
 import { EliminatorSlotEntity } from "../eliminator/eliminatorSlot.mDbSchema";
 import { EliminatorReservationEntity } from "../eliminator/eliminatorReservation.mDbSchema";
+import { JournalReservationEntity } from "../journalEliminator/journalReservation.mDbSchema";
 
 dotenv.config();
 
@@ -112,6 +113,7 @@ function getKaMigrationsConfig(): DataSourceOptions {
       EliminatorCampaignEntity,
       EliminatorSlotEntity,
       EliminatorReservationEntity,
+      JournalReservationEntity,
     ],
     migrations: [__dirname + "/../migrations-ka/*.ts"],
     subscribers: [],

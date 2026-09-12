@@ -60,6 +60,10 @@ import { EliminatorService } from "../eliminator/eliminator.service";
 import { EliminatorProvider } from "../eliminator/eliminator.provider";
 import { EliminatorController } from "../eliminator/eliminator.controller";
 import { EliminatorRouter } from "../eliminator/eliminator.router";
+import { JournalEliminatorService } from "../journalEliminator/journalEliminator.service";
+import { JournalEliminatorProvider } from "../journalEliminator/journalEliminator.provider";
+import { JournalEliminatorController } from "../journalEliminator/journalEliminator.controller";
+import { JournalEliminatorRouter } from "../journalEliminator/journalEliminator.router";
 
 import { AuthController } from "../auth/auth.controller";
 import { AuthRouter } from "../auth/auth.router";
@@ -296,6 +300,12 @@ container.bind(EliminatorService).toSelf().inTransientScope();
 container.bind(EliminatorProvider).toSelf().inTransientScope();
 container.bind(EliminatorController).toSelf().inTransientScope();
 container.bind(EliminatorRouter).toSelf().inTransientScope();
+
+// Candidate journal-club eliminator (authenticated; shares the campaign dates above)
+container.bind(JournalEliminatorService).toSelf().inTransientScope();
+container.bind(JournalEliminatorProvider).toSelf().inTransientScope();
+container.bind(JournalEliminatorController).toSelf().inTransientScope();
+container.bind(JournalEliminatorRouter).toSelf().inTransientScope();
 
 container.bind(ReportsController).toSelf().inTransientScope();
 container.bind(ReportsRouter).toSelf().inTransientScope();

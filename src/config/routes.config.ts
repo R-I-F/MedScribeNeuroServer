@@ -150,6 +150,12 @@ export function addRoutes(app: Application) {
   const eliminatorRouter = container.get(EliminatorRouter) as any;
   app.use("/eliminator", eliminatorRouter.router);
 
+  // Candidate journal-club booking (authenticated) + the super-admin open/close switch.
+  // Rides on the same eliminator campaign dates as the supervisor lecture form.
+  const { JournalEliminatorRouter } = require("../journalEliminator/journalEliminator.router");
+  const journalEliminatorRouter = container.get(JournalEliminatorRouter) as any;
+  app.use("/journalEliminator", journalEliminatorRouter.router);
+
   // Active-Users analytics, super-admin only (docs/ACTIVE_USERS_ANALYTICS_PLAN.md).
   const { ActiveUsersRouter } = require("../activeUsers/activeUsers.router");
   const activeUsersRouter = container.get(ActiveUsersRouter) as any;

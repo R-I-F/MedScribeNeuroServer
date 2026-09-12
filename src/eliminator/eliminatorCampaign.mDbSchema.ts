@@ -46,6 +46,15 @@ export class EliminatorCampaignEntity {
   @Column({ type: "boolean", default: true })
   isActive!: boolean;
 
+  /**
+   * Super-admin switch for the candidate-facing journal-club booking surface
+   * (src/journalEliminator/). Independent of `isActive`, which governs the
+   * supervisor lecture form: closing journals never closes lectures.
+   * Defaults to false so the surface is opened deliberately, not by migration.
+   */
+  @Column({ type: "boolean", default: false })
+  journalsOpen!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 
