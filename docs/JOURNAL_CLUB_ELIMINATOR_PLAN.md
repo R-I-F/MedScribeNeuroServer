@@ -3,8 +3,10 @@
 Living record for the candidate-facing journal-club reservation feature. Read this first
 before touching `src/journalEliminator/` or `CandidateJournalClubPage.tsx`.
 
-**Status: BUILT + VERIFIED, NOT DEPLOYED, NOTHING COMMITTED, migration NOT applied to production.**
-Date: 2026-09-04.
+**Status: SHIPPED to production 2026-09-12, round CLOSED.** Backup
+`F:\DB_BACKUPS\ka-institute-pre-journal-eliminator-20260912203623.sql.gz`, migration 320 applied,
+backend `6eb6327` + frontend `fcd6709` on `main`. Open the round from the super-admin console.
+Built 2026-09-04.
 
 ---
 

@@ -396,9 +396,10 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 33. [In-App Semantic Search](#in-app-semantic-search-inappsearch)
 34. [AI Search Usage Analytics](#ai-search-usage-analytics-searchanalytics)
 35. [Public Search Usage Analytics](#public-search-usage-analytics-publicsearchanalytics)
-36. [Error Responses](#error-responses)
-37. [Authentication Requirements Summary](#authentication-requirements-summary)
-38. [Load testing](#load-testing)
+36. [AI Office](#ai-office-aioffice)
+37. [Error Responses](#error-responses)
+38. [Authentication Requirements Summary](#authentication-requirements-summary)
+39. [Load testing](#load-testing)
 
 ---
 
@@ -9468,6 +9469,81 @@ Each email aggregates its sessions created within the window (searchCount = SUM(
 
 ---
 
+## AI Office (`/aiOffice`)
+
+Cairo University's AI Office has members from every department (mostly supervisors, sometimes candidates). Members register their AI Office work here instead of a Google Form and see their own statistics; the super-admin grants and revokes the role and sees every entry. See docs/AI_OFFICE_PLAN.md.
+
+**Membership** is read from the caller's DB row on every member request, never from JWT claims: `approved = true`, `aiOfficeMember = true`, and for candidates `archivedAt IS NULL`. Anything else gets **403 `NOT_AI_OFFICE_MEMBER`**, so a revoked role stops working on the next request. Member routes take no member id from the client. Every `/aiOffice` response is `Cache-Control: no-store`. Errors use the global formatter (`{ "status": "error", "error": { "error": "...", "code": "..." } }`).
+
+**Department-less accounts:** the AI Office signup may type a department we do not have. The account then has `departmentId = NULL` and `departmentOther = "<typed name>"`, which the database allows only while `aiOfficeMember` is true (`CHK_candidates_dept_or_ai_office` / `CHK_supervisors_dept_or_ai_office`). Its login token carries no `departmentId` claim and the dashboard shows only the AI Office pages. Candidate and supervisor login responses include `aiOfficeMember` and `departmentOther`.
+
+### Hidden signup
+**POST** `/aiOffice/signup` (public, `strictRateLimiter`; not linked from the landing page)
+```jsonc
+{
+  "role": "supervisor",                  // or "candidate"
+  "email": "member@example.com",
+  "password": "any 8+ characters",       // no other password rule on this signup
+  "fullName": "Full Name",
+  "phoneNum": "+201000000000",
+  "departmentId": "<department uuid>",   // exactly one of departmentId / departmentOther
+  // "departmentOther": "Faculty of Engineering",
+  "position": "Professor"                // supervisor, optional
+  // candidate instead: "regNum", "nationality", "rank", "regDeg" (optional)
+}
+```
+**201** `{ "signupId": "...", "expiresAt": "...", "email": "..." }`, then verify with the existing `POST /auth/verifySignupOtp` (resend with `/auth/resendSignupOtp`). The account is created **unapproved** with `aiOfficeMember = true`; the super-admin approves it.
+
+- **409 `EMAIL_EXISTS`**: the email already belongs to a candidate (archived included) or a supervisor, so no second account is created. The attempt is stored in `ai_office_access_requests` and `AI_OFFICE_NOTIFY_EMAIL` (default `medscribeeg@gmail.com`) is emailed the requested details, the existing account and a console link, at most once per email per 24 h and within `AI_OFFICE_REQUEST_EMAIL_BUDGET_PER_DAY` (default 20).
+- **409 `PHONE_EXISTS`**; **403 `SIGNUPS_CLOSED`** (the active-users signup cap applies, as on the normal signup); **400** validation errors or `UNKNOWN_DEPARTMENT`.
+
+### Member routes
+| Method | Route | Notes |
+|---|---|---|
+| GET | `/aiOffice/me` | `{ member, role, aiOfficeMember, approved, departmentless, departmentOther }`; drives the navigation, never 403 for a candidate or supervisor |
+| GET | `/aiOffice/activities` | the caller's own entries, newest first |
+| POST | `/aiOffice/activities` | create (`userBasedStrictRateLimiter`), **201** |
+| PATCH | `/aiOffice/activities/:id` | edit an own entry; another member's id → **404 `ACTIVITY_NOT_FOUND`** |
+| GET | `/aiOffice/activities/stats` | `{ total, done, thisQuarter, lastActivityAt, byType[], byStatus[], byMonth[] }`; `byMonth` = last 12 months, gap-filled, `YYYY-MM`; `done` counts `completed`, `ready`, `published` |
+
+Entry body. Only `activityType` is required (every question on the Google Form was optional):
+```jsonc
+{
+  "activityType": "partner_meeting",
+  "title": "Imaging vendor",
+  "status": null,
+  "activityDate": "2026-09-10",          // YYYY-MM-DD
+  "notes": null,
+  "details": { "purpose": "Data sharing agreement", "outcome": "Draft MoU", "followUpNeeded": true }
+}
+```
+Fields a section does not have are dropped; `status` must be one of that section's statuses; the date must be real; text answers are capped at 5000 characters. Otherwise **400 `INVALID_ACTIVITY`**.
+
+| activityType | title | statuses | details |
+|---|---|---|---|
+| `project_review` | project title | not_started, in_progress, completed | description |
+| `journal_club` | topic / paper title | not_started, in_progress, ready | presenters |
+| `symposium` | none | not_started, in_progress, ready | proposedTopics, roleInPreparation |
+| `partner_meeting` | partner / company | none (no notes either) | purpose, outcome, followUpNeeded (boolean) |
+| `qualification` | qualification / course | enrolled, in_progress, completed | provider |
+| `project_study` | project / study title | planning, data_collection, analysis, writing, submitted, published | topicField, yourRole |
+| `other_task` | none | not_started, in_progress, completed | taskDescription |
+
+### Super-admin console
+Paged responses are `{ "items": [...], "total": 0, "page": 1, "pageSize": 25 }`.
+
+| Method | Route | Notes |
+|---|---|---|
+| GET | `/aiOffice/admin/users?role=candidate\|supervisor&departmentId=all\|none\|<uuid>&aiOffice=all\|yes\|no&approved=all\|yes\|no&search=&page=&pageSize=` | accounts across all departments: name, email, phone, approved, aiOfficeMember, department name / arName or the typed `departmentOther`, `activityCount`, `createdAt`; supervisors add `canValidate`, `canValClin`, `position`; candidates add `rank`, `regDeg`. `search` matches name, email or phone |
+| PATCH | `/aiOffice/admin/users/:role/:id` | `{ "aiOfficeMember": true \| false }`; removing it from a department-less account → **409 `DEPARTMENTLESS_MEMBER`**; unknown account → **404 `USER_NOT_FOUND`** |
+| GET | `/aiOffice/admin/activities?activityType=&status=&role=&memberId=&departmentId=none\|<uuid>&from=&to=&page=&pageSize=` | every entry with `memberId`, `memberRole`, `memberName` and the department; `from` / `to` filter the registration date |
+| GET | `/aiOffice/admin/stats` (same filters) | the member statistics plus `membersTotal`, `activeMembers`, `byMember[]`, `byDepartment[]` |
+| GET | `/aiOffice/admin/access-requests?page=&pageSize=` | signup attempts with an existing email: `email`, `fullName`, `requestedRole`, `existingRole`, `departmentLabel`, `emailed`, `createdAt` |
+
+Approval and validator permissions reuse the existing `PUT /cand/:id/approved`, `PUT /supervisor/:id/approved` and `PUT /supervisor/:id` (`canValidate`, `canValClin`), which already admit the super-admin institution-wide, department-less accounts included.
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -10161,6 +10237,9 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `POST /inAppSearch/query` | Yes | Candidate, Supervisor, or Admin; in-form AI assist; department auto from JWT; 5 searches/user/UTC-day; returns CPT numCode |
 | `GET /searchAnalytics/analytics`, `/list`, `/user` | Yes | Super Admin only; AI search-usage breakdown (reads in_app_search_events; separate from activity; superAdmin excluded) |
 | `GET /publicSearchAnalytics/analytics`, `/list` | Yes | Super Admin only; public /explore usage (reads public_search_sessions; people/searches/funnel, session-only) |
+| `POST /aiOffice/signup` | No | Hidden AI Office signup; strict IP rate limit; 8-character password; `departmentId` or typed `departmentOther`; existing email → 409 + admin notification |
+| `GET /aiOffice/me`, `GET /aiOffice/activities`, `GET /aiOffice/activities/stats`, `POST /aiOffice/activities`, `PATCH /aiOffice/activities/:id` | Yes | Candidate or Supervisor; membership from the DB row (approved, `aiOfficeMember`, not archived); own entries only |
+| `/aiOffice/admin/*` (`users`, `users/:role/:id`, `activities`, `stats`, `access-requests`) | Yes | **Super Admin only**; all departments, department-less accounts included |
 | `POST /instituteAdmin` | Yes | Super Admin (`departmentId` optional; omitted = institution-wide admin) |
 | `GET /instituteAdmin`, `GET /instituteAdmin/:id` | Yes | Institute Admin or Super Admin |
 | `PUT /instituteAdmin/:id` | Yes | Super Admin, or Institute Admin (**own record only**); self dept-switch re-issues tokens |

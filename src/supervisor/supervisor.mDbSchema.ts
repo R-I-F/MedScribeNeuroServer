@@ -46,10 +46,19 @@ export class SupervisorEntity {
   @Column({ type: "timestamp", nullable: true, comment: "Timestamp when user accepted Terms of Service" })
   termsAcceptedAt?: Date;
 
-  // Department this user belongs to (FK → departments). NOT NULL: every supervisor must belong
-  // to a department (enforced after the prod backfill stamped all rows → NS).
-  @Column({ type: "uuid" })
-  departmentId!: string;
+  // Department this user belongs to (FK → departments). Required for everyone EXCEPT an AI Office
+  // member who signed up from a department we do not mirror: then it is NULL and the typed name is
+  // in `departmentOther` (DB CHECK "CHK_supervisors_dept_or_ai_office", docs/AI_OFFICE_PLAN.md).
+  @Column({ type: "uuid", nullable: true })
+  departmentId!: string | null;
+
+  // AI Office member role, granted by the super-admin (or pre-set by the AI Office signup).
+  @Column({ type: "boolean", default: false })
+  aiOfficeMember!: boolean;
+
+  // University department typed at the AI Office signup when it is not in `departments`.
+  @Column({ type: "varchar", length: 160, nullable: true })
+  departmentOther!: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

@@ -57,10 +57,19 @@ export class CandidateEntity {
   @Column({ type: "timestamp", nullable: true, comment: "Timestamp when user accepted Terms of Service" })
   termsAcceptedAt?: Date;
 
-  // Department this user belongs to (FK → departments). NOT NULL: every candidate must belong
-  // to a department (enforced after the prod backfill stamped all rows → NS).
-  @Column({ type: "uuid" })
-  departmentId!: string;
+  // Department this user belongs to (FK → departments). Required for everyone EXCEPT an AI Office
+  // member who signed up from a department we do not mirror: then it is NULL and the typed name is
+  // in `departmentOther` (DB CHECK "CHK_candidates_dept_or_ai_office", docs/AI_OFFICE_PLAN.md).
+  @Column({ type: "uuid", nullable: true })
+  departmentId!: string | null;
+
+  // AI Office member role, granted by the super-admin (or pre-set by the AI Office signup).
+  @Column({ type: "boolean", default: false })
+  aiOfficeMember!: boolean;
+
+  // University department typed at the AI Office signup when it is not in `departments`.
+  @Column({ type: "varchar", length: 160, nullable: true })
+  departmentOther!: string | null;
 
   // Promotion to supervisor (docs/CANDIDATE_TO_SUPERVISOR_PROMOTION_PLAN.md).
   // The row is never deleted (the whole logbook FKs to it), it is archived instead:

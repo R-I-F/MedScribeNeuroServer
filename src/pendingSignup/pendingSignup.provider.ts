@@ -54,12 +54,18 @@ export class PendingSignupProvider {
   public async startSignup(
     role: TPendingSignupRole,
     payload: Record<string, unknown> & { email: string; password: string; departmentId?: string },
-    dataSource: DataSource
+    dataSource: DataSource,
+    options: { aiOffice?: boolean; departmentOther?: string | null } = {}
   ): Promise<StartSignupResult> {
     const email = String(payload.email).trim().toLowerCase();
+    // AI Office signup (docs/AI_OFFICE_PLAN.md): the department may be one we do not mirror, in
+    // which case its typed name replaces the department id. Everyone else still needs a real one.
+    const departmentOther = options.aiOffice ? options.departmentOther?.trim() || null : null;
 
-    // Department must exist in the mirror (both user tables are dept-scoped, NOT NULL).
-    await this.assertDepartmentExists(String(payload.departmentId ?? ""), dataSource);
+    // Department must exist in the mirror (both user tables are dept-scoped).
+    if (!departmentOther) {
+      await this.assertDepartmentExists(String(payload.departmentId ?? ""), dataSource);
+    }
 
     // Reject if a REAL account already exists for this email+role.
     if (await this.accountEmailExists(role, email, dataSource)) {
@@ -93,6 +99,11 @@ export class PendingSignupProvider {
       ...rest,
       email,
       hashedPassword: await bcryptjs.hash(String(password), 10),
+      ...(options.aiOffice && {
+        aiOffice: true,
+        departmentOther,
+        departmentId: departmentOther ? null : rest.departmentId,
+      }),
     };
 
     const code = this.generateCode();
@@ -282,7 +293,10 @@ export class PendingSignupProvider {
       nationality: p.nationality,
       rank: p.rank,
       regDeg: p.regDeg != null && String(p.regDeg).trim() !== "" ? p.regDeg : null,
-      departmentId: p.departmentId,
+      departmentId: p.departmentId ?? null,
+      // AI Office signup: the role is pre-set, approval still waits for the super-admin.
+      aiOfficeMember: p.aiOffice === true,
+      departmentOther: p.aiOffice === true ? p.departmentOther ?? null : null,
     });
     (created as any).termsAcceptedAt = new Date(row.createdAt); // accepted at signup time
     const saved = await repo.save(created);
@@ -303,7 +317,10 @@ export class PendingSignupProvider {
       approved: false,
       role: UserRole.SUPERVISOR,
       canValidate: false, // no validation rights until granted by admin (unchanged flow)
-      departmentId: p.departmentId,
+      departmentId: p.departmentId ?? null,
+      // AI Office signup: the role is pre-set, approval still waits for the super-admin.
+      aiOfficeMember: p.aiOffice === true,
+      departmentOther: p.aiOffice === true ? p.departmentOther ?? null : null,
       ...(p.position != null && String(p.position).trim() !== "" && { position: p.position }),
     });
     (created as any).termsAcceptedAt = new Date(row.createdAt);

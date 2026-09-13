@@ -64,6 +64,10 @@ import { JournalEliminatorService } from "../journalEliminator/journalEliminator
 import { JournalEliminatorProvider } from "../journalEliminator/journalEliminator.provider";
 import { JournalEliminatorController } from "../journalEliminator/journalEliminator.controller";
 import { JournalEliminatorRouter } from "../journalEliminator/journalEliminator.router";
+import { AiOfficeService } from "../aiOffice/aiOffice.service";
+import { AiOfficeProvider } from "../aiOffice/aiOffice.provider";
+import { AiOfficeController } from "../aiOffice/aiOffice.controller";
+import { AiOfficeRouter } from "../aiOffice/aiOffice.router";
 
 import { AuthController } from "../auth/auth.controller";
 import { AuthRouter } from "../auth/auth.router";
@@ -306,6 +310,12 @@ container.bind(JournalEliminatorService).toSelf().inTransientScope();
 container.bind(JournalEliminatorProvider).toSelf().inTransientScope();
 container.bind(JournalEliminatorController).toSelf().inTransientScope();
 container.bind(JournalEliminatorRouter).toSelf().inTransientScope();
+
+// AI Office: member role, activity form, stats, hidden signup, super-admin console (docs/AI_OFFICE_PLAN.md)
+container.bind(AiOfficeService).toSelf().inTransientScope();
+container.bind(AiOfficeProvider).toSelf().inTransientScope();
+container.bind(AiOfficeController).toSelf().inTransientScope();
+container.bind(AiOfficeRouter).toSelf().inTransientScope();
 
 container.bind(ReportsController).toSelf().inTransientScope();
 container.bind(ReportsRouter).toSelf().inTransientScope();

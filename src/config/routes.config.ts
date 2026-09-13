@@ -156,6 +156,11 @@ export function addRoutes(app: Application) {
   const journalEliminatorRouter = container.get(JournalEliminatorRouter) as any;
   app.use("/journalEliminator", journalEliminatorRouter.router);
 
+  // AI Office: hidden signup (public), member activity form + stats, super-admin console.
+  const { AiOfficeRouter } = require("../aiOffice/aiOffice.router");
+  const aiOfficeRouter = container.get(AiOfficeRouter) as any;
+  app.use("/aiOffice", aiOfficeRouter.router);
+
   // Active-Users analytics, super-admin only (docs/ACTIVE_USERS_ANALYTICS_PLAN.md).
   const { ActiveUsersRouter } = require("../activeUsers/activeUsers.router");
   const activeUsersRouter = container.get(ActiveUsersRouter) as any;

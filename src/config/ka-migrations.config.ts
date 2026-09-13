@@ -40,6 +40,8 @@ import { EliminatorCampaignEntity } from "../eliminator/eliminatorCampaign.mDbSc
 import { EliminatorSlotEntity } from "../eliminator/eliminatorSlot.mDbSchema";
 import { EliminatorReservationEntity } from "../eliminator/eliminatorReservation.mDbSchema";
 import { JournalReservationEntity } from "../journalEliminator/journalReservation.mDbSchema";
+import { AiOfficeActivityEntity } from "../aiOffice/aiOfficeActivity.mDbSchema";
+import { AiOfficeAccessRequestEntity } from "../aiOffice/aiOfficeAccessRequest.mDbSchema";
 
 dotenv.config();
 
@@ -114,6 +116,8 @@ function getKaMigrationsConfig(): DataSourceOptions {
       EliminatorSlotEntity,
       EliminatorReservationEntity,
       JournalReservationEntity,
+      AiOfficeActivityEntity,
+      AiOfficeAccessRequestEntity,
     ],
     migrations: [__dirname + "/../migrations-ka/*.ts"],
     subscribers: [],
