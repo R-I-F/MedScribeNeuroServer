@@ -188,5 +188,19 @@ healthy: `/health`, `/institution`, `/departments`, lecture eliminator state 200
 supervisor lists 200 (62 supervisors, reading the altered table), `/journalEliminator/state` 401 (auth
 gate alive), `/aiOffice/me` 404 (not deployed yet).
 
-Remaining (only on the user's explicit ask): step 3, commit and push both repos, then poll the live API
-until `/aiOffice/me` answers 401 instead of 404.
+**Ship, step 3 of 3: commit and push (2026-09-13, user-requested).** Backend `4e36b0d` (21 files: the
+module, validator, migration, entity/config/pendingSignup changes, API doc, this plan, CLAUDE.md) and
+frontend `52649cc` (26 files), each committed on `feat/ai-office`, fast-forwarded into `main` and pushed;
+the feature branches were deleted and both local `dev` branches fast-forwarded to `main`. Unrelated
+untracked folders (`.agents/`, `AGENTS.md`, `marketing_docs/`, `newJournals/`, `reports/`,
+`docs/NETLIFY_CLOUDFLARE_TLS_INCIDENT.md`) were left out. 0 em-dashes in either commit.
+
+Live checks: Railway served the new code about 60 s after the push (`/aiOffice/me` and
+`/aiOffice/admin/users` 401, previously 404); `/health`, `/departments`, the lecture eliminator state and
+supervisor list (200) and `/journalEliminator/state` (401) unchanged. Netlify's live bundle
+(`index-qF5FpTVa.js`) contains the `/ai-office/signup` route; `/ai-office/signup` and
+`/dashboard/ai-office/activity` load (200). The link to share with the office:
+`https://libeluspro.com/ai-office/signup`.
+
+This final status note in the plan and in CLAUDE.md was written after the push, so it is a local,
+uncommitted docs edit.

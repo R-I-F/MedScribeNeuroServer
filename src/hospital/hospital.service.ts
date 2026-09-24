@@ -24,10 +24,19 @@ export class HospitalService {
     }
   }
 
-  public async getAllHospitals(dataSource: DataSource): Promise<IHospitalDoc[]> | never {
+  /**
+   * All hospitals, optionally narrowed to one department. Every hospital belongs to exactly
+   * one department (the same building repeats as one row per department), so the pickers
+   * must not offer another department's rows. Pass null/undefined for the whole institution.
+   */
+  public async getAllHospitals(
+    dataSource: DataSource,
+    departmentId?: string | null
+  ): Promise<IHospitalDoc[]> | never {
     try {
       const hospitalRepository = dataSource.getRepository(HospitalEntity);
       const allHospitals = await hospitalRepository.find({
+        ...(departmentId ? { where: { departmentId } } : {}),
         order: { createdAt: "DESC" },
       });
       return allHospitals as unknown as IHospitalDoc[];
