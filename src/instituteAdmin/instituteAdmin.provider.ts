@@ -589,7 +589,7 @@ export class InstituteAdminProvider {
             // whole search, so both are cast to text first. They must be written as fully
             // quoted identifiers: TypeORM only rewrites bare `alias.property` tokens, so
             // `c.regDeg::text` would reach Postgres as unquoted (lowercased) `c.regdeg`.
-            `(c.fullName LIKE :term OR c.regNum LIKE :term OR "c"."rank"::text LIKE :term OR "c"."regDeg"::text LIKE :term OR c.email LIKE :term)`,
+            `(c.fullName LIKE :term OR c.regNum LIKE :term OR "c"."rank"::text LIKE :term OR "c"."regDeg"::text LIKE :term OR c.email LIKE :term OR c.phoneNum LIKE :term)`,
             { term }
           )
           .andWhere("c.archivedAt IS NULL");
@@ -646,6 +646,7 @@ export class InstituteAdminProvider {
             ...(cand.rank != null && { rank: cand.rank }),
             ...(cand.regDeg != null && { regDeg: cand.regDeg }),
             ...(cand.email != null && { email: cand.email }),
+            ...(cand.phoneNum != null && { phoneNum: cand.phoneNum }),
           },
           stats,
         };

@@ -2181,7 +2181,7 @@ Cookie: auth_token=<token>
 ```
 
 **Query Parameters:**
-- `search` (optional, string): When present and non-empty, filter candidates server-side by `fullName`, `regNum`, `rank`, `regDeg`, and `email`. Trimmed; empty/whitespace is treated as no search (returns full list).
+- `search` (optional, string): When present and non-empty, filter candidates server-side by `fullName`, `regNum`, `rank`, `regDeg`, `email`, and `phoneNum`. Trimmed; empty/whitespace is treated as no search (returns full list).
 
 **Description:** Returns the full list of candidates (both **approved** and **not yet approved**) for the current institution with summary data only (identity + submission stats + academic points when applicable + clinical approved count when applicable). No pagination; one response contains all matching candidates. Use this for the Institute Admin candidates table. No full submissions, CPT/ICD/supervisor analytics, or full clinical arrays.
 
@@ -2201,7 +2201,8 @@ Cookie: auth_token=<token>
           "regNum": "REG123",
           "rank": "professor",
           "regDeg": "msc",
-          "email": "alice@example.com"
+          "email": "alice@example.com",
+          "phoneNum": "01000000000"
         },
         "stats": {
           "totalApproved": 42,
