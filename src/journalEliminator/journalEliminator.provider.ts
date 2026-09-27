@@ -6,6 +6,7 @@ import { IEventInput } from "../event/event.interface";
 import { MailerService } from "../mailer/mailer.service";
 import { EliminatorCampaignEntity } from "../eliminator/eliminatorCampaign.mDbSchema";
 import { toDateOnlyString } from "../eliminator/dateOnly.util";
+import { institutionWallClockToUtc } from "../eliminator/institutionTime.util";
 import {
   IJournalCampaignAdminRow,
   IJournalEliminatorState,
@@ -296,14 +297,13 @@ export class JournalEliminatorProvider {
   }
 
   /**
-   * Builds the event's `dateTime`. TypeORM formats "timestamp" (no tz) columns from a JS
-   * Date's UTC getters, so constructing via `Date.UTC(...)` with the intended Cairo
-   * wall-clock hour stores exactly that wall-clock value, whatever the server timezone is.
+   * Builds the event's `dateTime`: the UTC instant of the campaign's Cairo wall-clock
+   * start time for this date. Returned as an ISO string so the stored value does not
+   * depend on the server's own timezone. See `institutionWallClockToUtc`.
    */
-  private buildDateTime(date: string | Date, isOnline: boolean, campaign: EliminatorCampaignEntity): Date {
-    const [year, month, day] = toDateOnlyString(date).split("-").map(Number);
-    const [hour, minute] = (isOnline ? campaign.onlineTime : campaign.onsiteTime).split(":").map(Number);
-    return new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+  private buildDateTime(date: string | Date, isOnline: boolean, campaign: EliminatorCampaignEntity): string {
+    const wallClock = isOnline ? campaign.onlineTime : campaign.onsiteTime;
+    return institutionWallClockToUtc(toDateOnlyString(date), wallClock);
   }
 
   private async sendConfirmationEmail(

@@ -65,15 +65,20 @@ export interface IEventDoc extends IEvent {
 
 // Derived types for input operations
 // Accept legacy field names for backward compatibility
-export type IEventInput = Omit<IEvent, 'lectureId' | 'journalId' | 'confId' | 'presenterId'> & {
+export type IEventInput = Omit<IEvent, 'lectureId' | 'journalId' | 'confId' | 'presenterId' | 'dateTime'> & {
+  // An ISO 8601 string is accepted as well as a Date: the HTTP callers send one
+  // (the validator checks isISO8601) and the eliminators build one, which is what
+  // keeps the stored value independent of the server's timezone.
+  dateTime: Date | string;
   lecture?: string; // Accept 'lecture' in input, convert to 'lectureId' internally
   journal?: string; // Accept 'journal' in input, convert to 'journalId' internally
   conf?: string; // Accept 'conf' in input, convert to 'confId' internally
   presenter: string; // Accept 'presenter' in input, convert to 'presenterId' internally
   attendance?: IEventAttendance[]; // Optional attendance for create
 };
-export type IEventUpdateInput = Partial<Omit<IEvent, 'lectureId' | 'journalId' | 'confId' | 'presenterId'>> & {
+export type IEventUpdateInput = Partial<Omit<IEvent, 'lectureId' | 'journalId' | 'confId' | 'presenterId' | 'dateTime'>> & {
   id: string;
+  dateTime?: Date | string; // ISO 8601 string or Date, as above
   lecture?: string; // Accept 'lecture' in update
   journal?: string; // Accept 'journal' in update
   conf?: string; // Accept 'conf' in update

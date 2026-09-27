@@ -114,7 +114,10 @@ export class EventProvider {
         lectureId: validatedReq.lecture,
         journalId: validatedReq.journal,
         confId: validatedReq.conf,
-        dateTime: validatedReq.dateTime,
+        // Passed through verbatim: an ISO 8601 string reaches Postgres as text and
+        // casts to the timestamp column identically on any server timezone, whereas a
+        // Date would be serialized with the server's own offset.
+        dateTime: validatedReq.dateTime as Date,
         location: this.utilService.stringToLowerCaseTrim(validatedReq.location),
         presenterId: presenterId,
         status: validatedReq.status || "booked", // Default to "booked" when created
@@ -221,7 +224,7 @@ export class EventProvider {
           throw new Error("Invalid dateTime format. Expected ISO 8601 format.");
         }
 
-        updateFields.dateTime = updateData.dateTime;
+        updateFields.dateTime = updateData.dateTime as Date; // see createEvent: ISO string passes through
       }
 
       if (updateData.location !== undefined) {
