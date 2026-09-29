@@ -396,10 +396,11 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 33. [In-App Semantic Search](#in-app-semantic-search-inappsearch)
 34. [AI Search Usage Analytics](#ai-search-usage-analytics-searchanalytics)
 35. [Public Search Usage Analytics](#public-search-usage-analytics-publicsearchanalytics)
-36. [AI Office](#ai-office-aioffice)
-37. [Error Responses](#error-responses)
-38. [Authentication Requirements Summary](#authentication-requirements-summary)
-39. [Load testing](#load-testing)
+36. [Case Analytics](#case-analytics-caseanalytics)
+37. [AI Office](#ai-office-aioffice)
+38. [Error Responses](#error-responses)
+39. [Authentication Requirements Summary](#authentication-requirements-summary)
+40. [Load testing](#load-testing)
 
 ---
 
@@ -9470,6 +9471,99 @@ Each email aggregates its sessions created within the window (searchCount = SUM(
 
 ---
 
+## Case Analytics (`/caseAnalytics`)
+
+**Institute admin** (superAdmin admitted hierarchically by `requireInstituteAdmin`). Chain:
+`extractJWT -> institutionResolver -> userBasedRateLimiter -> requireInstituteAdmin`.
+Read-only statistics over the surgical cases the calendar manager registers (`cal_surgs`), with
+Excel and PDF export. No write path and no migration. See docs/CASE_ANALYTICS_TOOL_PLAN.md.
+
+**The department is auto-locked.** It is resolved from the calling admin's own DB row (never the
+JWT `departmentId` claim, which goes stale after a department switch). A department-scoped admin
+cannot widen their scope: `?deptCode` is honoured only for a caller who is already
+institution-wide (a department-less admin row, or a superAdmin, who has no `institute_admins` row).
+
+This supersedes `GET /instituteAdmin/calendarProcedures/analysis/hospital`, which is unused by the
+frontend and drops every case without a `procCptId`.
+
+### Filter semantics
+Within one filter the values are OR'd; across filters they are AND'd. Array filters accept either
+repeated keys (`?hospitalId=a&hospitalId=b`) or a comma-separated list (`?hospitalId=a,b`).
+
+| Param | Type | Notes |
+|---|---|---|
+| `from`, `to` | `YYYY-MM-DD` | Calendar dates only. `from` after `to` is a 400. |
+| `hospitalId` | uuid[] | Multi-select. Emergency work is identified by the unit, since no emergency flag exists. |
+| `procCptId` | uuid[] | Multi-select. |
+| `alphaCode` | string[] | Procedure families. The sentinel `__unrecorded__` selects cases with NO procedure recorded. |
+| `mainDiagId` | uuid[] | Applied with `EXISTS`, so it never fans out rows. |
+| `ageBand` | enum[] | `under1`, `age1to2`, `age3to12`, `age13to17`, `age18to39`, `age40to59`, `age60plus`, `unknown`. |
+| `gender` | `male`\|`female` | |
+
+Age is computed from `patientDob` at the procedure date. A dob that is missing, later than the
+procedure, or implying an age over 110 lands in the `unknown` band rather than being dropped.
+
+### Filter options
+**GET** `/caseAnalytics/filters`
+
+Returns the locked `department`, `departmentLocked`, the `hospitals`, `procedures` and `alphaCodes`
+that actually occur in the department's cases (each with a case count), the department's `mainDiags`,
+the `ageBands` enum, `dateBounds`, and `unrecordedProcedureKey`.
+
+### Summary
+**GET** `/caseAnalytics/summary?from=&to=&hospitalId=&procCptId=&alphaCode=&mainDiagId=&ageBand=&gender=`
+```jsonc
+{
+  "filtersApplied": { "from": "2025-01-01", "to": "2025-12-31" },
+  "totals": {
+    "totalCases": 3051, "pediatricCases": 925, "adultCases": 2121,
+    "distinctHospitals": 5, "distinctProcedures": 44,
+    "firstDate": "2025-01-01", "lastDate": "2025-12-31"
+  },
+  "byYear":   [{ "year": 2025, "cases": 3051, "pediatric": 925 }],
+  "byMonth":  [{ "bucket": "2025-01", "cases": 79 }],
+  "byHospital": [{ "id": "...", "engName": "Emergency 185", "arabName": "...", "cases": 998, "pediatric": 176 }],
+  "byAgeBand":  [{ "band": "under1", "cases": 202 }],
+  "byAlphaCode": [{ "alphaCode": "CRAN", "cases": 1275 }],
+  "byProcedure": [{ "id": "...", "title": "gross total resection", "arTitle": "...", "alphaCode": "CRAN", "numCode": "61510-01", "cases": 455 }],
+  "byMainDiag":  [{ "id": "...", "title": "cns tumors", "arTitle": "...", "cases": 624 }],
+  "byGender": [{ "gender": "male", "cases": 1712 }],
+  "dataQuality": {
+    "casesWithNoProcedureRecorded": 284,
+    "casesWithUnusableDob": 5,
+    "casesOutsidePlausibleDateRange": 0,
+    "casesWithNoMainDiag": 284,
+    "mainDiagCategorySum": 4128,
+    "mainDiagDoubleCounts": true
+  }
+}
+```
+`byMonth` is gap-filled but CLAMPED to the most recent 120 buckets, because a mistyped `procDate`
+(production holds one reading `0202-07-29`) would otherwise generate tens of thousands of rows.
+
+**`byMainDiag` deliberately double-counts.** A procedure can belong to several categories (44 of the
+100 NS-linked procedures do), so a case is counted under each one its procedure touches.
+`mainDiagCategorySum` is reported next to `totalCases` and `mainDiagDoubleCounts` flags it, so the
+figures are never mistaken for a split of the total. Every other breakdown reads the same filtered
+set and sums to `totalCases`.
+
+### Cases
+**GET** `/caseAnalytics/cases?...&page=1&pageSize=100`
+Paginated rows (`pageSize` capped at 1000) with `procDate`, bilingual patient name, `patientDob`,
+`ageYears`, `ageBand`, `gender`, bilingual hospital and procedure, `alphaCode` and `numCode`.
+
+### Exports
+**GET** `/caseAnalytics/export.xlsx?...&lang=en|ar`
+**GET** `/caseAnalytics/export.pdf?...&lang=en|ar`
+
+Both stream a binary body (so they are NOT wrapped by the global response formatter) with
+`Content-Disposition: attachment`. The Excel workbook carries one sheet per breakdown plus the raw
+cases; the PDF carries hand-drawn charts. Both print the exact filter set and a generation timestamp
+on their first page, so a forwarded file cannot be mistaken for the whole department.
+
+Errors: a malformed date, an unknown age band, a non-uuid id or an invalid gender is a **400**; an
+unknown `deptCode` is a **404**.
+
 ## AI Office (`/aiOffice`)
 
 Cairo University's AI Office has members from every department (mostly supervisors, sometimes candidates). Members register their AI Office work here instead of a Google Form and see their own statistics; the super-admin grants and revokes the role and sees every entry. See docs/AI_OFFICE_PLAN.md.
@@ -10238,6 +10332,8 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `POST /inAppSearch/query` | Yes | Candidate, Supervisor, or Admin; in-form AI assist; department auto from JWT; 5 searches/user/UTC-day; returns CPT numCode |
 | `GET /searchAnalytics/analytics`, `/list`, `/user` | Yes | Super Admin only; AI search-usage breakdown (reads in_app_search_events; separate from activity; superAdmin excluded) |
 | `GET /publicSearchAnalytics/analytics`, `/list` | Yes | Super Admin only; public /explore usage (reads public_search_sessions; people/searches/funnel, session-only) |
+| `GET /caseAnalytics/filters`, `/summary`, `/cases` | Yes | Institute Admin (superAdmin hierarchically); surgical case statistics over cal_surgs; department AUTO-LOCKED from the admin DB row, deptCode honoured only for an institution-wide caller |
+| `GET /caseAnalytics/export.xlsx`, `/export.pdf` | Yes | Same scope; streams a binary attachment (not response-formatter wrapped); prints the applied filters and timestamp on page 1 |
 | `POST /aiOffice/signup` | No | Hidden AI Office signup; strict IP rate limit; 8-character password; `departmentId` or typed `departmentOther`; existing email → 409 + admin notification |
 | `GET /aiOffice/me`, `GET /aiOffice/activities`, `GET /aiOffice/activities/stats`, `POST /aiOffice/activities`, `PATCH /aiOffice/activities/:id` | Yes | Candidate or Supervisor; membership from the DB row (approved, `aiOfficeMember`, not archived); own entries only |
 | `/aiOffice/admin/*` (`users`, `users/:role/:id`, `activities`, `stats`, `access-requests`) | Yes | **Super Admin only**; all departments, department-less accounts included |

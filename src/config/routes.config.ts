@@ -178,6 +178,13 @@ export function addRoutes(app: Application) {
   const publicSearchAnalyticsRouter = container.get(PublicSearchAnalyticsRouter) as any;
   app.use("/publicSearchAnalytics", publicSearchAnalyticsRouter.router);
 
+  // Case analytics over CM-registered surgical cases, institute-admin only, department auto-locked
+  // (docs/CASE_ANALYTICS_TOOL_PLAN.md). Read-only; supersedes the unused
+  // /instituteAdmin/calendarProcedures/analysis/hospital endpoint.
+  const { CaseAnalyticsRouter } = require("../caseAnalytics/caseAnalytics.router");
+  const caseAnalyticsRouter = container.get(CaseAnalyticsRouter) as any;
+  app.use("/caseAnalytics", caseAnalyticsRouter.router);
+
   // Public semantic-search tool, no auth (docs/PUBLIC_SEMANTIC_SEARCH_TOOL_PLAN.md).
   const { PublicSearchRouter } = require("../publicSearch/publicSearch.router");
   const publicSearchRouter = container.get(PublicSearchRouter) as any;

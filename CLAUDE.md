@@ -29,6 +29,56 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 
 ## 📍 Where we stopped (2026-07-08)
 
+### 📊 CASE ANALYTICS for department admins (filters + Excel + PDF): BUILT 2026-09-29, UNCOMMITTED both repos
+Living record (READ FIRST): **`docs/CASE_ANALYTICS_TOOL_PLAN.md`** (checkpoint table + the data findings).
+Triggered by the NS head of department asking for surgical case counts including emergency and
+pediatric cases over one or more years, to size how many trainees the department can take.
+- **New backend module `src/caseAnalytics/`** mounted at `/caseAnalytics`, institute-admin only,
+  department AUTO-LOCKED from the admin's DB row (never the JWT claim); `?deptCode` is honoured only
+  for an already institution-wide caller, so an admin cannot widen their own scope. Endpoints:
+  `/filters`, `/summary`, `/cases`, `/export.xlsx`, `/export.pdf`. **No migration, no write path.**
+- **It supersedes `GET /instituteAdmin/calendarProcedures/analysis/hospital`**, which is referenced
+  NOWHERE in the frontend (grep-verified) and silently drops every case with no procCpt, i.e. 970 of
+  6,443. Left in place, untouched. The new module aggregates in Postgres, not in Node.
+- **What the data actually supports, verified read-only against production:** department, hospital
+  (9 units), date, **age from `patientDob`** (100% populated and real), procedure and alphaCode.
+  **`alphaCode` is a PROCEDURE FAMILY, not a diagnosis** (only 8 in use: CRAN 2543, VSHN 996, LAM 709,
+  MNR 577, FUSN 566, PRPH 59, NONE 21, plus 970 with no procedure at all), and **mainDiag is
+  many-to-many: 44 of the 100 NS-linked procedures sit in 2+ categories**.
+- **USER DECISIONS (2026-09-29), do not re-litigate:** (1) the mainDiag double-count is ACCEPTED, a
+  case shows under every category its procedure touches, and the response/exports carry
+  `mainDiagCategorySum` + `mainDiagDoubleCounts` so it is stated, not implied; (2) filtering by
+  procedure(s) is included; (3) **emergency is hospital-filter-only, NO `caseType` column on
+  `hospitals`**, which is why the hospital filter must stay MULTI-select (Emergency 185 and Abou El
+  Reesh Emergency are selected together); (4) age bands under1 / 1-2 / 3-12 / 13-17 / 18-39 / 40-59 /
+  60+ plus `unknown`; (5) no interim one-off report for the professor.
+- **Dirty production rows are surfaced, never dropped:** 19 unusable dobs (16 dob after procDate, 3
+  implying age over 110) land in the `unknown` band, and 7 rows are dated before 2015 (one reads
+  `0202-07-29`). **That outlier is why the monthly axis is CLAMPED to 120 buckets**, otherwise
+  generate_series would ask for roughly 21,000 rows.
+- **New dependency `exceljs`** for the workbook (10 sheets, bilingual headers, raw case rows).
+  exceljs has no charts, so charts live in the PDF (`pdfkit`, hand-drawn, reusing `reportLayout.ts`).
+- **⚠️ The recorded pdfkit Arabic recipe was WRONG for this font and corrupted output.** With
+  `Cairo-Regular.ttf`, pdfkit already orders Latin/digit runs correctly: pre-reversing clusters (the
+  arial-era fix) turned a timestamp into `50:28:17 29-09-2026`, and a non-breaking space REVERSED
+  digits (18 rendered 81). What Cairo needs is only a trailing space plus a 3-space gap at an Arabic
+  to Latin boundary. New helper **`src/pdf/arabicText.ts`**. Settled by rasterizing probe pages with
+  `PDFParse.getScreenshot` and looking at them; the [[pdfkit-arabic-rtl-gotchas]] memory is corrected.
+  Parentheses are kept OUT of Arabic label strings rather than mirrored.
+- **Frontend** `/dashboard/i-admin/case-analytics` + sidebar entry (BarChart3), EN + AR, inner
+  `*Content` component under the layout provider. ⚠️ **`ds-input` does not exist**: like `.ds-btn`,
+  inputs take the raw tailwind `inputCls` string every other page defines.
+- **Verified:** 15/15 HTTP checks on :3017 against live data, every breakdown reconciles exactly to
+  the case total (only byMainDiag exceeds it, by design), scope lock proved (NS admin passing
+  `deptCode=PEDSURG` still gets NS; superAdmin sees 6,443 = NS 6,441 + PEDSURG 2), both exports read
+  back and inspected page by page in EN and AR, backend tsc + frontend tsc/vite build clean, 0
+  em-dashes, API_DOCUMENTATION.md section + auth-summary rows added.
+  ⚠️ **NOT browser click-tested**: the Chrome extension would not connect this session.
+- **Answer the professor can be given today:** NS 2025 = 3,051 cases (925 pediatric, 1,336 through
+  emergency units), 2026 YTD = 2,500 (800 pediatric, 1,251 emergency). **Only 2025 onward is
+  defensible**: 2024 shows 623 and 2023 shows 137 because the logbook was still being adopted, so a
+  2023-to-2025 comparison reads as 22x growth that did not happen. Both exports print that caveat.
+
 ### 🗓️ I-ADMIN CAN CREATE ACADEMIC EVENTS, same as the CM (2026-09-27, FRONTEND ONLY, uncommitted)
 User ask: give the institute admin the calendar manager's event-creation access.
 - **NO BACKEND CHANGE WAS NEEDED and this was verified, not assumed.** `authorize()` is hierarchical on a rank table where instituteAdmin is **2**, so any gate whose highest listed role sits at level 4 or 5 already admits it. `POST /event` and `PATCH|DELETE /event/:id` are `requireClerkOrInstituteAdmin` (max CLERK = 4), `POST /conf` is `authorize(INSTITUTE_ADMIN, SUPERVISOR, CLERK, SUPER_ADMIN)` (max 4), and every picker (`/lecture`, `/journal`, `/conf`, `/supervisor`, `/cand`) is `requireCandidate`-class (5). **Proved over HTTP on :3016 with a minted i-admin JWT without writing anything**: all 5 pickers 200, and `POST /event` + `POST /conf` with an EMPTY BODY returned **400 (validation), not 403**, which is the non-mutating way to show a role gate passes.

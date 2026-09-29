@@ -102,6 +102,11 @@ import { PublicSearchAnalyticsService } from "../publicSearchAnalytics/publicSea
 import { PublicSearchAnalyticsController } from "../publicSearchAnalytics/publicSearchAnalytics.controller";
 import { PublicSearchAnalyticsRouter } from "../publicSearchAnalytics/publicSearchAnalytics.router";
 
+import { CaseAnalyticsProvider } from "../caseAnalytics/caseAnalytics.provider";
+import { CaseAnalyticsService } from "../caseAnalytics/caseAnalytics.service";
+import { CaseAnalyticsController } from "../caseAnalytics/caseAnalytics.controller";
+import { CaseAnalyticsRouter } from "../caseAnalytics/caseAnalytics.router";
+
 import { SuperAdminController } from "../superAdmin/superAdmin.controller";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -276,6 +281,11 @@ container.bind(PublicSearchAnalyticsProvider).toSelf().inTransientScope();
 container.bind(PublicSearchAnalyticsService).toSelf().inTransientScope();
 container.bind(PublicSearchAnalyticsController).toSelf().inTransientScope();
 container.bind(PublicSearchAnalyticsRouter).toSelf().inTransientScope();
+
+container.bind(CaseAnalyticsProvider).toSelf().inTransientScope();
+container.bind(CaseAnalyticsService).toSelf().inTransientScope();
+container.bind(CaseAnalyticsController).toSelf().inTransientScope();
+container.bind(CaseAnalyticsRouter).toSelf().inTransientScope();
 
 container.bind(SuperAdminController).toSelf().inTransientScope();
 container.bind(SuperAdminRouter).toSelf().inTransientScope();
