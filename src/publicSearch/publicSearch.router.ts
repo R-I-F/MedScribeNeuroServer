@@ -1,3 +1,4 @@
+import { getClientIp } from "../utils/clientIp";
 import express, { Request, Response, Router } from "express";
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
@@ -63,7 +64,7 @@ export class PublicSearchRouter {
           if (!ds) return res.status(StatusCodes.OK).json(fallback);
           const resp = await this.controller.handleStartSession(
             payload,
-            { ip: req.ip ?? "unknown", userAgent: req.headers["user-agent"] },
+            { ip: getClientIp(req), userAgent: req.headers["user-agent"] },
             ds
           );
           return res.status(StatusCodes.OK).json(resp);

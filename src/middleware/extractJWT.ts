@@ -1,3 +1,4 @@
+import { getClientIp } from "../utils/clientIp";
 import { Request, Response, NextFunction } from "express";
 import jwt, { TokenExpiredError } from "jsonwebtoken";
 import { StatusCodes } from "http-status-codes";
@@ -56,7 +57,7 @@ export const extractJWT = (req: Request, res: Response, next: NextFunction) => {
       }
       
       // Log token expiration
-      console.log(`[${NAMESPACE}] Token expired - ${userInfo}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
+      console.log(`[${NAMESPACE}] Token expired - ${userInfo}, IP: ${getClientIp(req)}, Path: ${req.path}, Timestamp: ${new Date().toISOString()}`);
       
       res.locals.jwtError = "Token expired";
       return res.status(StatusCodes.UNAUTHORIZED).json({

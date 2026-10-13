@@ -1,3 +1,4 @@
+import { getClientIp } from "../utils/clientIp";
 import express, { Request, Response, Router } from "express";
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
@@ -58,7 +59,7 @@ export class DemoRequestRouter {
             await this.demoRequestController.handleSubmit(
               payload,
               {
-                ip: req.ip ?? "unknown",
+                ip: getClientIp(req),
                 userAgent: req.headers["user-agent"],
               },
               ds

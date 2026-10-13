@@ -2,6 +2,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import jwt from "jsonwebtoken";
+import { getClientIp } from "../utils/clientIp";
 
 /**
  * When set to "true", all rate limiters are skipped (for load testing).
@@ -10,27 +11,46 @@ import jwt from "jsonwebtoken";
 const skipRateLimit = () => process.env.DISABLE_RATE_LIMIT === "true";
 
 /**
- * Helper function to extract and normalize IP address for rate limiting
- * Uses express-rate-limit's ipKeyGenerator helper to properly handle IPv6 addresses
- * This satisfies express-rate-limit's validation requirements
+ * Rate-limit key for the visitor's real IP (see getClientIp: req.ip alone is the
+ * Netlify proxy, shared by every user). ipKeyGenerator collapses IPv6 to its /56
+ * subnet, as express-rate-limit requires.
  */
-function getIpForRateLimit(req: Request): string {
-  // Get IP from request (normalized by Express when trust proxy is set)
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  // Use ipKeyGenerator helper to properly handle IPv6 addresses
-  // This satisfies express-rate-limit's validation that requires ipKeyGenerator usage
-  return ipKeyGenerator(ip);
+function ipKey(req: Request): string {
+  return `ip:${ipKeyGenerator(getClientIp(req))}`;
 }
 
 /**
- * Global IP rate limiter (applied to all requests in index.ts).
- * Limits each IP to 400 requests per 15 minutes across the whole app.
+ * Rate-limit key per signed-in user, falling back to the real IP.
+ * The token is decoded WITHOUT verification (extractJWT verifies later); a forged id only
+ * picks a different bucket, it never grants access.
+ */
+function userOrIpKey(req: Request): string {
+  try {
+    const token = req.cookies?.auth_token ||
+                  req.headers.authorization?.replace(/^Bearer\s+/i, '') ||
+                  req.headers.authorization;
+    if (token) {
+      const decoded = jwt.decode(token) as any;
+      const userId = decoded?.id || decoded?._id;
+      if (userId) return `user:${userId}`;
+    }
+  } catch (error) {
+    // If JWT decode fails, fall back to IP
+  }
+  return ipKey(req);
+}
+
+/**
+ * Global rate limiter (applied to all requests in index.ts).
+ * 400 requests per 15 minutes per signed-in user, or per real IP for anonymous traffic.
+ * Keyed by user because many doctors share one hospital network address.
  * Throttles bots/scanners that hit many paths; per-route limiters provide finer limits.
  */
 export const globalIpRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 400,
   skip: skipRateLimit,
+  keyGenerator: userOrIpKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -58,6 +78,7 @@ export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 200, // Limit each IP to 200 requests per windowMs
   skip: skipRateLimit,
+  keyGenerator: ipKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -84,6 +105,7 @@ export const healthRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 60,
   skip: skipRateLimit,
+  keyGenerator: ipKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -111,6 +133,7 @@ export const strictRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // Limit each IP to 50 requests per windowMs
   skip: skipRateLimit,
+  keyGenerator: ipKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -139,6 +162,7 @@ export const superAdminLoginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // Limit each IP to 10 super-admin login attempts per windowMs
   skip: skipRateLimit,
+  keyGenerator: ipKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -162,12 +186,13 @@ export const superAdminLoginRateLimiter = rateLimit({
  * Tighter than strictRateLimiter (5 per 15 minutes per IP): the endpoint is
  * public and unauthenticated, and a legitimate visitor books a demo once.
  * Further abuse layers (honeypot, timing, per-email/per-IP caps, daily email
- * budget) live in src/demoRequest/ — see docs/BOOK_A_DEMO_PLAN.md.
+ * budget) live in src/demoRequest/ (see docs/BOOK_A_DEMO_PLAN.md).
  */
 export const demoRequestRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // Limit each IP to 5 demo requests per windowMs
   skip: skipRateLimit,
+  keyGenerator: ipKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -196,6 +221,7 @@ export const publicSearchRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   skip: skipRateLimit,
+  keyGenerator: ipKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -225,6 +251,7 @@ export const eliminatorReserveRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   skip: skipRateLimit,
+  keyGenerator: ipKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -253,32 +280,7 @@ export const userBasedRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 200, // Limit each user to 200 requests per windowMs
   skip: skipRateLimit,
-  keyGenerator: (req: Request) => {
-    // Try to extract user ID from JWT token
-    try {
-      const token = req.cookies?.auth_token || 
-                    req.headers.authorization?.replace(/^Bearer\s+/i, '') ||
-                    req.headers.authorization;
-      
-      if (token) {
-        // Decode without verification (verification happens in extractJWT middleware)
-        const decoded = jwt.decode(token) as any;
-        const userId = decoded?.id || decoded?._id;
-        
-        if (userId) {
-          return `user:${userId}`;
-        }
-      }
-    } catch (error) {
-      // If JWT decode fails, fall back to IP
-    }
-    
-    // Fallback to IP address if no valid token found
-    // Use ipKeyGenerator helper to properly handle IPv6 addresses
-    // This satisfies express-rate-limit's validation requirements
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    return `ip:${ipKeyGenerator(ip)}`;
-  },
+  keyGenerator: userOrIpKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,
@@ -307,32 +309,7 @@ export const userBasedStrictRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 50, // Limit each user to 50 requests per windowMs
   skip: skipRateLimit,
-  keyGenerator: (req: Request) => {
-    // Try to extract user ID from JWT token
-    try {
-      const token = req.cookies?.auth_token || 
-                    req.headers.authorization?.replace(/^Bearer\s+/i, '') ||
-                    req.headers.authorization;
-      
-      if (token) {
-        // Decode without verification (verification happens in extractJWT middleware)
-        const decoded = jwt.decode(token) as any;
-        const userId = decoded?.id || decoded?._id;
-        
-        if (userId) {
-          return `user:${userId}`;
-        }
-      }
-    } catch (error) {
-      // If JWT decode fails, fall back to IP
-    }
-    
-    // Fallback to IP address if no valid token found
-    // Use ipKeyGenerator helper to properly handle IPv6 addresses
-    // This satisfies express-rate-limit's validation requirements
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    return `ip:${ipKeyGenerator(ip)}`;
-  },
+  keyGenerator: userOrIpKey,
   message: {
     status: "error",
     statusCode: StatusCodes.TOO_MANY_REQUESTS,

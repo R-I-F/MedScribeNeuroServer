@@ -1,3 +1,4 @@
+import { getClientIp } from "../utils/clientIp";
 import express, { NextFunction, Request, Response, Router } from "express";
 import { inject, injectable } from "inversify";
 import { DataSource } from "typeorm";
@@ -86,7 +87,7 @@ export class AiOfficeRouter {
         const payload = matchedData(req, { locations: ["body"] }) as IAiOfficeSignupInput;
         const resp = await this.controller.handleSignup(
           payload,
-          { ip: req.ip ?? "unknown", userAgent: req.headers["user-agent"] },
+          { ip: getClientIp(req), userAgent: req.headers["user-agent"] },
           ds
         );
         switch (resp.status) {

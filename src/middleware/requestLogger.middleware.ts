@@ -1,3 +1,4 @@
+import { getClientIp } from "../utils/clientIp";
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
@@ -9,7 +10,7 @@ export function requestLogger(req: Request, _res: Response, next: NextFunction):
   const at = new Date().toISOString();
   const path = (req.originalUrl || req.url || "").split("?")[0];
   const method = req.method;
-  const ip = req.ip || req.socket?.remoteAddress || "unknown";
+  const ip = getClientIp(req);
 
   let identity = "anonymous";
   const token = req.cookies?.auth_token || (req.headers.authorization?.startsWith("Bearer ")

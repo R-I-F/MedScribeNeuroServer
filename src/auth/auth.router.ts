@@ -1,3 +1,4 @@
+import { getClientIp } from "../utils/clientIp";
 import express, { Request, Response, Router, NextFunction } from "express";
 import { inject, injectable } from "inversify";
 import jwt from "jsonwebtoken";
@@ -283,12 +284,12 @@ export class AuthRouter {
             }
 
             // Log login attempt
-            console.log(`[AuthRouter] 🔐 LOGIN ATTEMPT - Email: ${payload.email}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] 🔐 LOGIN ATTEMPT - Email: ${payload.email}, IP: ${getClientIp(req)}, Timestamp: ${new Date().toISOString()}`);
             
-            const resp = await (this.authController as any).candidateSupervisorLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
+            const resp = await (this.authController as any).candidateSupervisorLogin(payload, dataSource, { ip: getClientIp(req), userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
-            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - User: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - User: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -310,7 +311,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] ❌ LOGIN FAILED - Email: ${email}, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Email: ${email}, Error: ${err.message}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -355,10 +356,10 @@ export class AuthRouter {
               });
             }
 
-            const resp = await (this.authController as any).superAdminLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
+            const resp = await (this.authController as any).superAdminLogin(payload, dataSource, { ip: getClientIp(req), userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
-            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Super Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Super Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -372,7 +373,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] ❌ LOGIN FAILED - Super Admin Email: ${email}, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Super Admin Email: ${email}, Error: ${err.message}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -403,10 +404,10 @@ export class AuthRouter {
               });
             }
 
-            const resp = await (this.authController as any).instituteAdminLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
+            const resp = await (this.authController as any).instituteAdminLogin(payload, dataSource, { ip: getClientIp(req), userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
-            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Institute Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Institute Admin: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -420,7 +421,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] ❌ LOGIN FAILED - Institute Admin Email: ${email}, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Institute Admin Email: ${email}, Error: ${err.message}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -451,10 +452,10 @@ export class AuthRouter {
               });
             }
 
-            const resp = await (this.authController as any).clerkLogin(payload, dataSource, { ip: req.ip || req.socket.remoteAddress || null, userAgent: req.get("user-agent") || null });
+            const resp = await (this.authController as any).clerkLogin(payload, dataSource, { ip: getClientIp(req), userAgent: req.get("user-agent") || null });
             
             // Log successful login with comprehensive user details
-            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Clerk: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] ✅ LOGIN SUCCESS - Clerk: ${resp.user.fullName || "N/A"} (${payload.email}), Role: ${resp.role}, UserId: ${resp.user.id || resp.user._id}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             
             // Set httpOnly cookies
             setAuthCookies(res, resp.token, resp.refreshToken);
@@ -468,7 +469,7 @@ export class AuthRouter {
           } catch(err: any){
             // Log failed login attempt with request details
             const email = (req.body as IAuth)?.email || "unknown";
-            console.error(`[AuthRouter] ❌ LOGIN FAILED - Clerk Email: ${email}, Error: ${err.message}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.error(`[AuthRouter] ❌ LOGIN FAILED - Clerk Email: ${email}, Error: ${err.message}, IP: ${getClientIp(req)}, User-Agent: ${req.get("user-agent") || "unknown"}, Timestamp: ${new Date().toISOString()}`);
             res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
           }
         }
@@ -534,7 +535,7 @@ export class AuthRouter {
           setAuthCookies(res, newTokens.token, newTokens.refreshToken);
           
           // Log successful token refresh
-          console.log(`[AuthRouter] Token refresh successful - Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded.id || decoded._id || "unknown"}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+          console.log(`[AuthRouter] Token refresh successful - Email: ${decoded.email || "unknown"}, Role: ${decoded.role || "unknown"}, UserId: ${decoded.id || decoded._id || "unknown"}, IP: ${getClientIp(req)}, Timestamp: ${new Date().toISOString()}`);
           
           return res.status(StatusCodes.OK).json({ 
             success: true 
@@ -558,7 +559,7 @@ export class AuthRouter {
             }
             
             // Log refresh token expiration
-            console.log(`[AuthRouter] Refresh token expired - ${userInfo}, IP: ${req.ip || req.socket.remoteAddress || "unknown"}, Timestamp: ${new Date().toISOString()}`);
+            console.log(`[AuthRouter] Refresh token expired - ${userInfo}, IP: ${getClientIp(req)}, Timestamp: ${new Date().toISOString()}`);
             
             return res.status(StatusCodes.UNAUTHORIZED).json({ 
               error: "Refresh token expired",
