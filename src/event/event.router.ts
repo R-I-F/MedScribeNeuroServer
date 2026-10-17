@@ -6,6 +6,8 @@ import { getEventByIdValidator } from "../validators/getEventById.validator";
 import { getEventsByPresenterValidator } from "../validators/getEventsByPresenter.validator";
 import { updateEventValidator } from "../validators/updateEvent.validator";
 import { deleteEventValidator } from "../validators/deleteEvent.validator";
+import { changeEventPresenterValidator } from "../validators/changeEventPresenter.validator";
+import { EventPresenterError } from "./event.interface";
 import { addAttendanceValidator } from "../validators/addAttendance.validator";
 import { removeAttendanceValidator } from "../validators/removeAttendance.validator";
 import { flagAttendanceValidator } from "../validators/flagAttendance.validator";
@@ -258,6 +260,36 @@ export class EventRouter {
       }
     );
 
+    // Change the presenter (institute admin). Declared before PATCH /:id so the
+    // longer path is never read as an event id. Moves an eliminator reservation
+    // with the event, in one transaction.
+    this.router.patch(
+      "/:id/presenter",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireInstituteAdmin,
+      changeEventPresenterValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          return;
+        }
+        try {
+          const resp = await this.eventController.handleChangePresenter(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          if (err instanceof EventPresenterError) {
+            res.status(err.status).json({ error: err.message, code: err.code });
+            return;
+          }
+          console.error("[event] presenter change failed:", err);
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Could not change the presenter" });
+        }
+      }
+    );
+
     // Update event
     this.router.patch(
       "/:id",
@@ -283,6 +315,8 @@ export class EventRouter {
           // Business-rule validation errors (e.g. invalid status change) should not be 500
           if (msg.includes("Cannot change status")) {
             res.status(StatusCodes.BAD_REQUEST).json({ error: msg });
+          } else if (msg.includes("eliminator-booked event")) {
+            res.status(StatusCodes.CONFLICT).json({ error: msg, code: "USE_PRESENTER_ENDPOINT" });
           } else {
             res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: msg });
           }

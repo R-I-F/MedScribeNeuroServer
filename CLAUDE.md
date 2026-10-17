@@ -29,6 +29,189 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 
 ## 📍 Where we stopped (2026-07-08)
 
+### 🎤 I-ADMIN CAN CHANGE AN EVENT'S PRESENTER: BUILT 2026-10-17, UNCOMMITTED both repos, NOT deployed
+Living record: **`docs/EVENT_PRESENTER_CHANGE_PLAN.md`**. New `PATCH /event/:id/presenter` `{presenterId}`
+(institute admin own department from the DB row, superAdmin institution-wide; an admin token with no
+admin row now FAILS CLOSED 403). One transaction moves `events.presenterId` AND the eliminator
+reservation that booked it (`eliminator_reservations.supervisorId` / `journal_reservations.candidateId`),
+using the SAME advisory-lock keys as the booking paths. Journal: one-per-candidate-per-round and
+never-a-paper-presented-before are hard 409s; lecture cap is a WARNING only; held events allowed; no
+email (all user decisions). Generic `PATCH /event/:id` now 409s (`USE_PRESENTER_ENDPOINT`) a DIFFERENT
+presenter on a reserved event, so the tables cannot drift. Frontend: "Change Presenter" panel on
+`InstituteAdminEventDetailPage` (dept-filtered picker, EN + AR, cap warning shown after save).
+Verified on a throwaway PG17 restored from the 2026-10-15 backup: 28/28 HTTP E2E incl. a forced-failure
+rollback; ECC code + security review addressed. ⚠️ NOT browser click-tested. API_DOCUMENTATION.md updated.
+
+### 📥 HISTORICAL LOGBOOK IMPORT #3, moaz yahia farghal abdelmohsen (NS): APPLIED to production 2026-10-15
+`moaz.abdel-mohsen@students.kasralainy.edu.eg.xlsx`: 32 operations (28 Dec 2024 to 1 May 2025).
+**30 inserted** (cal_surgs + submissions, 49 CPT links, 30 ICD links, 69 answers, +1 clerk phrase),
+all Qasr Al Aini (rotation 6 each). **Rows 31-32 were ALREADY in production** (1 May 2025, Emergency
+185, entered through the in-app form) and were skipped untouched. Logbook 87 -> 117; content
+overlap check vs his 87 (date + patient) found none. Roles AND gender came from the sheet this
+time (14 assistant / 16 observer; 16 M / 14 F). New phrase: تركيب صمام ظهري برتوني -> lumboperitoneal
+shunt (63741-00). Backup: `F:\DB_BACKUPS\ka-institute-pre-moaz-abdelmohsen-import-20261015181434.sql.gz`
+(submissions 4557 / cal_surgs 6732 == live). verify ALL PASS.
+- **Skill fixed during this run**: in-app-form rows carry their OWN submission uid in the trailing
+  column (differs from the column-2 procedure uid). parse.py now records it as `subUid`; import.cjs
+  keys cal_surgs by `uid` and submissions by `subUid`, decides "already present" BEFORE planning
+  (so skipped rows need no coding); verify.cjs checks only the rows this run inserted
+  (`baseline.json.imported`). Those 2 rows also used an English location and US-format text dates,
+  which never reached validation because they were skipped.
+- Rollback: delete the 30 inserted uids listed in the work dir's baseline.json (children first) + the
+  one new clerk_procs row, else restore the backup.
+
+### 📥 HISTORICAL LOGBOOK IMPORT #2, Ahmed Ramadan Moheldin Elsayed (NS): APPLIED to production 2026-10-15
+First run of the new `/import-candidate-logbook` skill, on `ahmed122elsayed122@gmail.com.xlsx`
+(Downloads). **72 cal_surgs + 72 submissions inserted** (107 CPT links, 73 ICD links, 71 answers,
++1 clerk_procs phrase), insert-only, one transaction, committed 2026-10-15 15:04 UTC. His 1
+pre-existing submission (1 Oct 2026, entered via the app) is untouched; logbook now 73.
+- Backup first: `F:\DB_BACKUPS\ka-institute-pre-ahmed122elsayed122-import-20261015180326.sql.gz`
+  (verified: 56 tables, submissions 4485 / cal_surgs 6660 == live). `verify.cjs` ALL PASS, incl.
+  pre-existing counts unchanged (4485 / 6660 / 102 clerk_procs).
+- Sheet: 104 rows -> 72 uids; 40 existed only in the shifted layout (why the parser reads the uid
+  from column 2). Ops 15 Jan to 26 Apr 2025. Emergency 185 50 (Hossam), Qasr Al Aini 22 (rotation
+  5/5/4/4/4). Roles all unknown -> 25 operator / 29 assistant / 18 observer. Gender inferred
+  41 M / 31 F (سليا age 2.5 and "ام ..." taken female). 3 sheet-Pending rows imported approved.
+- **User decision this run**: rows 43 and 45 (same patient رحمه س ع م, VP shunt 24 and 25 Feb 2025)
+  both imported, not treated as a duplicate.
+- New phrase learned: تركيب صمام بالحبل الشوكي -> csf diversion neither vp shunt nor etv (61107-00).
+- **Noticed, NOT changed (insert-only)**: two pre-existing learned clerk phrases map oddly and
+  colour the CALENDAR side only: حقن بالفقرات -> vertebroplasty (used here for a facet injection),
+  تسليك عصب الرجل -> ulnar nerve entrapment (used for a peroneal release). Submissions carry the
+  right codes. Fixing them = an UPDATE on clerk_procs + the cal_surgs that use them; ask first.
+- Work files (recs/rows/coding/dryrun/apply/baseline) in this session's scratchpad
+  `import-ahmed122elsayed122/`. Rollback: delete these 72 uids (answers, icd links, proc links,
+  submissions, cal_surgs) + the one new clerk_procs row, else restore the backup.
+
+### 📖 CHIARI JOURNAL ADDED WITHOUT A PDF + CM-booked for 15 Oct (2026-10-14/15, data-only on production)
+- **Inserted into production `journals`** (user-approved, one guarded transaction, exactly 1 row): "decompression with or without duraplasty for chiari i and syringomyelia", NS, id `712b9965-bd3d-463a-a962-c6cbb6c6020c`, `google_uid` `d3472e9f-4053-4651-b446-c30b8f258f2d`. **No PDF exists** (user could not find one), so `pdfLink` is the NEJM DOI `https://doi.org/10.1056/NEJMoa2402821` (the column is NOT NULL; the frontend uses it only as an href, so this is safe). NS journals now 42. **Not in the Journal Club Plan sheet**: a future sheet row must reuse that `google_uid` or postBulk duplicates it. Rollback = delete the row by id (only if no event references it).
+- **The user then booked it from the calendar manager event form**: event `d6b2230b-072a-47a9-8558-e12952256df1`, journal, booked, dept, Thu 2026-10-15 10:00 Cairo, presenter candidate `e853aa30...` (Wally Hesham). Event shape verified valid. **Nothing breaks**, BUT the form creates no `journal_reservations` row, so (a) the paper is still offered as available on the candidate journal eliminator page, and (b) Wally can still reserve a second paper. 15 Oct also already holds Mohamedalmojtaba Hummaida's eliminator-booked journal club ("effect of perforating arteries on microvascular decompression for hemifacial spasm."), so that Thursday has TWO journal clubs at 10:00 plus a lecture.
+- **OPEN, offered, NOT applied (awaiting user answer)**: insert a matching `journal_reservations` row (campaign, 15-Oct slot, journal, Wally, event id) and raise that ONE slot's `journalCapacity` 1 -> 2 (it is full: `journalReservedCount` = 1), bumping `journalReservedCount` to 2. Also ask whether the double journal club is intended or the other event should be cancelled. Production write: needs explicit go-ahead.
+- **Product gap worth fixing later**: the CM/i-admin event form can book a journal that bypasses the eliminator's one-paper/one-candidate/one-per-Thursday rules.
+
+### 🚦 RATE LIMITS WERE APP-WIDE, NOT PER USER: FIXED + SHIPPED 2026-10-13 (backend `19bb622` on main)
+Reported as "a supervisor approving cases gets rate limited after about 10 and it stops for a while". There is no 10-limit in code. **All API traffic is browser -> Cloudflare -> Netlify `/api/*` proxy -> Railway, and with `trust proxy = 1` `req.ip` was the NETLIFY node**, so every IP-keyed limiter was one shared bucket (login_events over 30 days: 65 users on `79.127.178.82`, 62 on `.81`). The global limiter (400/15 min, every request) ran dry at busy times and whoever was clicking got 429 until the window reset.
+- **Fix**: new `src/utils/clientIp.ts` `getClientIp()` = `CF-Connecting-IP` -> `X-Nf-Client-Connection-Ip` -> `req.ip` (a header is accepted only if `net.isIP`). Every IP limiter now has `keyGenerator: ipKey`; the global and both user-based limiters use `userOrIpKey` (signed-in = per user, since a hospital network shares one address). Login event IPs, the demoRequest + publicSearch per-IP daily caps, and logs use the helper. Limit numbers unchanged. The forgeable-header tradeoff is documented in the helper (the Railway origin is public; a forged header only picks a bucket).
+- **Bug caught by the local test before shipping**: a shell heredoc ate a backslash and wrote `/^Bearers+/i`, which would have broken per-user keying. Write regexes with the Edit tool, not through heredocs.
+- **Verified live** through libeluspro.com: a 404 probe showed the global budget dropping exactly 1 per own call (396 -> 392). **Follow-up check**: new `login_events.ip` rows should now be diverse real IPs, not the 79.127.178.x pair. Login IPs recorded before 2026-10-13 are the proxy's and meaningless.
+- **Same day, data-only on production**: Mina Gorgy Selim's 133 pending submissions were moved to Ehab El Refaee and approved, with `reviewedBy`/`reviewedAt` deliberately left NULL (user choice); his 1 Eltoukhy rejection was left alone. Row backup: `F:\DB_BACKUPS\ka-mina-gorgy-pending-pre-approve-20261013.json`.
+
+### 🐛 OPEN, NOT FIXED: the submission error message is a GUESS, the real reason is swallowed
+Reported 2026-09-30 (`mez@live.in`, candidate moataz el massry, NS): creating a submission for patient
+Israa on 1/8 showed "Submission could not be created. You may have reached the limit (2 per procedure)
+or chosen a role you already used for this procedure." **That sentence is hardcoded at
+`NeuroLogBookFront/src/utils/api.ts:2301` and is printed whenever the backend's own message cannot be
+unwrapped. It is not diagnostic and in this case its first half is false.**
+- **Chain, proven by reading the code, not inferred**: the route replies
+  `res.status(400).json({ error: "<real reason>" })`, then `responseFormatter` (`src/middleware/
+  responseFormatter.ts`) wraps it as `{status, statusCode, message: "Bad Request", error: { error:
+  "<real reason>" }}`. The reason is now at **`data.error.error`**, but `api.ts` only looks for
+  `data.error` as a STRING or `data.error.message`, falls through to `data.message` = "Bad Request",
+  matches its own `genericPhrases` list, and substitutes the invented text. **Same `.error` nesting
+  defect already recorded for `reserveEliminatorLectures` / `EliminatorPage`.**
+- **Not every error is swallowed**: validator failures reply with an ARRAY (`result.array()`), which
+  `api.ts` does map correctly, and a 429 from `userBasedStrictRateLimiter` writes its own body with
+  `error` as a plain string, so "Too many requests..." does show. **Only the four business-rule 400s
+  in `sub.router.ts` are lost** (the 2-per-procedure limit, the duplicate-role rule, "not found",
+  "Main diagnosis ...").
+- **This user never hit the 2-per-procedure limit**: 60 submissions across 60 DISTINCT procedures.
+  There are TWO separate 1-Aug-2026 cal_surgs for patient `اسراء ا ع م`, and he already holds one
+  entry on each (Fifth Operations / gross total resection as **assistant** 29 Aug; Emergency /
+  evacuation as **operator** 29 Sep 16:08). So the probable trigger is the duplicate-role rule on a
+  retry. Inference, not proof: failed POSTs are persisted nowhere, so the exact request is unknowable.
+- **Fix offered, NOT applied** (frontend-only, but pushing frontend `main` deploys to Netlify):
+  read `data.error.error` in `api.ts`, and sweep the other call sites for the same hole.
+
+### 🌳 REFERENCE DATA TREE PDF, now department-parameterised (NS produced 2026-09-30)
+`reports/LibelusPro-NS-data-tree-2026-09-30.pdf` (42 pages), the NS twin of the PEDSURG edition from
+2026-09-09. **The generator is no longer session-scratchpad only: it lives in the gitignored
+`scripts/data-tree/`** as `fetch-dept.js` (read-only pull, takes a dept CODE argument, writes
+`dept-tree.json` beside itself) + `build-pdf.js` (pdfkit). Run `node fetch-dept.js <CODE>` then
+`node build-pdf.js <out.pdf>`. Everything that was hardcoded PEDSURG is now read from the data.
+- **The PEDSURG original had 5 hardcoded facts that silently produce a WRONG document for any other
+  department**, all now dynamic: the two cover stat cards (`15` categories, `100` diagnoses), the
+  "15 diagnostic categories, in alphabetical order" line, the "used in N of 15 categories" line under
+  every question, and the curriculum subtitle that read "transcribed from the published **paediatric
+  surgery** curriculum". If this is ever reused again, re-read the cover and the curriculum heading
+  before shipping.
+- **NS numbers, all cross-checked against the live DB after rendering**: 10 categories, 124
+  diagnoses (134 category links), 100 distinct procedures (163 links), 6 questions / 26 options,
+  10 topics / 152 lectures, 0 orphan diagnoses. A text extraction confirms **every** record actually
+  appears in the PDF (0 missing of 124 dx + 98 proc titles + 152 lectures + 10 topics).
+  NB `distinct procs` is 100 by `numCode` but 98 by title: `local injection` and `duroplasty` each
+  exist twice under different codes. The cover counts numCodes, which is correct.
+- **NS additions over the PEDSURG layout**: PEDSURG lectures were all `level = NULL` so the field was
+  never rendered. NS has it populated (84 msc / 66 md / 2 null), so each lecture now carries an
+  MSC/MD tag and the curriculum subtitle states the split. **Gotcha: the tag sits under the lecture
+  number, so the row height must clear it** (`Math.max(endA, doc.y, l.level ? ty + 20 : 0)`),
+  otherwise it collides with the next row's number and reads as belonging to the wrong lecture.
+- **Arabic is correct here and uses the OLD arial recipe on purpose** (`arFix`: pre-reverse Latin and
+  digit runs, mirror brackets, append a trailing space). That is right for `arial.ttf`; it is NOT the
+  Cairo-font recipe recorded in [[pdfkit-arabic-rtl-gotchas]]. Do not "fix" one with the other.
+  Verified by rasterising all 42 pages with `PDFParse.getScreenshot` and reading them.
+
+### 📥 HISTORICAL LOGBOOK IMPORT for the NS candidate MAMADOU KHAIRA: APPLIED to production 2026-09-29
+User supplied `mamadoukhairabah7@gmail.com  AggHistData (1).xlsx` (Downloads) and asked to import it
+without touching live data, alternating supervisors by hospital, everything approved, and with the
+codes worked out row by row. **91 cal_surgs + 91 submissions inserted, insert-only, one transaction.**
+Backup first: `F:\DB_BACKUPS\ka-institute-pre-mamadou-import-20260929223759.sql.gz` (verified, 56
+tables, submissions 4181 == live pre-import). **Turned into the reusable skill
+`/import-candidate-logbook <xlsx>` on 2026-10-15** (`.claude/skills/import-candidate-logbook/`,
+gitignored): the original script was recovered from the session transcript and generalised. The
+candidate is whoever the sheet's email belongs to; the user decisions below live in its
+`protocol.json`. Improvements over the Mamadou run: the uid is read from column 2 ("Procedure Unique
+ID (prefilled)"), because the next export (ahmed122elsayed122, 72 procedures) had 40 uids that exist
+ONLY in the shifted layout, which the "keep the column-56 copy" rule would have dropped; a real
+sheet role is kept and only unknown roles get the 35/40/25 split; an email lock refuses a sheet
+that is not the named candidate's; `verify.cjs` proves the pre-existing row counts are unchanged.
+- **⚠️ THE SHEET IS RAGGED AND THE HEADER LIES.** The submissions tab is an aggregate of several
+  Google Form variants, so `uid`/`status` land at column 56 **or** 58 depending on the row's source
+  form, and the 60-column union header labels 58/59 as `AlphaCode`/`NumCode`. **Parse rule that
+  works: uid = the LAST uuid in the row, status = the very next cell, everything else by header
+  index.** 128 rows collapse to **91 distinct uids** (37 appear twice, the second copy being the
+  same answers shifted right); dedupe by uid keeping the copy whose uid sits at 56.
+- **`Main Diagnosis` in the sheet is NOT usable**: 54 of 91 rows say "1.Congenital anomalies,
+  infantile, Hydrocephalus" including every lumbar microdiscectomy and ACDF (the candidate left the
+  first option selected). Every category was re-derived from the procedure/notes text. Final split:
+  CSF 24, congenital 16, spinal degenerative 15, cns tumors 15, cranial trauma 13, spinal trauma 3,
+  cns infection 3, neuro-vascular 1, peripheral nerve 1.
+- **Two independent codings per row, and they are allowed to disagree** (the source disagrees):
+  `cal_surgs.procCptId` comes from the clerk's ARABIC procedure string, `submissions` proc/icd links
+  come from the candidate's own English answers. **66 of 91 Arabic phrases already existed in
+  `clerk_procs`** (it is a rich learned table, always check it before inventing a mapping); 12 new
+  phrases were learned, e.g. بذل للسائل الشوكي -> tapping 61020-01, استئصال غضروف + تثبيت ->
+  intervertebral fusion 22630-00, ورم بالمخ + تركيب صمام -> biopsy 61140-00.
+- **USER DECISIONS (2026-09-29), do not re-litigate:** (1) "أبو الريش الياباني" maps to **Fifth
+  Operations**, not Emergency (the sheet does not distinguish them); (2) gender is absent from the
+  source and was **inferred from the Arabic first name** (63 male / 28 female; only كيان was
+  genuinely ambiguous, taken as female); (3) `roleInSurg` was "unknown" in all 128 rows, so it was
+  **randomly distributed 35/40/25** -> operator 32, assistant 36, observer (scrubbed) 23, via a
+  seeded shuffle so dry run and apply agree.
+- **Supervisors by hospital as instructed**: Emergency 185 -> Hossam ElDin Mostafa (37), both Abou
+  El Reesh sites -> Ehab El Refaee (32 + 3), Qasr Al Aini -> round-robin in date order over Salama /
+  Fathy / El Ashry / Enayet / Fathalla (4/4/4/4/3). NB the roster names resolve to **Abd El Rahman
+  Enayet** and **Mohamed Fathalla** (there is also a Hussein Abdelrahman Fathallah, not used).
+- **All 91 are `approved` but `reviewedBy`/`reviewedAt` are deliberately NULL.** Stamping them would
+  fabricate review events, and `activity_read_model` derives 'surgical_review' from exactly those two
+  columns, inflating those 7 supervisors' active-user counts and the signup cap. 1,872 pre-existing
+  approved rows already carry NULL reviewers, so this is an established state.
+- **Patient names were put through the privacy format server-side** (`أحمد م خ` shape) rather than
+  stored in full, and `patientNameEn` was built deterministically from `AR_INITIAL_TO_EN` with the
+  first name supplied by hand (no Gemini call). **DOB gotcha: the sheet serialises a date-only DOB as
+  UTC midnight of the Cairo date** (22:00/21:00 the day before), so the value is rounded to the
+  nearest day, never truncated.
+- **Verified read-only after**: 91/91 uids present and distinct in both tables, 0 rows with a missing
+  gender/patientNameEn/clerkProcId/procCptId or a wrong department, every submission carries at least
+  one CPT and one ICD link (140 proc links, 104 icd links, 111 question answers), supervisor and role
+  splits exact. **Nothing pre-existing was modified**: the script has no UPDATE/DELETE at all, and
+  submissions created before the import window count 4181, matching the dump exactly (the live total
+  drifts because production is taking real traffic).
+- **Rollback** is a targeted delete of the 91 `google_uid`/`subGoogleUid` values (none existed
+  before, confirmed before writing), else restore the snapshot above. Data-only, no redeploy.
+- ⚠️ **First apply attempt failed and rolled back cleanly** ("inconsistent types deduced for
+  parameter $2"): reusing one placeholder for both `patientName` (varchar) and `patientNameAr` (text)
+  is not inferable. Cast every parameter explicitly in a hand-written INSERT.
+
 ### 📊 CASE ANALYTICS for department admins (filters + Excel + PDF): BUILT 2026-09-29, UNCOMMITTED both repos
 Living record (READ FIRST): **`docs/CASE_ANALYTICS_TOOL_PLAN.md`** (checkpoint table + the data findings).
 Triggered by the NS head of department asking for surgical case counts including emergency and

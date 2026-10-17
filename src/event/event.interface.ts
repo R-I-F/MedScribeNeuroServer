@@ -142,3 +142,41 @@ export interface ICandidateEventPointsResponse {
 }
 
 
+
+// Presenter change (institute admin). The event and any eliminator reservation
+// that booked it move together, so these codes are the rules that can refuse it.
+export type TEventPresenterErrorCode =
+  | "EVENT_NOT_FOUND"
+  | "ADMIN_NOT_FOUND"
+  | "PRESENTER_NOT_FOUND"
+  | "PRESENTER_ARCHIVED"
+  | "PRESENTER_OTHER_DEPARTMENT"
+  | "NO_CHANGE"
+  | "ALREADY_RESERVED"
+  | "JOURNAL_ALREADY_PRESENTED";
+
+export class EventPresenterError extends Error {
+  public code: TEventPresenterErrorCode;
+  public status: number;
+
+  constructor(code: TEventPresenterErrorCode, status: number, message: string) {
+    super(message);
+    this.name = "EventPresenterError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** A rule the admin is allowed to break, reported back instead of refused. */
+export interface IEventPresenterWarning {
+  code: "CAP_EXCEEDED";
+  message: string;
+  count: number;
+  cap: number;
+}
+
+export interface IChangeEventPresenterResult {
+  event: IEventDoc | null;
+  reservation: { kind: "lecture" | "journal"; id: string } | null;
+  warnings: IEventPresenterWarning[];
+}

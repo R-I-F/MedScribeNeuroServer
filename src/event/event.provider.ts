@@ -18,6 +18,9 @@ import {
   IEventPointsPresenter,
   IEventPointsEvent,
   TEventTypePublic,
+  EventPresenterError,
+  IEventPresenterWarning,
+  IChangeEventPresenterResult,
 } from "./event.interface";
 import { UtilService } from "../utils/utils.service";
 import { LectureService } from "../lecture/lecture.service";
@@ -243,6 +246,16 @@ export class EventProvider {
       }
 
       if (updateData.presenter !== undefined) {
+        // A booked eliminator seat names the presenter too; only changePresenter
+        // moves both, so this generic path must not change it on its own.
+        if (
+          updateData.presenter.trim().toLowerCase() !== String(currentEvent.presenterId ?? "").trim().toLowerCase() &&
+          (await this.hasReservation(id, dataSource))
+        ) {
+          throw new Error(
+            "Cannot change the presenter of an eliminator-booked event here; use PATCH /event/:id/presenter"
+          );
+        }
         updateFields.presenterId = updateData.presenter;
       }
 
@@ -320,6 +333,192 @@ export class EventProvider {
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * Hand an existing event to another presenter (institute admin).
+   *
+   * An event booked through an eliminator has a reservation row naming the same
+   * person; it moves in the same transaction, so the eliminator never keeps
+   * counting the old presenter. Rules:
+   *  - the presenter must be the right kind for the type (supervisor for lecture
+   *    and conf, non-archived candidate for journal) and in the event's department
+   *  - journal: one reservation per candidate per campaign (hard), and never a
+   *    paper the candidate already presented (hard)
+   *  - lecture: the per-supervisor cap is a WARNING, not a refusal (user decision
+   *    2026-10-17), so an admin can push a supervisor past it knowingly
+   * Held events are allowed (user decision 2026-10-17); academic points follow
+   * presenterId, so they move with the change.
+   *
+   * `adminDepartmentId` null means institution-wide (superAdmin, or an admin row
+   * with no department). Out of scope reads as not found, like the i-admin by-id guards.
+   */
+  public async changePresenter(
+    eventId: string,
+    presenterId: string,
+    adminDepartmentId: string | null,
+    dataSource: DataSource
+  ): Promise<IChangeEventPresenterResult> {
+    const outcome = await dataSource.transaction(async (manager) => {
+      const [event] = await manager.query(
+        `SELECT "id", "type", "journalId", "presenterId", "departmentId"
+           FROM "events" WHERE "id" = $1 FOR UPDATE`,
+        [eventId]
+      );
+      if (!event || (adminDepartmentId && event.departmentId !== adminDepartmentId)) {
+        throw new EventPresenterError("EVENT_NOT_FOUND", 404, "Event not found");
+      }
+      if (String(event.presenterId).trim().toLowerCase() === presenterId.toLowerCase()) {
+        throw new EventPresenterError("NO_CHANGE", 400, "This person is already the presenter");
+      }
+
+      const isJournal = event.type === "journal";
+      const [person] = isJournal
+        ? await manager.query(
+            `SELECT "id", "departmentId", "archivedAt" FROM "candidates" WHERE "id" = $1`,
+            [presenterId]
+          )
+        : await manager.query(
+            `SELECT "id", "departmentId" FROM "supervisors" WHERE "id" = $1`,
+            [presenterId]
+          );
+      if (!person) {
+        throw new EventPresenterError(
+          "PRESENTER_NOT_FOUND",
+          400,
+          isJournal
+            ? "A journal club is presented by a candidate; no such candidate"
+            : "A lecture or conference is presented by a supervisor; no such supervisor"
+        );
+      }
+      if (isJournal && person.archivedAt) {
+        throw new EventPresenterError("PRESENTER_ARCHIVED", 400, "This candidate was promoted and is no longer active");
+      }
+      if (event.departmentId && person.departmentId !== event.departmentId) {
+        throw new EventPresenterError(
+          "PRESENTER_OTHER_DEPARTMENT",
+          400,
+          "The presenter must belong to the event's department"
+        );
+      }
+
+      const warnings: IEventPresenterWarning[] = [];
+      let reservation: IChangeEventPresenterResult["reservation"] = null;
+
+      if (isJournal) {
+        if (event.journalId) {
+          const presented = await manager.query(
+            `SELECT 1 FROM "events"
+              WHERE "type" = 'journal' AND "journalId" = $1 AND "presenterId" = $2::text
+                AND "status" <> 'canceled' AND "id" <> $3`,
+            [event.journalId, presenterId, eventId]
+          );
+          if (presented.length > 0) {
+            throw new EventPresenterError(
+              "JOURNAL_ALREADY_PRESENTED",
+              409,
+              "This candidate has presented this paper before"
+            );
+          }
+        }
+
+        const [res] = await manager.query(
+          `SELECT "id", "campaignId" FROM "journal_reservations" WHERE "eventId" = $1 FOR UPDATE`,
+          [eventId]
+        );
+        if (res) {
+          // Same lock key as a candidate's own booking, so the two cannot interleave.
+          await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+            `journal:${res.campaignId}:${presenterId}`,
+          ]);
+          const held = await manager.query(
+            `SELECT 1 FROM "journal_reservations" WHERE "campaignId" = $1 AND "candidateId" = $2`,
+            [res.campaignId, presenterId]
+          );
+          if (held.length > 0) {
+            throw new EventPresenterError(
+              "ALREADY_RESERVED",
+              409,
+              "This candidate already holds a journal club in this round. Each candidate may present one."
+            );
+          }
+          try {
+            await manager.query(`UPDATE "journal_reservations" SET "candidateId" = $1 WHERE "id" = $2`, [
+              presenterId,
+              res.id,
+            ]);
+          } catch (err: any) {
+            // UNIQUE(campaignId, candidateId) is the backstop for any writer that skips the lock.
+            if (err?.code === "23505") {
+              throw new EventPresenterError(
+                "ALREADY_RESERVED",
+                409,
+                "This candidate already holds a journal club in this round. Each candidate may present one."
+              );
+            }
+            throw err;
+          }
+          reservation = { kind: "journal", id: res.id };
+        }
+      } else {
+        const [res] = await manager.query(
+          `SELECT r."id", r."campaignId", c."maxPerSupervisor"
+             FROM "eliminator_reservations" r
+             JOIN "eliminator_campaigns" c ON c."id" = r."campaignId"
+            WHERE r."eventId" = $1
+            FOR UPDATE OF r`,
+          [eventId]
+        );
+        if (res) {
+          // Same lock key as the supervisor's own booking.
+          await manager.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+            `${res.campaignId}:${presenterId}`,
+          ]);
+          const [{ count }] = await manager.query(
+            `SELECT COUNT(*)::int AS "count" FROM "eliminator_reservations"
+              WHERE "campaignId" = $1 AND "supervisorId" = $2`,
+            [res.campaignId, presenterId]
+          );
+          const after = count + 1;
+          if (after > res.maxPerSupervisor) {
+            warnings.push({
+              code: "CAP_EXCEEDED",
+              message: `This supervisor now holds ${after} lectures in this round, above the cap of ${res.maxPerSupervisor}`,
+              count: after,
+              cap: res.maxPerSupervisor,
+            });
+          }
+          await manager.query(`UPDATE "eliminator_reservations" SET "supervisorId" = $1 WHERE "id" = $2`, [
+            presenterId,
+            res.id,
+          ]);
+          reservation = { kind: "lecture", id: res.id };
+        }
+      }
+
+      await manager.query(`UPDATE "events" SET "presenterId" = $1, "updatedAt" = now() WHERE "id" = $2`, [
+        presenterId,
+        eventId,
+      ]);
+
+      return { reservation, warnings };
+    });
+
+    // Read after commit: the populated shape is the same one every other event route returns.
+    const event = await this.eventService.getEventById(eventId, dataSource);
+    return { event, ...outcome };
+  }
+
+  /** True when an eliminator reservation (lecture or journal) booked this event. */
+  private async hasReservation(eventId: string, dataSource: DataSource): Promise<boolean> {
+    const rows = await dataSource.query(
+      `SELECT 1 FROM "eliminator_reservations" WHERE "eventId" = $1
+       UNION ALL
+       SELECT 1 FROM "journal_reservations" WHERE "eventId" = $1
+       LIMIT 1`,
+      [eventId]
+    );
+    return rows.length > 0;
   }
 
   public async addAttendance(validatedReq: IAddAttendanceInput, dataSource: DataSource): Promise<IEventDoc> | never {

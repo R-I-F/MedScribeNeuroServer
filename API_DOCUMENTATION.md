@@ -9037,6 +9037,75 @@ Backend re-validates:
 }
 ```
 
+**Presenter changes on eliminator-booked events:** when the event was booked through the
+lecture or journal-club eliminator (it has an `eliminator_reservations` or
+`journal_reservations` row), sending a `presenter` that differs from the current one is
+refused with **409** `{ "error": "...", "code": "USE_PRESENTER_ENDPOINT" }`, because this
+route would move the event without its reservation. Use **Change Event Presenter** below.
+Sending the unchanged presenter still succeeds.
+
+---
+
+### Change Event Presenter
+
+**PATCH** `/event/:id/presenter`
+
+Hands an existing event to another presenter. A lecture or conference takes a supervisor,
+a journal club takes a candidate. If an eliminator reservation booked the event, it moves
+to the new presenter in the same transaction, so the event and the reservation can never
+disagree.
+
+**Authentication:** Institute Admin or Super Admin. An institute admin is limited to
+events of their own department, read from their `institute_admins` row (not the JWT
+claim); a Super Admin, or an admin row with no department, is institution-wide. An event
+outside the caller's scope answers 404.
+
+**Request body:**
+```json
+{ "presenterId": "uuid of a supervisor (lecture/conf) or candidate (journal)" }
+```
+
+**Rules:**
+- The presenter must exist, be the right kind for the event type, belong to the event's
+  department, and (candidates) not be archived after a promotion.
+- Journal: a candidate who already holds a journal club in that eliminator round is
+  refused, and so is a candidate who presented the same paper in another non-canceled event.
+- Lecture: the round's per-supervisor cap is NOT enforced here. Going over it succeeds and
+  returns a `CAP_EXCEEDED` warning.
+- Held events can be changed; academic points follow the presenter.
+- No email is sent.
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "statusCode": 200,
+  "message": "OK",
+  "data": {
+    "event": { "...": "the populated event, same shape as GET /event/:id" },
+    "reservation": { "kind": "lecture", "id": "uuid" },
+    "warnings": [
+      { "code": "CAP_EXCEEDED", "message": "This supervisor now holds 6 lectures in this round, above the cap of 5", "count": 6, "cap": 5 }
+    ]
+  }
+}
+```
+`reservation` is `null` for an event that no eliminator booked; `warnings` is usually empty.
+
+**Errors** (body `{ "error": "...", "code": "..." }`, nested under `error` by the response formatter):
+
+| Status | code | When |
+|--------|------|------|
+| 400 | (validator array) | `:id` or `presenterId` is not a UUID |
+| 400 | `NO_CHANGE` | that person is already the presenter |
+| 400 | `PRESENTER_NOT_FOUND` | no such supervisor (lecture/conf) or candidate (journal) |
+| 400 | `PRESENTER_ARCHIVED` | the candidate was promoted and archived |
+| 400 | `PRESENTER_OTHER_DEPARTMENT` | the presenter is in another department |
+| 403 | | caller is not an institute admin or super admin |
+| 404 | `EVENT_NOT_FOUND` | no such event, or outside the admin's department |
+| 409 | `ALREADY_RESERVED` | the candidate already holds a journal club in this round |
+| 409 | `JOURNAL_ALREADY_PRESENTED` | the candidate presented this paper before |
+
 ---
 
 ### Delete Event
@@ -10391,6 +10460,7 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /event`, `GET /event/dashboard` | Yes | All roles; **dept-scoped** |
 | `GET /event/by-presenter/:supervisorId`, `GET /event/:id` | Yes | Supervisor (own id) / admins; all roles (unscoped) |
 | `POST /event`, `PATCH /event/:id`, `DELETE /event/:id` | Yes | Clerk, Institute Admin, Super Admin (create stamps the department) |
+| `PATCH /event/:id/presenter` | Yes | Institute Admin (own department, from the DB row), Super Admin |
 | `POST /event/bulk-import-attendance` | Yes | Institute Admin or Super Admin |
 | `GET /event/candidate/points`, `GET /event/candidate/:candidateId/points` | Yes | Candidate+ |
 | `GET /event/academicRanking` | Yes | Candidate+; **dept-scoped** |

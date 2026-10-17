@@ -9,6 +9,7 @@ import {
   IRemoveAttendanceInput,
   IFlagAttendanceInput,
   IUnflagAttendanceInput,
+  EventPresenterError,
 } from "./event.interface";
 
 @injectable()
@@ -109,6 +110,34 @@ export class EventController {
     } catch (err: any) {
       throw new Error(err);
     }
+  }
+
+  /**
+   * The caller's scope comes from their institute_admins ROW, never the JWT claim
+   * (a department switch leaves old tokens stale). No row (superAdmin) or a NULL
+   * department means institution-wide.
+   */
+  public async handleChangePresenter(req: Request, res: Response) {
+    const { presenterId } = matchedData(req) as { presenterId: string };
+    const dataSource = (req as any).institutionDataSource;
+    if (!dataSource) {
+      throw new Error("Institution DataSource not resolved");
+    }
+    const jwt = (res as any).locals?.jwt;
+    const callerId = jwt?.id || jwt?._id;
+    let adminDepartmentId: string | null = null;
+    if (jwt?.role !== "superAdmin") {
+      // Fail closed: a still-valid token whose admin row is gone must not read as
+      // institution-wide. Only an existing row with a NULL department is.
+      const rows = callerId
+        ? await dataSource.query(`SELECT "departmentId" FROM "institute_admins" WHERE "id" = $1`, [callerId])
+        : [];
+      if (rows.length === 0) {
+        throw new EventPresenterError("ADMIN_NOT_FOUND", 403, "Your admin account was not found");
+      }
+      adminDepartmentId = rows[0].departmentId ?? null;
+    }
+    return this.eventProvider.changePresenter(req.params.id, presenterId, adminDepartmentId, dataSource);
   }
 
   public async handleDeleteEvent(req: Request, res: Response) {
