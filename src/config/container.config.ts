@@ -68,6 +68,9 @@ import { AiOfficeService } from "../aiOffice/aiOffice.service";
 import { AiOfficeProvider } from "../aiOffice/aiOffice.provider";
 import { AiOfficeController } from "../aiOffice/aiOffice.controller";
 import { AiOfficeRouter } from "../aiOffice/aiOffice.router";
+import { RankChangeRequestProvider } from "../rankChangeRequest/rankChangeRequest.provider";
+import { RankChangeRequestController } from "../rankChangeRequest/rankChangeRequest.controller";
+import { RankChangeRequestRouter } from "../rankChangeRequest/rankChangeRequest.router";
 
 import { AuthController } from "../auth/auth.controller";
 import { AuthRouter } from "../auth/auth.router";
@@ -326,6 +329,11 @@ container.bind(AiOfficeService).toSelf().inTransientScope();
 container.bind(AiOfficeProvider).toSelf().inTransientScope();
 container.bind(AiOfficeController).toSelf().inTransientScope();
 container.bind(AiOfficeRouter).toSelf().inTransientScope();
+
+// Candidate rank change requests, approved by the institute admin (docs/RANK_CHANGE_REQUEST_PLAN.md)
+container.bind(RankChangeRequestProvider).toSelf().inTransientScope();
+container.bind(RankChangeRequestController).toSelf().inTransientScope();
+container.bind(RankChangeRequestRouter).toSelf().inTransientScope();
 
 container.bind(ReportsController).toSelf().inTransientScope();
 container.bind(ReportsRouter).toSelf().inTransientScope();

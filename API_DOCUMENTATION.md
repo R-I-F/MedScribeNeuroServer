@@ -9708,6 +9708,28 @@ Approval and validator permissions reuse the existing `PUT /cand/:id/approved`, 
 
 ---
 
+## Candidate Rank Change Requests (`/rankChangeRequest`)
+
+A candidate asks for a new rank from their profile. `candidates.rank` is **not** changed until an institute admin of the candidate's department (or the super admin) approves. Table `rank_change_requests` (migration `1783782610340-CreateRankChangeRequests`); at most one `pending` request per candidate (partial unique index). Ranks are the `Rank` enum values (`professor`, `assistant professor`, `lecturer`, `assistant lecturer`, `resident`, `guest`, `specialist`, `other`, `none`). Errors carry `{ error, code }` under the formatter's `error` key.
+
+**Candidate** (the candidate is always the JWT subject; a non-candidate token gets **403 `not_candidate`**):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/rankChangeRequest/me` | `{ currentRank, latest }`; `latest` is the most recent request of any status, or `null` |
+| POST | `/rankChangeRequest` | `{ "requestedRank": "lecturer" }` (case-insensitive) → **201** the new pending request. **400** `invalid_rank` / `same_rank`; **409** `already_pending` |
+| DELETE | `/rankChangeRequest/me` | Cancels the pending request (status `canceled`); **404** `not_found` if none |
+
+**Institute Admin** (own department, read from the admin's DB row; super admin and a department-less admin row are institution-wide; archived candidates are left out):
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/rankChangeRequest/admin?status=pending\|approved\|rejected\|canceled\|all` | Default `pending`. Rows add `candidateName`, `candidateEmail`, `regNum`, `currentRank`, `departmentId`, `departmentName`, `departmentArName`; pending first, max 500 |
+| GET | `/rankChangeRequest/admin/pendingCount` | `{ pending }`, for the sidebar badge |
+| PATCH | `/rankChangeRequest/admin/:id` | `{ "decision": "approve" \| "reject", "note"?: "<=500 chars" }`. One transaction: the request row is locked, re-checked, and on approve `candidates.rank` is set to `requestedRank`. Stamps `reviewedById`, `reviewedByRole`, `reviewedAt`. **404** for another department's request (same as a missing id), **409** `not_pending` if already decided |
+
+---
+
 ## Error Responses
 
 All error responses follow the standardized format with `status: "error"` and the error details in the `error` field.
@@ -10406,6 +10428,8 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `POST /aiOffice/signup` | No | Hidden AI Office signup; strict IP rate limit; 8-character password; `departmentId` or typed `departmentOther`; existing email → 409 + admin notification |
 | `GET /aiOffice/me`, `GET /aiOffice/activities`, `GET /aiOffice/activities/stats`, `POST /aiOffice/activities`, `PATCH /aiOffice/activities/:id` | Yes | Candidate or Supervisor; membership from the DB row (approved, `aiOfficeMember`, not archived); own entries only |
 | `/aiOffice/admin/*` (`users`, `users/:role/:id`, `activities`, `stats`, `access-requests`) | Yes | **Super Admin only**; all departments, department-less accounts included |
+| `GET /rankChangeRequest/me`, `POST /rankChangeRequest`, `DELETE /rankChangeRequest/me` | Yes | Candidate only (active, non-archived row); own request only |
+| `GET /rankChangeRequest/admin`, `/admin/pendingCount`, `PATCH /rankChangeRequest/admin/:id` | Yes | Institute Admin (own department from the DB row; superAdmin institution-wide); only an approval writes `candidates.rank` |
 | `POST /instituteAdmin` | Yes | Super Admin (`departmentId` optional; omitted = institution-wide admin) |
 | `GET /instituteAdmin`, `GET /instituteAdmin/:id` | Yes | Institute Admin or Super Admin |
 | `PUT /instituteAdmin/:id` | Yes | Super Admin, or Institute Admin (**own record only**); self dept-switch re-issues tokens |

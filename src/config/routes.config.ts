@@ -161,6 +161,11 @@ export function addRoutes(app: Application) {
   const aiOfficeRouter = container.get(AiOfficeRouter) as any;
   app.use("/aiOffice", aiOfficeRouter.router);
 
+  // Candidate rank change requests: the candidate asks, the institute admin approves.
+  const { RankChangeRequestRouter } = require("../rankChangeRequest/rankChangeRequest.router");
+  const rankChangeRequestRouter = container.get(RankChangeRequestRouter) as any;
+  app.use("/rankChangeRequest", rankChangeRequestRouter.router);
+
   // Active-Users analytics, super-admin only (docs/ACTIVE_USERS_ANALYTICS_PLAN.md).
   const { ActiveUsersRouter } = require("../activeUsers/activeUsers.router");
   const activeUsersRouter = container.get(ActiveUsersRouter) as any;

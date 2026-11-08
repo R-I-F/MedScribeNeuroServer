@@ -42,6 +42,7 @@ import { EliminatorReservationEntity } from "../eliminator/eliminatorReservation
 import { JournalReservationEntity } from "../journalEliminator/journalReservation.mDbSchema";
 import { AiOfficeActivityEntity } from "../aiOffice/aiOfficeActivity.mDbSchema";
 import { AiOfficeAccessRequestEntity } from "../aiOffice/aiOfficeAccessRequest.mDbSchema";
+import { RankChangeRequestEntity } from "../rankChangeRequest/rankChangeRequest.mDbSchema";
 
 dotenv.config();
 

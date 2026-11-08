@@ -29,6 +29,54 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 
 ## 📍 Where we stopped (2026-07-08)
 
+### 🎖️ CANDIDATE RANK CHANGE REQUESTS (admin-approved): SHIPPED to production 2026-11-08
+Migration 340 applied by the user 2026-11-08 after a verified backup
+(`F:\DB_BACKUPS\ka-institute-pre-rank-change-requests-20261108112251.sql.gz`, restore-tested, 56 tables);
+read-only check after: table + 4 indexes + 4 constraints, 0 rows. Then both repos committed and pushed to main.
+`marketing_docs/` added to .gitignore (pitchDeck/ already was).
+Record: **`docs/RANK_CHANGE_REQUEST_PLAN.md`**. Candidate requests a new rank from the profile card;
+`candidates.rank` changes only when the institute admin (own department, from the DB row; superAdmin
+institution-wide) approves on `/dashboard/i-admin/rank-requests` (sidebar badge = pending count).
+New table `rank_change_requests` (migration `1783782610340`, applied; one pending per
+candidate via partial unique index). Module `src/rankChangeRequest/`, routes `/rankChangeRequest` (me, POST,
+DELETE me, admin, admin/pendingCount, PATCH admin/:id). Verified on a throwaway PG17 copy: migration
+cycle clean, 31/31 HTTP checks, Chrome click-through (AR) request -> approve -> new rank.
+
+### ✅ 2026-10-22 to 24 RAILWAY BREACH: ROTATED + CLOSED 2026-10-24
+Railway reported customer env vars may have been decrypted. Full record: `docs/RAILWAY_INCIDENT_SECRET_ROTATION_PLAN.md`
+(uncommitted). On 2026-10-24 the site was put behind a Cloudflare maintenance Worker (`maintenance`, routes
+since removed, Worker kept for reuse; IP-allowlist bypass + `/api/*` 401 so open tabs land on the page),
+Aiven was locked to the user's IP, snapshots taken, then rotated and deployed in one go: both Aiven
+`avnadmin` passwords (old ones verified rejected), JWT access+refresh secrets, hub `API_KEYS`
+(`kasalainy:<new>`) + spoke `REF_API_KA`, `HUB_WEBHOOK_SECRET`, Gemini (both services), Mailgun sending key.
+Super admin DB password changed (row backup in F:\DB_BACKUPS). Aiven is back to `0.0.0.0/0` + `::/0`
+(no Railway static IPs on this plan; upgrade to Pro to tighten). Tampering diff vs the 10-22 snapshot:
+nothing unexplained. **User decisions, do not re-litigate:** the user only cares about DB + API-key
+integrity; 42 candidates + 45 supervisors still log in with the leaked `BASE_CAND_PASSWORD` /
+`BASE_SUPER_PASSWORD` defaults; `EMAIL_PASS`, `WA_*`, `SUB_REVIEW_PATCHER_API_PASSWORD`,
+`GETTER_API_ENDPOINT` not rotated. **Lesson: the user wants SHORT answers, and wants to generate secrets
+themselves (never generate keys into files Claude can read).**
+
+### 🗓️ 2026-10-17 wrap-up: i-admin date editor fixed, Thursday announcements, one bad event time
+- **I-admin "Edit event date & time" box SHOWED UTC: FIXED + SHIPPED (frontend `716e2ff` on main).** It was
+  prefilled from `toISOString()` while Save Date reads the box as local time, so a Cairo admin saw 07:00 for a
+  10:00 event and an untouched Save moved it 3 h earlier (2 h after DST). Now prefilled from local getters, as
+  `EventFormContent` already did. Round trip proved in TZ=Africa/Cairo; live bundle verified. NOT checked: whether
+  any production event was already shifted by an untouched Save before the fix.
+- **⚠️ OPEN, production data: event `09a459d9-5ea3-40d8-88f2-950f20c1a00e`** ("medical management of pain and
+  radiofrequency", Amr Ashraf, postponed 15 -> 22 Oct) is stored at **04:00 Cairo**; the rest of 22 Oct is 10:00
+  on-site. Offered to set it to 10:00; needs the user's go-ahead (or an admin fixes it from the event page).
+- **WhatsApp announcements for 22 Oct / 29 Oct (online 22:00) / 5 Nov**: `docs/WHATSAPP_ACADEMIC_ANNOUNCEMENTS_22OCT_5NOV_2026.md`
+  (uncommitted, like the October one). Generated from a read-only prod query (scratchpad `thursdays-ro.cjs` pattern:
+  Cairo date via `("dateTime" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Cairo'`). There is NO skill for this yet;
+  turning it into `/thursday-announcements` was offered, not built.
+- **Presenter-change guide PDF for institute admins** built with real screenshots (sample names, throwaway DB) and
+  numbered markers; its Step 3 shot still shows the old 07:00 date box.
+- `marketing_docs/STARTUP_APPLICATION_ANSWERS.md`: startup-application answers rewritten around LibelusPro
+  (founding date **10 June 2025**, per the user). Uncommitted.
+- Still uncommitted and NOT ours to ship blindly: `src/instituteAdmin/instituteAdmin.provider.ts` + its one
+  `API_DOCUMENTATION.md` hunk (supervisors report Cases/Events columns, from an earlier session).
+
 ### 🎤 I-ADMIN CAN CHANGE AN EVENT'S PRESENTER: BUILT 2026-10-17, UNCOMMITTED both repos, NOT deployed
 Living record: **`docs/EVENT_PRESENTER_CHANGE_PLAN.md`**. New `PATCH /event/:id/presenter` `{presenterId}`
 (institute admin own department from the DB row, superAdmin institution-wide; an admin token with no
