@@ -140,6 +140,11 @@ export function addRoutes(app: Application) {
   app.use("/candidate", bundlerRouter.router);
   app.use("/waBot", waBotRouter.router);
 
+  // Public certificate verification (QR code on the E-Certificate), no login.
+  const { VerifyRouter } = require("../certificates/verify.router");
+  const verifyRouter = container.get(VerifyRouter) as any;
+  app.use("/verify", verifyRouter.router);
+
   // Public landing-page "Book a demo" form (docs/BOOK_A_DEMO_PLAN.md).
   const { DemoRequestRouter } = require("../demoRequest/demoRequest.router");
   const demoRequestRouter = container.get(DemoRequestRouter) as any;

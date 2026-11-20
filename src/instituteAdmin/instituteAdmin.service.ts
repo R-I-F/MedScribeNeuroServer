@@ -227,18 +227,34 @@ export class InstituteAdminService {
     );
   }
 
+  public async listCandidateCertificates(candidateId: string, dataSource: DataSource, departmentId?: string | null) {
+    return this.instituteAdminProvider.listCandidateCertificates(candidateId, dataSource, departmentId);
+  }
+
+  public async revokeCertificate(
+    certificateId: string,
+    reason: string,
+    dataSource: DataSource,
+    departmentId: string | null | undefined,
+    revokedById: string | null
+  ) {
+    return this.instituteAdminProvider.revokeCertificate(certificateId, reason, dataSource, departmentId, revokedById);
+  }
+
   public async generateCandidateReportPdf(
     candidateId: string,
     dataSource: DataSource,
     institution: import("../institution/institution.service").IInstitution,
-    departmentId?: string | null
-  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    departmentId?: string | null,
+    issuer?: { role: string; id: string | null }
+  ): Promise<{ buffer: Buffer; suggestedFilename: string; certificateCode: string }> {
     try {
       return await this.instituteAdminProvider.generateCandidateReportPdf(
         candidateId,
         dataSource,
         institution,
-        departmentId
+        departmentId,
+        issuer
       );
     } catch (err: any) {
       throw new Error(err);

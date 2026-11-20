@@ -330,6 +330,22 @@ export class InstituteAdminController {
     }
   }
 
+  /** Certificates issued for a candidate. Errors propagate unwrapped for the router. */
+  public async handleListCandidateCertificates(req: Request, res: Response) {
+    const { candidateId } = matchedData(req) as { candidateId: string };
+    const dataSource = (req as any).institutionDataSource;
+    const departmentId = await this.getAdminDepartmentScope(res, dataSource);
+    return this.instituteAdminService.listCandidateCertificates(candidateId, dataSource, departmentId);
+  }
+
+  public async handleRevokeCertificate(req: Request, res: Response) {
+    const { certificateId, reason } = matchedData(req) as { certificateId: string; reason: string };
+    const dataSource = (req as any).institutionDataSource;
+    const departmentId = await this.getAdminDepartmentScope(res, dataSource);
+    const jwt = res.locals.jwt as { id?: string; _id?: string } | undefined;
+    return this.instituteAdminService.revokeCertificate(certificateId, reason, dataSource, departmentId, jwt?.id || jwt?._id || null);
+  }
+
   /** Logbook Record PDF. Errors propagate unwrapped so the router can map them to 400/404. */
   public async handleGenerateCandidateLogbookRecordPdf(req: Request, res: Response) {
     const validatedReq = matchedData(req) as { candidateId: string };
@@ -363,13 +379,18 @@ export class InstituteAdminController {
         throw new Error("Institution not resolved");
       }
       const departmentId = await this.getAdminDepartmentScope(res, dataSource);
-      const { buffer: pdfBuffer, suggestedFilename } = await this.instituteAdminService.generateCandidateReportPdf(
+      const jwt = res.locals.jwt as { id?: string; _id?: string; role?: string } | undefined;
+      const { buffer: pdfBuffer, suggestedFilename, certificateCode } = await this.instituteAdminService.generateCandidateReportPdf(
         validatedReq.candidateId,
         dataSource,
         institution,
-        departmentId
+        departmentId,
+        { role: jwt?.role ?? "instituteAdmin", id: jwt?.id || jwt?._id || null }
       );
       res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("X-Certificate-Code", certificateCode);
+      res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Certificate-Code");
+      res.setHeader("Cache-Control", "private, no-store");
       const safeName = suggestedFilename.replace(/[\r\n"]/g, "").trim() || "Ecertificate.pdf";
       res.setHeader("Content-Disposition", `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
       res.send(pdfBuffer);

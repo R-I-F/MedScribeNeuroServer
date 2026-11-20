@@ -116,7 +116,9 @@ export function drawReportFooter(
   doc: InstanceType<typeof PDFDocument>,
   left: number,
   right: number,
-  pageNumber: number
+  pageNumber: number,
+  /** Certificate code printed on every page, so a single page can still be verified. */
+  reference?: string
 ): void {
   const footerY = doc.page.height - REPORT_LAYOUT.footerYFromBottom;
   const w = REPORT_LAYOUT.footerPageNumWidth;
@@ -133,6 +135,9 @@ export function drawReportFooter(
     .font("Helvetica")
     .fillColor(HEADER_FOOTER_COLORS.muted);
   doc.text(FOOTER_TEXT, left, footerY - 10, { width: right - left - w - 10 });
+  if (reference) {
+    doc.text(`Certificate ${reference}`, right - w - 150, footerY - 6, { width: 140, align: "right", lineBreak: false });
+  }
   doc.text(`Page ${pageNumber}`, right - w, footerY - 6, { width: w, align: "right", lineBreak: false });
   doc.y = savedY;
 }

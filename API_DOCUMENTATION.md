@@ -2332,6 +2332,18 @@ Cookie: auth_token=<token>
 
 ---
 
+### Verifiable E-Certificates (issue, list, revoke, public check)
+
+Every `GET /instituteAdmin/candidates/:candidateId/report` download now **issues a certificate**: a row in `certificates` (migration `1783782610350-CreateCertificates`) with a short code such as `LP-7K3Q-9XA2`, the issuer, the period covered and a snapshot of the headline numbers (`summary` jsonb, hashed in `dataHash`). The PDF starts with a landscape cover page (hand-signature, date and stamp fields left empty; QR code and code bottom right) and prints `Certificate <code>` in every page footer. The response carries the header `X-Certificate-Code` and the filename includes the code. The Gemini summary is cached per certificate (`aiSummary` / `aiSummaryHash`) and reused while the data sent to Gemini is unchanged.
+
+**GET** `/instituteAdmin/candidates/:candidateId/certificates` (Institute Admin; department scope from the admin's DB row, superAdmin institution-wide): newest first, `[{ id, code, kind, issuedAt, issuedByRole, issuedByName, revokedAt, revokedReason }]`. 404 outside scope.
+
+**PATCH** `/instituteAdmin/certificates/:certificateId/revoke` (Institute Admin) body `{ "reason": "3 to 500 chars" }`: 200 `{ revoked: true }`, 400 invalid reason, 404 unknown or out of scope, 409 already revoked. Revoking cannot be undone.
+
+**GET** `/verify/:code` (**public**, no login, per-IP API rate limit): the code is accepted however it was typed (case, spaces, missing dashes, O/0 and I/L/1 look-alikes). 200 `{ status: "valid" | "revoked", code, kind, candidateName, department, degree, periodFrom, periodTo, issuedAt, revokedAt, summary: { approvedCases, byRole, hospitals, academicPoints, eventsAttended, clinicalApproved } }`; 404 unknown code; 400 malformed. Never returns email, phone, registration number, patient data or the revocation reason. `Cache-Control: no-store`. The QR code links to `<FRONTEND_URL>/verify/<code>` (frontend page `/verify/:code`).
+
+---
+
 ### Generate Candidate Logbook Record PDF (Admin)
 **GET** `/instituteAdmin/candidates/:candidateId/logbook-record`
 

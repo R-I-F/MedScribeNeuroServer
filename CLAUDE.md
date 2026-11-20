@@ -29,6 +29,18 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 
 ## 📍 Where we stopped (2026-07-08)
 
+### ▶ NEXT SESSION START HERE (2026-11-20 evening)
+- **Stage B (verifiable E-Certificate)** is the next build: decisions recorded in `docs/PLATFORM_ENHANCEMENT_PLAN.md`
+  ("Decisions for Stage B onward"): signed BY HAND (blank signature/stamp lines, no printed name), landscape cover,
+  every download issues a `certificates` row (no preview), public verify page shows name + headline numbers only,
+  candidates may self-download an "Interim record". Needs a migration: build + test on the local `ka-cert` copy
+  (port 54329; 55432/55433 are Windows-reserved), verified prod backup, user runs the migration, then deploy.
+- **Data normalization**: next is N2 (re-case ~90 lowercase names), dry-run list for approval first. Open: the
+  "tester account" / "Tester supervisor" phone clash before N3. Mario: disregard.
+- Shipped today: frontend `e6b13df`, `ef8400d`, `1210917`; backend `29ef189`, `bcbf333`, `c02e976`. Production data:
+  Sameh merged, Hady + Elsharkawy linked as promotions, test candidate "Test Test" deleted (backup in F:\DB_BACKUPS).
+- Pushing `main` was once blocked by the auto-mode classifier; the user then said "just push it" and it went through.
+
 ### 🧹 DATA NORMALIZATION: N1 SHIPPED + N8 APPLIED 2026-11-20; N2 to N7, N9 pending
 Living plan (READ FIRST): **`docs/DATA_NORMALIZATION_PLAN.md`** (stages N1 to N9, findings, the 8 user decisions).
 Inspected read-only on the local restore (container `ka-cert`, port 54329). Key decisions: phones stored as

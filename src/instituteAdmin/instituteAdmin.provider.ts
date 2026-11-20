@@ -28,6 +28,10 @@ import { loadLogbookRecordData } from "../pdf/logbookRecord/logbookRecord.data";
 import { renderLogbookRecordPdf } from "../pdf/logbookRecord/renderLogbookRecordPdf";
 import { institutionTodayIso } from "../utils/institutionDateFormat";
 import { randomBytes } from "crypto";
+import { CertificateService, CertificateSummary, sha256 } from "../certificates/certificate.service";
+import { drawCertificateCover, CertificateCoverInfo, capitalizeWords } from "../pdf/certificateCover";
+import QRCode from "qrcode";
+import path from "path";
 
 /** Colors for "Procedures Performed" section progress bars (order matches REPORT_ROLE_ORDER) */
 const PROCEDURE_ROLE_COLORS = ["#ea580c", "#0d9488", "#2563eb", "#7c3aed", "#ca8a04"] as const; // Operator, Operator (Assisted), Assistant, Supervising, Observer
@@ -135,7 +139,8 @@ export class InstituteAdminProvider {
     @inject(EventService) private eventService: EventService,
     @inject(EventProvider) private eventProvider: EventProvider,
     @inject(ClinicalSubProvider) private clinicalSubProvider: ClinicalSubProvider,
-    @inject(AiAgentService) private aiAgentService: AiAgentService
+    @inject(AiAgentService) private aiAgentService: AiAgentService,
+    @inject(CertificateService) private certificateService: CertificateService
   ) {}
 
   public async createInstituteAdmin(validatedReq: Partial<IInstituteAdmin>, dataSource: DataSource): Promise<IInstituteAdminDoc> | never {
@@ -860,8 +865,9 @@ export class InstituteAdminProvider {
     candidateId: string,
     dataSource: DataSource,
     institution: IInstitution,
-    departmentId?: string | null
-  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    departmentId?: string | null,
+    issuer: { role: string; id: string | null } = { role: "instituteAdmin", id: null }
+  ): Promise<{ buffer: Buffer; suggestedFilename: string; certificateCode: string }> {
     if (!this.uuidRegex.test(candidateId)) {
       throw new Error("Invalid candidate ID");
     }
@@ -1029,19 +1035,98 @@ export class InstituteAdminProvider {
       proceduresByRole,
     };
 
+    // AI summary (Stage D): reuse the last summary when the data sent to Gemini is unchanged.
     let aiSummary: string | null = null;
+    let aiSummaryHash: string | null = null;
     try {
       const snapshot = this.buildReportSnapshotForAi(cand as any, docInstitution, data);
-      const prompt = `You are summarizing a candidate's surgical and training activity for the front page of an e-certificate report. Write 2 to 3 short, professional paragraphs that summarize the following data. Be concise and highlight key numbers and scope of practice. Use plain text only; no markdown, no bullet points, no section headers.\n\n${snapshot}`;
-      const raw = await this.aiAgentService.generateText(prompt);
-      aiSummary = raw?.trim() || null;
+      aiSummaryHash = sha256(snapshot);
+      aiSummary = await this.certificateService.cachedAiSummary(dataSource, candidateId, aiSummaryHash);
+      if (!aiSummary) {
+        const prompt = `You are summarizing a candidate's surgical and training activity for the front page of an e-certificate report. Write 2 to 3 short, professional paragraphs that summarize the following data. Be concise and highlight key numbers and scope of practice. Use plain text only; no markdown, no bullet points, no section headers.\n\n${snapshot}`;
+        const raw = await this.aiAgentService.generateText(prompt);
+        aiSummary = raw?.trim() || null;
+      }
     } catch {
       aiSummary = null;
     }
 
-    const buffer = await this.buildCandidateReportPdfBuffer(cand as any, docInstitution, data, aiSummary);
-    const suggestedFilename = `${toPascalCaseForFilename(cand.fullName)} - Ecertificate - ${toPascalCaseForFilename(docInstitution.name)} - ${toPascalCaseForFilename(docInstitution.department)}.pdf`;
-    return { buffer, suggestedFilename };
+    // Issue the certificate record (Stage B): every download is a verifiable certificate.
+    const opDates = approvedSubs
+      .map((s: any) => s?.calSurg?.procDate)
+      .filter(Boolean)
+      .map((d: any) => String(d instanceof Date ? d.toISOString() : d).slice(0, 10))
+      .sort();
+    const summary: CertificateSummary = {
+      approvedCases: approvedSubs.length,
+      byRole: data.proceduresByRole,
+      hospitals: hospitalMap.size,
+      academicPoints: institution.isAcademic ? totalAcademicPoints : null,
+      eventsAttended: institution.isAcademic ? academicEvents.length : null,
+      clinicalApproved: institution.isClinical ? clinicalTotal : null,
+    };
+    const issued = await this.certificateService.issue(dataSource, {
+      candidateId,
+      departmentId: (cand as any).departmentId ?? null,
+      kind: "final",
+      issuedByRole: issuer.role,
+      issuedById: issuer.id,
+      periodFrom: opDates[0] ?? null,
+      periodTo: opDates[opDates.length - 1] ?? null,
+      summary,
+      aiSummary,
+      aiSummaryHash,
+    });
+    const verifyUrl = `${(process.env.FRONTEND_URL || "https://libeluspro.com").replace(/\/+$/, "")}/verify/${issued.code}`;
+    const qrPng = await QRCode.toBuffer(verifyUrl, { errorCorrectionLevel: "M", margin: 1, width: 360 });
+    const cover: CertificateCoverInfo = {
+      institutionName: toTitleCase(docInstitution.name),
+      department: docInstitution.department,
+      candidateName: toTitleCase(cand.fullName),
+      regNum: (cand as any).regNum ?? null,
+      degree: (cand as any).regDeg ?? null,
+      rank: (cand as any).rank ?? null,
+      periodFrom: opDates[0] ?? null,
+      periodTo: opDates[opDates.length - 1] ?? null,
+      summary,
+      code: issued.code,
+      issuedAt: new Date(issued.issuedAt),
+      verifyUrl,
+      qrPng,
+      kind: "final",
+      arabicFontPath: path.resolve(process.cwd(), "assets", "fonts", "Cairo-Regular.ttf"),
+    };
+
+    const buffer = await this.buildCandidateReportPdfBuffer(cand as any, docInstitution, data, aiSummary, cover);
+    const suggestedFilename = `${toPascalCaseForFilename(cand.fullName)} - Ecertificate - ${issued.code} - ${toPascalCaseForFilename(docInstitution.department)}.pdf`;
+    return { buffer, suggestedFilename, certificateCode: issued.code };
+  }
+
+  /** Certificates issued for one candidate (newest first), within the admin's department scope. */
+  public async listCandidateCertificates(candidateId: string, dataSource: DataSource, departmentId?: string | null) {
+    if (!this.uuidRegex.test(candidateId)) throw new Error("Invalid candidate ID");
+    const rows = await dataSource.query(`SELECT "departmentId" FROM "candidates" WHERE "id" = $1`, [candidateId]);
+    if (!rows[0] || (departmentId && rows[0].departmentId !== departmentId)) {
+      throw new Error("Candidate not found or does not belong to the requested institution");
+    }
+    return this.certificateService.listForCandidate(dataSource, candidateId);
+  }
+
+  /** Revoke one certificate. The public verify page then shows it as revoked (reason stays internal). */
+  public async revokeCertificate(
+    certificateId: string,
+    reason: string,
+    dataSource: DataSource,
+    departmentId: string | null | undefined,
+    revokedById: string | null
+  ): Promise<{ revoked: true }> {
+    if (!this.uuidRegex.test(certificateId)) throw new Error("Invalid certificate ID");
+    const row = await this.certificateService.findForRevoke(dataSource, certificateId);
+    if (!row || (departmentId && row.departmentId !== departmentId)) throw new Error("Certificate not found");
+    if (row.revokedAt) throw new Error("Certificate already revoked");
+    const ok = await this.certificateService.revoke(dataSource, certificateId, reason.trim(), revokedById);
+    if (!ok) throw new Error("Certificate already revoked");
+    return { revoked: true };
   }
 
   /**
@@ -1341,9 +1426,16 @@ export class InstituteAdminProvider {
       clinicalByType: Map<string, number>;
       proceduresByRole: Record<string, number>;
     },
-    aiSummary: string | null = null
+    aiSummary: string | null = null,
+    cover?: CertificateCoverInfo
   ): Promise<Buffer> {
-    const doc = new PDFDocument({ margin: REPORT_LAYOUT.pageMargin, size: "A4" });
+    // With a cover the first page is the landscape certificate, so the portrait report page
+    // is added explicitly after it.
+    const doc = new PDFDocument({ margin: REPORT_LAYOUT.pageMargin, size: "A4", autoFirstPage: !cover });
+    if (cover) {
+      drawCertificateCover(doc, cover);
+      doc.addPage({ size: "A4", layout: "portrait", margin: REPORT_LAYOUT.pageMargin });
+    }
     const chunks: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
 
@@ -1362,7 +1454,7 @@ export class InstituteAdminProvider {
       const ensureSpace = (required: number) => {
         if (doc.y + required > doc.page.height - REPORT_LAYOUT.footerYFromBottom - 20) {
           const yBeforeFooter = doc.y;
-          drawReportFooter(doc, left, right, pageNumber);
+          drawReportFooter(doc, left, right, pageNumber, cover?.code);
           doc.y = yBeforeFooter;
           doc.addPage({ size: "A4", margin: REPORT_LAYOUT.pageMargin });
           pageNumber += 1;
@@ -1381,8 +1473,8 @@ export class InstituteAdminProvider {
       const rows: { label: string; value: string }[] = [
         { label: "Name:", value: toTitleCase(cand.fullName) },
         { label: "Registration Number:", value: cand.regNum ?? "—" },
-        { label: "Rank:", value: cand.rank ?? "—" },
-        { label: "Degree:", value: cand.regDeg ?? "—" },
+        { label: "Rank:", value: cand.rank ? capitalizeWords(cand.rank) : "-" },
+        { label: "Degree:", value: cand.regDeg ? capitalizeWords(cand.regDeg) : "-" },
       ];
       const rowHeight = 16;
       for (const { label, value } of rows) {
@@ -1548,7 +1640,7 @@ export class InstituteAdminProvider {
         this.drawSectionDivider(doc, left, right);
       }
 
-      drawReportFooter(doc, left, right, pageNumber);
+      drawReportFooter(doc, left, right, pageNumber, cover?.code);
       doc.end();
     });
   }

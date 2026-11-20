@@ -14,7 +14,7 @@ import { getHospitalAnalysisValidator } from "../validators/getHospitalAnalysis.
 import { getCandidateDashboardsValidator } from "../validators/getCandidateDashboards.validator";
 import { getCandidateSummaryValidator } from "../validators/getCandidateSummary.validator";
 import { getCandidateDashboardByIdValidator } from "../validators/getCandidateDashboardById.validator";
-import { validationResult } from "express-validator";
+import { body, param, validationResult } from "express-validator";
 import { StatusCodes } from "http-status-codes";
 import extractJWT from "../middleware/extractJWT";
 import { requireSuperAdmin, requireInstituteAdmin } from "../middleware/authorize.middleware";
@@ -248,6 +248,56 @@ export class InstituteAdminRouter {
           }
         } else {
           res.status(StatusCodes.BAD_REQUEST).json(result.array());
+        }
+      }
+    );
+
+    // Certificates issued for one candidate (Stage B)
+    this.router.get(
+      "/candidates/:candidateId/certificates",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      getCandidateDashboardByIdValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          return;
+        }
+        try {
+          res.status(StatusCodes.OK).json(await this.instituteAdminController.handleListCandidateCertificates(req, res));
+        } catch (err: any) {
+          const msg = String(err?.message ?? err);
+          if (msg.includes("not found")) res.status(StatusCodes.NOT_FOUND).json({ error: "Candidate not found" });
+          else res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Could not list certificates" });
+        }
+      }
+    );
+
+    // Revoke a certificate: the public verify page then shows it as revoked.
+    this.router.patch(
+      "/certificates/:certificateId/revoke",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      param("certificateId").isUUID().withMessage("certificateId must be a valid UUID"),
+      body("reason").isString().trim().isLength({ min: 3, max: 500 }).withMessage("reason must be 3 to 500 characters"),
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          return;
+        }
+        try {
+          res.status(StatusCodes.OK).json(await this.instituteAdminController.handleRevokeCertificate(req, res));
+        } catch (err: any) {
+          const msg = String(err?.message ?? err);
+          if (msg.includes("already revoked")) res.status(StatusCodes.CONFLICT).json({ error: "Certificate already revoked" });
+          else if (msg.includes("not found") || msg.includes("Invalid")) res.status(StatusCodes.NOT_FOUND).json({ error: "Certificate not found" });
+          else res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Could not revoke the certificate" });
         }
       }
     );

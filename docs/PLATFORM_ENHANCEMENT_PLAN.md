@@ -10,9 +10,9 @@ Each piece of work gets its own purpose-named branch off `main`. Nothing is comm
 |---|-------|--------|-------|
 | A | Certificate bug fixes (6 items) | **built, verified locally** | backend branch `feat/logbook-record-and-cert-fixes`; no migration |
 | A2 | Full Logbook Record PDF (landscape, every submission, institute admin only) | **built, verified locally** | backend same branch + frontend `feat/logbook-record`; no migration |
-| B | Verifiable certificate: `certificates` table, QR, public verify page, cover page | not started | migration 350 |
+| B | Verifiable certificate: `certificates` table, QR, public verify page, cover page | **built, verified locally 2026-11-21**, NOT deployed | migration 350 must be applied on production first |
 | C | Candidate self-download of the certificate | not started | depends on B |
-| D | AI summary cache | not started | rides on B's table |
+| D | AI summary cache | **built with B** | reuses `aiSummary` when the snapshot hash matches |
 | E | Dashboard freshness via `/me/updates` polling | not started | no infra change |
 | F | Milestone and gap tracker | not started | needs a user decision on targets |
 | G | Smart tools (case pre-fill, duplicate flags, supervisor triage, weekly digest, NL analytics) | not started | each one gets its own mini-plan |
@@ -167,6 +167,12 @@ The PDF bytes are NOT stored. A re-download regenerates from current data; the v
 
 Verify: migration apply/revert/re-apply on a throwaway PG17; HTTP E2E (issue, verify valid, revoke, verify revoked, unknown code 404, rate limit 429, department scope checks); scan the QR from a rasterized page.
 
+### Stage B build log (2026-11-21)
+- Backend: migration `src/migrations-ka/1783782610350-CreateCertificates.ts`; `src/certificates/certificate.service.ts` (issue, cached AI summary, list, revoke, public view; code = "LP-" + 8 Crockford base32 symbols, 40 bits) and `verify.router.ts` (`GET /verify/:code`, public); `src/pdf/certificateCover.ts` (landscape cover, hand-signature fields, QR via the new `qrcode` dependency); `drawReportFooter` gained an optional reference; instituteAdmin list + revoke routes. TypeORM gotcha hit again and fixed: `query()` on `UPDATE ... RETURNING` returns `[rows, count]`.
+- Frontend: public `VerifyCertificatePage` (`/verify`, `/verify/:code`, EN + AR), `CandidateCertificatesPanel` on the i-admin candidate page (list, open the public check, revoke with a required reason), API types.
+- Verified on the local restore: migration applied; 14/14 HTTP checks (issue with code, filename, list with issuer, public valid, private fields hidden, loose code input, unknown 404, scope 404, revoke validation, revoke, public revoked, second revoke 409, superAdmin issue on an empty logbook); cover rendered and read; verify page click-tested EN and AR (valid and revoked). Backend + frontend tsc and build clean, 0 em-dashes. The admin panel itself was not click-tested (API verified).
+- **Deploy order**: verified production backup, user applies migration 350, push backend, then frontend. Check that Railway `FRONTEND_URL` is `https://libeluspro.com` (the QR link uses it).
+
 ## Stage C: candidate self-download
 
 - `GET /cand/me/certificate` (candidate only; the candidate is resolved from the JWT then the DB row, never an id from the client; archived candidates refused).
@@ -220,14 +226,14 @@ Verify: migration apply/revert/re-apply on a throwaway PG17; HTTP E2E (issue, ve
 
 ---
 
-## Questions for the user (answer before building)
+## Decisions for Stage B onward (user, 2026-11-20). Do not re-litigate.
 
-- **Q1** Who signs the certificate (printed name and title), and is it per department or one for the institution?
-- **Q2** Cover page orientation: landscape (classic certificate look) or portrait (matches the appendix)?
-- **Q3** Should admins keep an un-issued "preview" download, or does every download create a certificate record?
-- **Q4** Public verify page fields: is the candidate's full name plus headline numbers acceptable to show to anyone holding the code?
-- **Q5** Until milestones exist, is candidate self-download allowed as an "interim" certificate?
-- **Q6** Stage H: OK to add the `api.` subdomain and move cookie scope to `.libeluspro.com`?
+- **Q1 Signature: signed BY HAND.** The cover prints empty "Programme director", "Signature", "Stamp" and "Date" lines with room for a wet signature and stamp. No printed signatory name, no signature image.
+- **Q2 Cover orientation: landscape** (classic certificate look); the analytics appendix stays portrait.
+- **Q3 No unrecorded preview:** every download issues a `certificates` row, so any printed copy can be verified.
+- **Q4 Public verify page:** candidate full name, institution, department, degree, kind, period, issue date and headline numbers. No email, phone, registration number or patient data.
+- **Q5 Candidate self-download allowed** as an "Interim record" until Stage F milestones exist.
+- **Q6** (api. subdomain for realtime): not asked yet; only needed for Stage H.
 
 ## Safety rules for this work
 

@@ -119,6 +119,8 @@ import { InstituteAdminController } from "../instituteAdmin/instituteAdmin.contr
 import { InstituteAdminRouter } from "../instituteAdmin/instituteAdmin.router";
 import { InstituteAdminService } from "../instituteAdmin/instituteAdmin.service";
 import { InstituteAdminProvider } from "../instituteAdmin/instituteAdmin.provider";
+import { CertificateService } from "../certificates/certificate.service";
+import { VerifyRouter } from "../certificates/verify.router";
 
 import { ReportsController } from "../reports/reports.controller";
 import { ReportsRouter } from "../reports/reports.router";
@@ -299,6 +301,8 @@ container.bind(InstituteAdminController).toSelf().inTransientScope();
 container.bind(InstituteAdminRouter).toSelf().inTransientScope();
 container.bind(InstituteAdminService).toSelf().inTransientScope();
 container.bind(InstituteAdminProvider).toSelf().inTransientScope();
+container.bind(CertificateService).toSelf().inTransientScope();
+container.bind(VerifyRouter).toSelf().inTransientScope();
 
 container.bind(PasswordResetService).toSelf().inTransientScope();
 container.bind(PasswordResetProvider).toSelf().inTransientScope();
