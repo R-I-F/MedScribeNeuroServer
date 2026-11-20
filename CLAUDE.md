@@ -29,6 +29,53 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 
 ## 📍 Where we stopped (2026-07-08)
 
+### 🧹 DATA NORMALIZATION: N1 SHIPPED + N8 APPLIED 2026-11-20; N2 to N7, N9 pending
+Living plan (READ FIRST): **`docs/DATA_NORMALIZATION_PLAN.md`** (stages N1 to N9, findings, the 8 user decisions).
+Inspected read-only on the local restore (container `ka-cert`, port 54329). Key decisions: phones stored as
+`+201XXXXXXXXX`; proper-case only badly cased names; convert the 1,112 full patient names to initials; English
+initials style "Ahmed M Kh"; nationality as a fixed list; reference titles fixed IN THE HUB with an acronym list;
+equipment/consumables to link tables; duplicates Sameh (OLDER `b3a2c3db` merges INTO NEWER `ba86f9f5`), Hady and
+Elsharkawy (candidate + self-signed-up supervisor, to be linked as promotions). Mario / Ahmed Abdelrahman phone
+clashes: leave alone.
+- **N1 shipped** (frontend `ef8400d` + backend): canonical names/phones/nationality on every write, bilingual searchable
+  `NationalityPicker` on signup, signup errors only after blur and in the page language, WhatsApp lookup now matches
+  `201...` against stored `01...` (it never did before).
+- **N8 applied on production**: Sameh merged (old INTO new, rollback JSON in F:\DB_BACKUPS); Hady + Elsharkawy linked as
+  promotions with the new gitignored `scripts/tmp-link-promotion.cjs` (no pending items, archive + link only).
+- **Open before N3 (phones)**: the "tester account" / "Tester supervisor" rows share a number. Mario clash: user said
+  disregard for now.
+
+### 📄 LOGBOOK RECORD PDF + E-CERTIFICATE FIXES (Stages A + A2): SHIPPED to production 2026-11-20 (frontend `e6b13df`, backend pushed the same day)
+Living plan (READ FIRST): **`docs/PLATFORM_ENHANCEMENT_PLAN.md`** (checkpoint table, build log, open questions for Stages B to I).
+Branches: backend `feat/logbook-record-and-cert-fixes`, frontend `feat/logbook-record` (both off dev == main).
+- **Stage A fixes** (all institute-admin PDFs): footer typo "Inteligent Lofbook" fixed; department now comes from the
+  person / the admin's scope instead of `institutions.department` (which says neurosurgery for everyone); "Report
+  generated" in Cairo time (`src/utils/institutionDateFormat.ts`); by-year counts use the operation date; candidate
+  clinical section is one scoped query. Role labels moved to `src/pdf/reportRoles.ts`.
+- **Stage A2**: new `GET /instituteAdmin/candidates/:candidateId/logbook-record` (institute admin only, never the
+  candidate): A4 landscape, every surgical entry in all statuses (patient initials + age + sex, ICD-11 + CPT, role,
+  supervisor, status, details line), summaries, every academic event + presented + topic coverage, every clinical
+  entry, closing block. Code in `src/pdf/logbookRecord/`. Frontend button on the i-admin candidate snapshot page.
+- **Verified locally only** (throwaway Docker `ka-cert` on port 54329 from the 2026-11-08 backup; ports 55432/55433 are
+  Windows-reserved here): 13/13 HTTP checks, pages rasterized and read, totals reconcile. Not browser click-tested.
+- Redesigned after user review into a RULED LEDGER (thin grid, wrapping cells, bold codes, CPT without the internal
+  `-NN` suffix, details band inside each case frame); generated for all 118 candidates locally, 0 overflows.
+- The older supervisors-report hunk (Cases/Events columns on the all-supervisors PDF) shipped with it.
+
+### 📥 HISTORICAL LOGBOOK IMPORT #4, ahmed ramadan abdellatif osman (NS, d.ahmed.r20@gmail.com): APPLIED to production 2026-11-08
+19 operations (13 Jan to 26 Feb 2025), all Emergency 185 -> Hossam ElDin Mostafa. **19 cal_surgs + 19
+submissions inserted** (31 CPT links, 22 ICD links, 19 answers), insert-only, one transaction; he had 0
+submissions before. NOT the same person as import #2 (ahmed122elsayed122). Roles unknown -> mix 7 operator /
+7 assistant / 5 observer; gender inferred 15 M / 4 F (سليا taken female, as before). All 8 Arabic phrases
+already learned, 0 new clerk_procs. Backup: `F:\DB_BACKUPS\ka-institute-pre-d-ahmed-r20-import-20261108142325.sql.gz`
+(57 tables, submissions 4795 == live). verify ALL PASS, pre-existing counts unchanged.
+- **Inferred, flag if questioned**: the 4 spine rows had no usable diagnosis, so category came from the notes:
+  row 13 (C3-6 lateral mass + laminectomy) spinal trauma "other", 15 (L1-4) degenerative stenosis, 16 (D7-L3
+  + corpectomy) dorsal fracture, 17 (D11-L3) lumbar fracture. Row 12 (infected shunt removal + EVD) = cns infection.
+- Pre-existing clerk phrase توسيع القناة العصبية maps to laminoplasty (calendar side only); row 13 was a
+  laminectomy + fixation. Submission carries the right codes. Not changed (insert-only).
+- Rollback: delete these 19 uids (answers, icd links, proc links, submissions, cal_surgs), else restore the backup.
+
 ### 🎖️ CANDIDATE RANK CHANGE REQUESTS (admin-approved): SHIPPED to production 2026-11-08
 Migration 340 applied by the user 2026-11-08 after a verified backup
 (`F:\DB_BACKUPS\ka-institute-pre-rank-change-requests-20261108112251.sql.gz`, restore-tested, 56 tables);

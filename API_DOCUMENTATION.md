@@ -355,6 +355,14 @@ These require the **`X-Migration-Key`** header matching the `MIGRATION_API_KEY` 
 
 ---
 
+## Person Data Normalization (names, phones, nationality)
+
+Since 2026-11-20 every route that writes a person record (signup, profile update, admin create/update, AI Office signup, the legacy bulk import) stores one canonical form. Rules live in `src/utils/personData.ts`; validators use `src/validators/personFields.ts`.
+
+- **`phoneNum`** is normalized to E.164 before saving. Egyptian mobiles in any common shape (`01012345678`, `0101 234 5678`, `201012345678`, `00201012345678`, `+201012345678`) are stored as `+201012345678`. Other countries must be written with `+` or `00`. Invalid numbers and placeholders (`010000000NN`, `+20000000099`) are rejected with `400` and the message `phone number must be a valid mobile number, for example 01012345678 or +201012345678`. Rows written before this date may still hold older formats until the one-off cleanup (docs/DATA_NORMALIZATION_PLAN.md, N3); phone comparisons (WhatsApp lookup, AI Office duplicate check, promotion conflict check) compare the last 10 digits, so both formats match.
+- **`fullName`** is trimmed and inner spaces collapsed. A name typed entirely in lower case or in CAPITALS is re-cased (`hady mohamed hesham` becomes `Hady Mohamed Hesham`); a name typed in mixed case is stored exactly as typed.
+- **`nationality`** (candidates) must be one value from a fixed list of English demonyms (`Egyptian`, `Sudanese`, ...). Common spellings and country names are accepted and stored as the list value (`egyption`, `egypt` become `Egyptian`); anything else is rejected with `400` `nationality must be one of the listed nationalities`.
+
 ## Table of Contents
 
 1. [Disabled, Gated & Removed Routes](#disabled-gated--removed-routes)
@@ -1821,7 +1829,7 @@ Cookie: auth_token=<token>
 
 **Description:** Generates and returns a PDF report of **all supervisors** for the current institution. The PDF uses the same layout and style as the candidate summary report: E-Certificate header, institution name and department, report-generated date, line dividers, footer (LIBELUSpro / www.libeluspro.com), and page numbers. Content includes:
 
-1. **Supervisors Summary** – Total count and a table with: #, Full Name, Email, Position, Val. (can validate surgical submissions), Clin. (can validate clinical), Approved.
+1. **Supervisors Summary** – Total count, a legend, and a table with: #, Full Name, Email, Position, Surg. (can validate surgical submissions), Clin. (can validate clinical), Acct. (account approved), **Cases** (trainee surgical submissions this supervisor approved, the same figure the single-supervisor report calls supervised approved) and **Events** (academic events presented, canceled excluded).
 
 **Response (200 OK):** Binary PDF file (not wrapped in the standard JSON envelope). Response headers:
 - `Content-Type: application/pdf`
@@ -2308,16 +2316,52 @@ Cookie: auth_token=<token>
 
 **Response (200 OK):** Binary PDF file (not wrapped in the standard JSON envelope). Response headers:
 - `Content-Type: application/pdf`
-- `Content-Disposition: attachment; filename="LIBELUSpro_candidate_report_<candidateId>.pdf"`
+- `Content-Disposition: attachment; filename="<CandidateName> - Ecertificate - <Institution> - <Department>.pdf"`
 
 **Notes:**
 - This endpoint returns the PDF bytes directly; do not expect a `{ status, statusCode, message, data }` wrapper.
-- Accessible only to Institute Admins. Institution name and department on the report come from the single KA institution.
+- Accessible only to Institute Admins. The department printed on the report (header and filename) is the **candidate's own department**; the institution name comes from the single KA institution. (Before 2026-11-20 it printed the legacy `institutions.department` value, "neurosurgery", for every candidate.)
+- "Report generated" is printed in the institution's time zone (`INSTITUTION_TIMEZONE`, default `Africa/Cairo`).
+- The "submissions by year" breakdown counts each case by its **operation date** (`cal_surgs.procDate`), falling back to the logging time only when a case has no operation date.
+- The supervisor report and the all-supervisors report follow the same department rule (the supervisor's own department; the admin's scope, or "All departments" for an institution-wide caller), and so does the submission report (the submission's department).
 
 **Errors:**
 - 400 if `candidateId` is not a valid UUID.
 - 404 if the candidate does not exist or does not belong to the requested institution.
 - Otherwise same as other institute admin endpoints (401, 403, 429).
+
+---
+
+### Generate Candidate Logbook Record PDF (Admin)
+**GET** `/instituteAdmin/candidates/:candidateId/logbook-record`
+
+**Requires:** Authentication (Institute Admin). Candidates cannot download it.
+
+**Rate Limit:** 200 requests per 15 minutes per user
+
+**URL Parameters:**
+- `candidateId` (required): Candidate UUID. Must be within the admin's department scope (taken from the admin's DB row; a superAdmin is institution-wide). Cross-department targets return 404.
+
+**Description:** The long-form companion to the E-Certificate: an A4 **landscape** PDF listing every entry the candidate made, entry by entry. Read-only, no AI call. Sections:
+1. **Cover page**: candidate identity (registration number, degree, rank, department, registration date, record period), headline totals (entries by status, approved cases by role, hospitals, supervisors, academic points, events attended and presented, clinical entries), contents with page numbers, and a short "how to read" note.
+2. **Surgical experience**: every candidate-type submission in **all review statuses**, ordered by operation date and grouped by year with a subtotal per year. Laid out as a ruled ledger: every column and entry is separated by thin rules and nothing is clipped (cells wrap). Columns: #, date, patient (initials only, with age at operation and sex), diagnosis (the main-diagnosis category as a small label, then ICD-11 code + name, one per line), procedure (CPT code + title, one per line; the internal `-NN` variant suffix of `proc_cpts.numCode` is removed, so `61510-01` prints as `61510`), role, supervisor, hospital, status. A tinted details band inside each case's frame carries its additional-question answers, revision flag, equipment and consumables (answers of "none" are omitted).
+3. **Surgical summary** (approved entries): cases by main diagnosis x role, top 30 procedures x role; plus entries by hospital, supervisor and operation year in all statuses.
+4. **Academic experience** (academic institutions): every attended event grouped by academic year (September to August) with subtotals (date, type, lecture number, title, presenter, location, points, flag); events presented by the candidate with attendance counts; an academic summary; curriculum coverage by topic (distinct lectures of the candidate's department attended, flagged attendance excluded). Points use the same rule as the dashboard.
+5. **Clinical experience** (clinical institutions): every clinical submission grouped by year (date, activity type, description, supervisor, status, reviewed on, supervisor comment), with summaries by activity type and by supervisor.
+6. **Closing block** with a generation statement and programme director / signature / date lines.
+
+Every page carries a running header (candidate, department, institution), and a footer with the document reference (`LR-XXXXXXXX`, random per download, not stored), the generation time in the institution's time zone, and "Page X of Y".
+
+**Response (200 OK):** Binary PDF (no JSON envelope).
+- `Content-Type: application/pdf`
+- `Content-Disposition: attachment; filename="<CandidateName> - Logbook Record - <Department> - <YYYY-MM-DD>.pdf"`
+- `Cache-Control: private, no-store`
+
+**Errors:**
+- 400 if `candidateId` is not a valid UUID.
+- 403 for a caller below institute admin (for example a candidate token).
+- 404 if the candidate does not exist or is outside the admin's department.
+- 500 `{ "error": "Could not generate the logbook record" }` on an unexpected failure.
 
 ---
 
