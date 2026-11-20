@@ -252,6 +252,36 @@ export class InstituteAdminRouter {
       }
     );
 
+    // Logbook Record PDF for one candidate (long landscape document, every entry)
+    this.router.get(
+      "/candidates/:candidateId/logbook-record",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireInstituteAdmin,
+      getCandidateDashboardByIdValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          return;
+        }
+        try {
+          await this.instituteAdminController.handleGenerateCandidateLogbookRecordPdf(req, res);
+        } catch (err: any) {
+          const msg = String(err?.message ?? err);
+          if (msg.includes("Invalid candidate ID")) {
+            res.status(StatusCodes.BAD_REQUEST).json({ error: "Invalid candidate ID" });
+          } else if (msg.includes("Candidate not found")) {
+            res.status(StatusCodes.NOT_FOUND).json({ error: "Candidate not found" });
+          } else {
+            console.error("[logbook-record]", msg);
+            res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Could not generate the logbook record" });
+          }
+        }
+      }
+    );
+
     // Dashboard endpoints - Generate PDF report for one candidate
     this.router.get(
       "/candidates/:candidateId/report",

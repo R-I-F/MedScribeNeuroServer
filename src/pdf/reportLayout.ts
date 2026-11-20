@@ -3,6 +3,7 @@
  * Single source of truth for layout constants and draw functions.
  */
 import type PDFDocument from "pdfkit";
+import { formatInstitutionDateTime } from "../utils/institutionDateFormat";
 
 /** Header/footer: content starts below header; footer sits above bottom margin. */
 export const REPORT_LAYOUT = {
@@ -16,7 +17,7 @@ export const REPORT_LAYOUT = {
 } as const;
 
 export const FOOTER_TEXT =
-  "LIBELUSpro - The Inteligent Lofbook for Medical Practice & Training\nwww.libeluspro.com";
+  "LIBELUSpro - The Intelligent Logbook for Medical Practice & Training\nwww.libeluspro.com";
 
 /** Typography used in header/footer */
 const REPORT_TYPO_HEADER_FOOTER = {
@@ -92,7 +93,7 @@ export function drawReportHeader(
   if (includeReportGenerated) {
     doc.moveDown(0.25);
     doc.fontSize(REPORT_TYPO_HEADER_FOOTER.captionSize).fillColor(HEADER_FOOTER_COLORS.muted);
-    doc.text(`Report generated: ${new Date().toLocaleString()}`, left, doc.y);
+    doc.text(`Report generated: ${formatInstitutionDateTime()}`, left, doc.y);
     doc.moveDown(0.5);
   } else {
     doc.moveDown(0.35);

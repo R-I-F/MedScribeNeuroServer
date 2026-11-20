@@ -330,6 +330,27 @@ export class InstituteAdminController {
     }
   }
 
+  /** Logbook Record PDF. Errors propagate unwrapped so the router can map them to 400/404. */
+  public async handleGenerateCandidateLogbookRecordPdf(req: Request, res: Response) {
+    const validatedReq = matchedData(req) as { candidateId: string };
+    const dataSource = (req as any).institutionDataSource;
+    const institution = (req as any).institution as import("../institution/institution.service").IInstitution | undefined;
+    if (!dataSource) throw new Error("Institution DataSource not resolved");
+    if (!institution) throw new Error("Institution not resolved");
+    const departmentId = await this.getAdminDepartmentScope(res, dataSource);
+    const { buffer, suggestedFilename } = await this.instituteAdminService.generateCandidateLogbookRecordPdf(
+      validatedReq.candidateId,
+      dataSource,
+      institution,
+      departmentId
+    );
+    res.setHeader("Content-Type", "application/pdf");
+    const safeName = suggestedFilename.replace(/[\r\n"]/g, "").trim() || "Logbook-Record.pdf";
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(buffer);
+  }
+
   public async handleGenerateCandidateReportPdf(req: Request, res: Response) {
     const validatedReq = matchedData(req) as { candidateId: string };
     try {

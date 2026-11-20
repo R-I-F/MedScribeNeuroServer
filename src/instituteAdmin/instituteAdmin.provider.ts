@@ -23,27 +23,31 @@ import { ClinicalSubProvider } from "../clinicalSub/clinicalSub.provider";
 import { IInstitution } from "../institution/institution.service";
 import { AiAgentService } from "../aiAgent/aiAgent.service";
 import { drawReportHeader, drawReportFooter } from "../pdf/reportLayout";
-
-/** Role order for report (matches frontend): Operator → Operator (Assisted) → Assistant → Supervising → Observer */
-const REPORT_ROLE_ORDER = ["Operator", "Operator (Assisted)", "Assistant", "Supervising", "Observer"];
-
-/** Raw roleInSurg (lowercase) → display label for report */
-const REPORT_ROLE_LABELS: Record<string, string> = {
-  operator: "Operator",
-  "operator with supervisor scrubbed (assisted)": "Operator (Assisted)",
-  assistant: "Assistant",
-  "supervising, teaching a junior colleague (scrubbed)": "Supervising",
-  "observer (scrubbed)": "Observer",
-};
-
-function getReportRoleLabel(roleInSurg: string | undefined): string {
-  if (!roleInSurg || typeof roleInSurg !== "string") return "Other";
-  return REPORT_ROLE_LABELS[roleInSurg.trim().toLowerCase()] ?? roleInSurg.trim();
-}
+import { REPORT_ROLE_ORDER, getReportRoleLabel } from "../pdf/reportRoles";
+import { loadLogbookRecordData } from "../pdf/logbookRecord/logbookRecord.data";
+import { renderLogbookRecordPdf } from "../pdf/logbookRecord/renderLogbookRecordPdf";
+import { institutionTodayIso } from "../utils/institutionDateFormat";
+import { randomBytes } from "crypto";
 
 /** Colors for "Procedures Performed" section progress bars (order matches REPORT_ROLE_ORDER) */
 const PROCEDURE_ROLE_COLORS = ["#ea580c", "#0d9488", "#2563eb", "#7c3aed", "#ca8a04"] as const; // Operator, Operator (Assisted), Assistant, Supervising, Observer
 const PROCEDURE_TRACK_COLOR = "#e5e7eb";
+
+/**
+ * Year a surgical case belongs to: the OPERATION date (cal_surgs.procDate), not the day it was
+ * logged. Imported historical logbooks were logged years after the operations, so the logging
+ * timestamp put whole logbooks into the import year. Falls back to the logging time only when a
+ * case has no operation date.
+ */
+function operationYear(sub: any): number {
+  const proc = sub?.calSurg?.procDate;
+  if (proc) {
+    const y = Number(String(proc instanceof Date ? proc.toISOString() : proc).slice(0, 4));
+    if (Number.isFinite(y) && y > 1900) return y;
+  }
+  const ts = sub?.timeStamp ?? sub?.createdAt;
+  return ts ? new Date(ts).getFullYear() : new Date().getFullYear();
+}
 
 /** Title-case a string (capitalize first letter of each word). */
 function toTitleCase(s: string | undefined | null): string {
@@ -300,8 +304,46 @@ export class InstituteAdminProvider {
     departmentId?: string | null
   ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
     const supervisors = await this.supervisorService.getAllSupervisors(dataSource, departmentId);
-    const buffer = await this.buildSupervisorsReportPdfBuffer(supervisors as any[], institution);
-    const suggestedFilename = `Supervisors - Ecertificate - ${toPascalCaseForFilename(institution.name)} - ${toPascalCaseForFilename(institution.department)}.pdf`;
+    // The list follows the admin's scope: their own department, or the whole institution.
+    const docInstitution: IInstitution = {
+      ...institution,
+      department: await this.resolveDepartmentLabel(dataSource, departmentId, "All departments"),
+    };
+
+    // Activity per supervisor, as two aggregate queries rather than a pair of queries per
+    // row: this runs for every supervisor in the department (71 of them today).
+    //
+    // Cases = trainee submissions this supervisor approved, which is the same figure the
+    // single-supervisor report calls "supervised approved", so the two documents agree.
+    const approvedRows: { id: string; n: number }[] = await dataSource.query(
+      `SELECT "supervisorDocId"::text AS id, count(*)::int AS n
+         FROM "submissions"
+        WHERE "supervisorDocId" IS NOT NULL
+          AND "submissionType"::text = 'candidate'
+          AND "subStatus"::text = 'approved'
+        GROUP BY 1`
+    );
+    // Events = academic events this supervisor presented. Canceled ones are left out: a
+    // talk that never happened is not activity. `presenterId` is polymorphic (journals
+    // point at candidates), so joining on a supervisor id naturally ignores those.
+    const eventRows: { id: string; n: number }[] = await dataSource.query(
+      `SELECT trim("presenterId") AS id, count(*)::int AS n
+         FROM "events"
+        WHERE "presenterId" IS NOT NULL
+          AND "status"::text <> 'canceled'
+        GROUP BY 1`
+    );
+
+    const approvedBySupervisor = new Map<string, number>(approvedRows.map((r) => [r.id, Number(r.n)]));
+    const eventsBySupervisor = new Map<string, number>(eventRows.map((r) => [r.id, Number(r.n)]));
+
+    const buffer = await this.buildSupervisorsReportPdfBuffer(
+      supervisors as any[],
+      docInstitution,
+      approvedBySupervisor,
+      eventsBySupervisor
+    );
+    const suggestedFilename = `Supervisors - Ecertificate - ${toPascalCaseForFilename(docInstitution.name)} - ${toPascalCaseForFilename(docInstitution.department)}.pdf`;
     return { buffer, suggestedFilename };
   }
 
@@ -792,6 +834,25 @@ export class InstituteAdminProvider {
   }
 
   /**
+   * Department name printed on a document. `institutions.department` is a single-department-era
+   * column that reads "neurosurgery" for every account, so every report used to say Neurosurgery
+   * whatever the person's real department. Documents take the department from the person (or the
+   * admin's scope) instead; `fallback` covers a missing or unknown id.
+   */
+  private async resolveDepartmentLabel(
+    dataSource: DataSource,
+    departmentId: string | null | undefined,
+    fallback: string
+  ): Promise<string> {
+    if (!departmentId) return fallback;
+    const rows: { name: string }[] = await dataSource.query(
+      `SELECT "name" FROM "departments" WHERE "id" = $1`,
+      [departmentId]
+    );
+    return rows[0]?.name?.trim() || fallback;
+  }
+
+  /**
    * Generate a PDF report for a specific candidate. Includes candidate info, surgical analytics (ICD, CPT, consumables, equipment, supervisor, main diagnosis, hospital, by year), academic conferences, and clinical activity.
    * Brand: E-Certificate. Uses institution name and department from the provided institution.
    */
@@ -809,6 +870,11 @@ export class InstituteAdminProvider {
     if (!cand || (departmentId && (cand as any).departmentId !== departmentId)) {
       throw new Error("Candidate not found or does not belong to the requested institution");
     }
+
+    const docInstitution: IInstitution = {
+      ...institution,
+      department: await this.resolveDepartmentLabel(dataSource, (cand as any).departmentId, institution.department),
+    };
 
     const approvedSubs = await this.subService.getSubsByCandidateIdAndStatus(
       candidateId,
@@ -863,8 +929,7 @@ export class InstituteAdminProvider {
         sRole[roleLabel] = (sRole[roleLabel] ?? 0) + 1;
       }
 
-      const ts = sub.timeStamp ?? (sub as any).createdAt;
-      const year = ts ? new Date(ts).getFullYear() : new Date().getFullYear();
+      const year = operationYear(sub);
       yearMap.set(year, (yearMap.get(year) ?? 0) + 1);
 
       const consUsed = String((sub as any).consUsed ?? "").trim();
@@ -885,7 +950,7 @@ export class InstituteAdminProvider {
 
     let academicEvents: { topic: string; lecturer: string; points: number; date: string }[] = [];
     let totalAcademicPoints = 0;
-    if (institution.isAcademic) {
+    if (docInstitution.isAcademic) {
       const pointsResponse = await this.eventProvider.getCandidateEventPoints(candidateId, dataSource);
       totalAcademicPoints = pointsResponse.totalPoints;
       // getCandidateEventPoints falls back to a dash when an event carries no linked
@@ -910,15 +975,15 @@ export class InstituteAdminProvider {
 
     let clinicalTotal = 0;
     const clinicalByType = new Map<string, number>();
-    if (institution.isClinical) {
-      const clinicalList = await this.clinicalSubProvider.getMineOrAll(dataSource, {
-        callerCandidateId: undefined,
-      });
-      const forCandidate = clinicalList.filter((row: any) => {
-        const c = row.candDocId ?? row.candidate;
-        const cid = c && typeof c === "object" ? c.id : c;
-        return cid === candidateId && row.subStatus === "approved";
-      });
+    if (docInstitution.isClinical) {
+      // Only this candidate's approved rows (this used to load every clinical submission in the
+      // institution and filter them in memory).
+      const forCandidate: { typeCA: string }[] = await dataSource.query(
+        `SELECT "typeCA"::text AS "typeCA"
+           FROM "clinical_sub"
+          WHERE "candDocId" = $1 AND "subStatus"::text = 'approved'`,
+        [candidateId]
+      );
       clinicalTotal = forCandidate.length;
       for (const row of forCandidate) {
         const t = (row as any).typeCA ?? "other";
@@ -966,7 +1031,7 @@ export class InstituteAdminProvider {
 
     let aiSummary: string | null = null;
     try {
-      const snapshot = this.buildReportSnapshotForAi(cand as any, institution, data);
+      const snapshot = this.buildReportSnapshotForAi(cand as any, docInstitution, data);
       const prompt = `You are summarizing a candidate's surgical and training activity for the front page of an e-certificate report. Write 2 to 3 short, professional paragraphs that summarize the following data. Be concise and highlight key numbers and scope of practice. Use plain text only; no markdown, no bullet points, no section headers.\n\n${snapshot}`;
       const raw = await this.aiAgentService.generateText(prompt);
       aiSummary = raw?.trim() || null;
@@ -974,8 +1039,43 @@ export class InstituteAdminProvider {
       aiSummary = null;
     }
 
-    const buffer = await this.buildCandidateReportPdfBuffer(cand as any, institution, data, aiSummary);
-    const suggestedFilename = `${toPascalCaseForFilename(cand.fullName)} - Ecertificate - ${toPascalCaseForFilename(institution.name)} - ${toPascalCaseForFilename(institution.department)}.pdf`;
+    const buffer = await this.buildCandidateReportPdfBuffer(cand as any, docInstitution, data, aiSummary);
+    const suggestedFilename = `${toPascalCaseForFilename(cand.fullName)} - Ecertificate - ${toPascalCaseForFilename(docInstitution.name)} - ${toPascalCaseForFilename(docInstitution.department)}.pdf`;
+    return { buffer, suggestedFilename };
+  }
+
+  /**
+   * Logbook Record: the long, landscape companion to the E-Certificate, listing every surgical,
+   * academic and clinical entry of one candidate. Institute admins only (own department from the
+   * admin's DB row; superAdmin institution-wide). Read-only; no AI call.
+   */
+  public async generateCandidateLogbookRecordPdf(
+    candidateId: string,
+    dataSource: DataSource,
+    institution: IInstitution,
+    departmentId?: string | null
+  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    if (!this.uuidRegex.test(candidateId)) {
+      throw new Error("Invalid candidate ID");
+    }
+    const data = await loadLogbookRecordData(dataSource, candidateId, {
+      isAcademic: institution.isAcademic === true,
+      isClinical: institution.isClinical === true,
+      // The one points rule the dashboard and the E-Certificate use.
+      pointsRule: (att, event, cid) =>
+        this.eventService.computePointsForAttendance(att as any, event as any, cid),
+    });
+    if (!data || (departmentId && data.candidate.departmentId !== departmentId)) {
+      throw new Error("Candidate not found or does not belong to the requested institution");
+    }
+    const buffer = await renderLogbookRecordPdf(data, {
+      institutionName: toTitleCase(institution.name),
+      generatedAt: new Date(),
+      documentRef: `LR-${randomBytes(4).toString("hex").toUpperCase()}`,
+    });
+    const suggestedFilename = `${toPascalCaseForFilename(data.candidate.fullName)} - Logbook Record - ${toPascalCaseForFilename(
+      data.candidate.departmentName ?? institution.department
+    )} - ${institutionTodayIso()}.pdf`;
     return { buffer, suggestedFilename };
   }
 
@@ -1009,10 +1109,19 @@ export class InstituteAdminProvider {
     if (!submission) {
       throw new Error("Submission not found");
     }
+    const subDeptRows: { departmentId: string | null }[] = await dataSource.query(
+      `SELECT "departmentId" FROM "submissions" WHERE "id" = $1`,
+      [submissionId]
+    );
+    const subDepartment = await this.resolveDepartmentLabel(
+      dataSource,
+      subDeptRows[0]?.departmentId,
+      institution.department
+    );
     const viewModel = mapSubmissionToViewModel(submission);
     const buffer = await renderSubmissionReportPdfKit(viewModel, {
       institutionName: institution.name ?? "Institution",
-      department: institution.department ?? undefined,
+      department: subDepartment || undefined,
       isPractical: institution.isPractical ?? false,
     });
     const shortId = submissionId.slice(0, 8);
@@ -1038,6 +1147,10 @@ export class InstituteAdminProvider {
     if (!supervisor || (departmentId && (supervisor as any).departmentId !== departmentId)) {
       throw new Error("Supervisor not found or does not belong to the requested institution");
     }
+    const docInstitution: IInstitution = {
+      ...institution,
+      department: await this.resolveDepartmentLabel(dataSource, (supervisor as any).departmentId, institution.department),
+    };
 
     // Supervised candidate submissions: candidate-created cases where this supervisor is the approver
     const supervisedApproved = await this.subService.getSubsBySupervisorIdCandidateOnly(
@@ -1082,8 +1195,7 @@ export class InstituteAdminProvider {
       const hospitalName = hospital?.engName ?? hospital?.arabName ?? "—";
       hospitalMap.set(hospitalName, (hospitalMap.get(hospitalName) ?? 0) + 1);
 
-      const ts = sub.timeStamp ?? sub.createdAt;
-      const year = ts ? new Date(ts).getFullYear() : new Date().getFullYear();
+      const year = operationYear(sub);
       yearMap.set(year, (yearMap.get(year) ?? 0) + 1);
     }
 
@@ -1109,7 +1221,7 @@ export class InstituteAdminProvider {
 
     // Clinical supervised cases (approved) for this supervisor
     let clinicalSupervisedCount = 0;
-    if (institution.isClinical && (supervisor as any).canValClin) {
+    if (docInstitution.isClinical && (supervisor as any).canValClin) {
       const clinicalList = await this.clinicalSubProvider.getAssignedToSupervisorOrAll(dataSource, {
         callerSupervisorId: supervisorId,
       });
@@ -1138,7 +1250,7 @@ export class InstituteAdminProvider {
 
     let aiSummary: string | null = null;
     try {
-      const snapshot = this.buildSupervisorSnapshotForAi(supervisor as any, institution, data);
+      const snapshot = this.buildSupervisorSnapshotForAi(supervisor as any, docInstitution, data);
       const prompt =
         "You are summarizing a supervisor's activity for the front page of an e-certificate style report. " +
         "All surgical counts in the data refer primarily to trainee submissions that this supervisor supervised and approved; " +
@@ -1153,11 +1265,11 @@ export class InstituteAdminProvider {
       aiSummary = null;
     }
 
-    const buffer = await this.buildSupervisorReportPdfBuffer(supervisor as any, institution, data, aiSummary);
+    const buffer = await this.buildSupervisorReportPdfBuffer(supervisor as any, docInstitution, data, aiSummary);
     const suggestedFilename = `${toPascalCaseForFilename(
       (supervisor as any).fullName
-    )} - SupervisorReport - ${toPascalCaseForFilename(institution.name)} - ${toPascalCaseForFilename(
-      institution.department
+    )} - SupervisorReport - ${toPascalCaseForFilename(docInstitution.name)} - ${toPascalCaseForFilename(
+      docInstitution.department
     )}.pdf`;
     return { buffer, suggestedFilename };
   }
@@ -1444,7 +1556,9 @@ export class InstituteAdminProvider {
   /** Build PDF buffer for supervisors list report (same header/footer/dividers/typography as candidate report). */
   private async buildSupervisorsReportPdfBuffer(
     supervisors: any[],
-    institution: IInstitution
+    institution: IInstitution,
+    approvedBySupervisor: Map<string, number>,
+    eventsBySupervisor: Map<string, number>
   ): Promise<Buffer> {
     const doc = new PDFDocument({ margin: REPORT_LAYOUT.pageMargin, size: "A4" });
     const chunks: Buffer[] = [];
@@ -1479,25 +1593,52 @@ export class InstituteAdminProvider {
 
       doc.fontSize(REPORT_TYPO.bodySize).font("Helvetica").fillColor(CHART_COLORS.bodyText);
       doc.text(`Total supervisors: ${sortedSupervisors.length}`, left, doc.y);
+      doc.moveDown(0.35);
+      // Without this the reader cannot tell the validator flags from the activity counts,
+      // and "Acct." used to be headed "Approved" right beside a count of approved cases.
+      doc.fontSize(REPORT_TYPO.bodySize - 1).fillColor(CHART_COLORS.bodyText);
+      doc.text(
+        "Surg. / Clin.: validator rights. Acct.: account approved. " +
+          "Cases: trainee surgical submissions approved by this supervisor. " +
+          "Events: academic events presented, excluding canceled.",
+        left,
+        doc.y,
+        { width: right - left }
+      );
+      doc.fontSize(REPORT_TYPO.bodySize);
       doc.moveDown(0.6);
       this.drawSectionDivider(doc, left, right);
 
+      // A4 content width at a 35pt margin is about 525pt. The columns below sum to 498,
+      // so the two activity counts were made room for by trimming email and position
+      // rather than by shrinking the font.
       const colNo = 22;
       const colName = 120;
-      const colEmail = 140;
-      const colPosition = 72;
-      const colCanVal = 42;
-      const colCanValClin = 42;
-      const colApproved = 42;
+      const colEmail = 126;
+      const colPosition = 68;
+      const colCanVal = 28;
+      const colCanValClin = 28;
+      const colApproved = 30;
+      const colCases = 38;
+      const xName = left + colNo;
+      const xEmail = xName + colName;
+      const xPosition = xEmail + colEmail;
+      const xCanVal = xPosition + colPosition;
+      const xCanValClin = xCanVal + colCanVal;
+      const xApproved = xCanValClin + colCanValClin;
+      const xCases = xApproved + colApproved;
+      const xEvents = xCases + colCases;
       const tableHeaderY = doc.y;
       doc.fontSize(REPORT_TYPO.bodySize).font("Helvetica-Bold").fillColor(CHART_COLORS.bodyTextDark);
       doc.text("#", left, tableHeaderY);
-      doc.text("Full Name", left + colNo, tableHeaderY);
-      doc.text("Email", left + colNo + colName, tableHeaderY);
-      doc.text("Position", left + colNo + colName + colEmail, tableHeaderY);
-      doc.text("Surg.", left + colNo + colName + colEmail + colPosition, tableHeaderY);
-      doc.text("Clin.", left + colNo + colName + colEmail + colPosition + colCanVal, tableHeaderY);
-      doc.text("Approved", left + colNo + colName + colEmail + colPosition + colCanVal + colCanValClin, tableHeaderY);
+      doc.text("Full Name", xName, tableHeaderY);
+      doc.text("Email", xEmail, tableHeaderY);
+      doc.text("Position", xPosition, tableHeaderY);
+      doc.text("Surg.", xCanVal, tableHeaderY);
+      doc.text("Clin.", xCanValClin, tableHeaderY);
+      doc.text("Acct.", xApproved, tableHeaderY);
+      doc.text("Cases", xCases, tableHeaderY);
+      doc.text("Events", xEvents, tableHeaderY);
       doc.moveTo(left, tableHeaderY + 12).lineTo(right, tableHeaderY + 12).strokeColor(REPORT_LAYOUT.dividerColor).lineWidth(REPORT_LAYOUT.dividerLineWidth).stroke();
       doc.y = tableHeaderY + 14;
       doc.moveDown(0.2);
@@ -1518,12 +1659,14 @@ export class InstituteAdminProvider {
         doc.font("Helvetica").fontSize(REPORT_TYPO.bodySize).fillColor(CHART_COLORS.bodyText);
         const rowY = doc.y;
         doc.text(String(index + 1), left, rowY);
-        doc.text(truncate(s.fullName, colName - 4), left + colNo, rowY);
-        doc.text(truncate(s.email, colEmail - 4), left + colNo + colName, rowY);
-        doc.text(truncate(s.position, colPosition - 4), left + colNo + colName + colEmail, rowY);
-        doc.text(s.canValidate === true ? "Yes" : "No", left + colNo + colName + colEmail + colPosition, rowY);
-        doc.text(s.canValClin === true ? "Yes" : "No", left + colNo + colName + colEmail + colPosition + colCanVal, rowY);
-        doc.text(s.approved === true ? "Yes" : "No", left + colNo + colName + colEmail + colPosition + colCanVal + colCanValClin, rowY);
+        doc.text(truncate(s.fullName, colName - 4), xName, rowY);
+        doc.text(truncate(s.email, colEmail - 4), xEmail, rowY);
+        doc.text(truncate(s.position, colPosition - 4), xPosition, rowY);
+        doc.text(s.canValidate === true ? "Yes" : "No", xCanVal, rowY);
+        doc.text(s.canValClin === true ? "Yes" : "No", xCanValClin, rowY);
+        doc.text(s.approved === true ? "Yes" : "No", xApproved, rowY);
+        doc.text(String(approvedBySupervisor.get(String(s.id)) ?? 0), xCases, rowY);
+        doc.text(String(eventsBySupervisor.get(String(s.id)) ?? 0), xEvents, rowY);
         doc.y = rowY + 14;
         doc.moveDown(0.2);
       });

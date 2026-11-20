@@ -213,6 +213,20 @@ export class InstituteAdminService {
     }
   }
 
+  public async generateCandidateLogbookRecordPdf(
+    candidateId: string,
+    dataSource: DataSource,
+    institution: import("../institution/institution.service").IInstitution,
+    departmentId?: string | null
+  ): Promise<{ buffer: Buffer; suggestedFilename: string }> {
+    return this.instituteAdminProvider.generateCandidateLogbookRecordPdf(
+      candidateId,
+      dataSource,
+      institution,
+      departmentId
+    );
+  }
+
   public async generateCandidateReportPdf(
     candidateId: string,
     dataSource: DataSource,
