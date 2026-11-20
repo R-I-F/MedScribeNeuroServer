@@ -1,4 +1,5 @@
 import { body } from "express-validator";
+import { sanitizePhone, assertPhone, PHONE_ERROR, sanitizeName, sanitizeNationality, assertNationality, NATIONALITY_ERROR } from "./personFields";
 
 export const createCandValidator = [
   body("email")
@@ -14,13 +15,18 @@ export const createCandValidator = [
     .isString()
     .trim()
     .notEmpty()
-    .withMessage("fullName is required"),
+    .withMessage("fullName is required")
+    .customSanitizer(sanitizeName),
 
   body("phoneNum")
     .isString()
     .trim()
     .notEmpty()
-    .withMessage("phoneNum is required"),
+    .withMessage("phoneNum is required")
+    .bail()
+    .customSanitizer(sanitizePhone)
+    .custom(assertPhone)
+    .withMessage(PHONE_ERROR),
 
   body("regNum")
     .isString()
@@ -28,7 +34,11 @@ export const createCandValidator = [
 
   body("nationality")
     .isString()
-    .withMessage("nationality must be a string"),
+    .withMessage("nationality must be a string")
+    .bail()
+    .customSanitizer(sanitizeNationality)
+    .custom(assertNationality)
+    .withMessage(NATIONALITY_ERROR),
 
   body("rank")
     .isString()

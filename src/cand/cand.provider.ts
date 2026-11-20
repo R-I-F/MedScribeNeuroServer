@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { normalizePersonName, normalizePhone, canonicalNationality, phoneKeySql, phoneMatchKey } from "../utils/personData";
 import { DataSource } from "typeorm";
 import { UtilService } from "../utils/utils.service";
 import { IExternalRow } from "../types/externalRow.interface";
@@ -105,7 +106,10 @@ export class CandProvider {
           "A supervisor account already exists for this email"
         );
       }
-      const phoneTaken = await supRepo.findOne({ where: { phoneNum: candidate.phoneNum } });
+      const phoneTaken = await supRepo
+        .createQueryBuilder("s")
+        .where(`${phoneKeySql('s."phoneNum"')} = :key`, { key: phoneMatchKey(candidate.phoneNum) })
+        .getOne();
       if (phoneTaken) {
         throw new PromoteCandidateError(
           "supervisor_phone_exists",
@@ -254,16 +258,13 @@ export class CandProvider {
             ),
             email: String(rawItem["Email Address"] ?? "").trim(),
             password: `MEDscrobe01$`,
-            fullName: this.utilsService.stringToLowerCaseTrim(
-              rawItem["Full Name (as per ID)"]
-            ),
+            fullName: normalizePersonName(rawItem["Full Name (as per ID)"]),
             regNum: this.utilsService.numToStringTrim(
               rawItem["Registry Number (Medical Committee or College ID)"]
             ),
-            phoneNum: rawItem["Phone Number"],
-            nationality: this.utilsService.stringToLowerCaseTrim(
-              rawItem["Nationality"]
-            ),
+            phoneNum: normalizePhone(rawItem["Phone Number"]) ?? String(rawItem["Phone Number"] ?? "").trim(),
+            nationality:
+              canonicalNationality(rawItem["Nationality"]) ?? normalizePersonName(rawItem["Nationality"]),
             rank: this.utilsService.returnRankEnum(
               rawItem["Rank"]
             ),

@@ -1,4 +1,5 @@
 import { checkSchema } from "express-validator";
+import { phoneSchema, nameSanitizerSchema } from "./personFields";
 
 export const createSuperAdminValidator = checkSchema({
   email: {
@@ -33,18 +34,14 @@ export const createSuperAdminValidator = checkSchema({
       errorMessage: "super admin full name should have a maximum of 100 characters",
     },
     trim: true,
+    ...nameSanitizerSchema,
   },
   phoneNum: {
     in: ["body"],
     notEmpty: true,
     errorMessage: "super admin phone number is required.",
-    isLength: {
-      options: {
-        min: 11,
-      },
-      errorMessage: "super admin phone number must be at least 11 digits",
-    },
     trim: true,
+    ...phoneSchema,
   },
   approved: {
     in: ["body"],

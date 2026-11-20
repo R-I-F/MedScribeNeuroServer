@@ -1,4 +1,5 @@
 import { body, checkSchema, param, query } from "express-validator";
+import { sanitizePhone, assertPhone, PHONE_ERROR, sanitizeName, sanitizeNationality, assertNationality, NATIONALITY_ERROR } from "./personFields";
 import { AI_OFFICE_ACTIVITY_TYPES } from "../aiOffice/aiOffice.types";
 import { Rank, RegDegree } from "../cand/cand.interface";
 import { SupervisorPosition } from "../types/supervisorPosition.types";
@@ -30,7 +31,8 @@ export const aiOfficeSignupValidator = [
     .withMessage("fullName is required")
     .bail()
     .isLength({ max: 100 })
-    .withMessage("fullName should have a maximum of 100 characters"),
+    .withMessage("fullName should have a maximum of 100 characters")
+    .customSanitizer(sanitizeName),
 
   body("phoneNum")
     .isString()
@@ -39,7 +41,11 @@ export const aiOfficeSignupValidator = [
     .withMessage("phoneNum is required")
     .bail()
     .isLength({ max: 32 })
-    .withMessage("phoneNum is too long"),
+    .withMessage("phoneNum is too long")
+    .bail()
+    .customSanitizer(sanitizePhone)
+    .custom(assertPhone)
+    .withMessage(PHONE_ERROR),
 
   body("departmentId")
     .optional({ values: "falsy" })
@@ -80,7 +86,11 @@ export const aiOfficeSignupValidator = [
     .withMessage("nationality is required")
     .bail()
     .isLength({ max: 100 })
-    .withMessage("nationality is too long"),
+    .withMessage("nationality is too long")
+    .bail()
+    .customSanitizer(sanitizeNationality)
+    .custom(assertNationality)
+    .withMessage(NATIONALITY_ERROR),
   body("rank")
     .if(isCandidate)
     .isIn(Object.values(Rank))

@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { phoneKeySql, phoneMatchKey } from "../utils/personData";
 import { injectable } from "inversify";
 import { DataSource, MoreThanOrEqual } from "typeorm";
 import { QueryDeepPartialEntity } from "typeorm/query-builder/QueryPartialEntity";
@@ -374,8 +375,8 @@ export class AiOfficeService {
 
   public async phoneExists(role: AiOfficeMemberRole, phoneNum: string, dataSource: DataSource): Promise<boolean> {
     const rows = await dataSource.query(
-      `SELECT 1 FROM "${USER_TABLE[role]}" WHERE "phoneNum" = $1 LIMIT 1`,
-      [phoneNum]
+      `SELECT 1 FROM "${USER_TABLE[role]}" WHERE ${phoneKeySql('"phoneNum"')} = $1 LIMIT 1`,
+      [phoneMatchKey(phoneNum)]
     );
     return rows.length > 0;
   }

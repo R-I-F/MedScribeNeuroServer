@@ -1,4 +1,5 @@
 import { injectable, inject } from "inversify";
+import { normalizePersonName } from "../utils/personData";
 import { DataSource } from "typeorm";
 import crypto from "crypto";
 import { ExternalService } from "../externalService/external.service";
@@ -254,9 +255,7 @@ export class SubProvider {
         otherSurgRank: (this.utilService.stringToLowerCaseTrimUndefined(
           rawItemArr[indexes.otherSurg] ?? ""
         ) || "other") as TOtherSurgRank,
-        otherSurgName: (this.utilService.stringToLowerCaseTrimUndefined(
-          rawItemArr[indexes.nameOtherSurg] ?? ""
-        ) ?? "") as string,
+        otherSurgName: normalizePersonName(rawItemArr[indexes.nameOtherSurg] ?? ""),
         isItRevSurg: this.utilService.yesNoToBoolean(
           rawItemArr[indexes.isItRevSurg]
         ),

@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { phoneKeySql, phoneMatchKey } from "../utils/personData";
 import { DataSource } from "typeorm";
 import { In } from "typeorm";
 import { ISupervisor, ISupervisorDoc } from "./supervisor.interface";
@@ -100,7 +101,8 @@ export class SupervisorProvider {
       const supervisor = await supervisorRepository
         .createQueryBuilder("s")
         // Postgres needs the 'g' flag to strip ALL non-digit runs (without it, only the first is removed).
-        .where("REGEXP_REPLACE(s.phoneNum, '[^0-9]+', '', 'g') = :digits", { digits })
+        // Last 10 digits: matches "01012345678", "+201012345678" and WhatsApp's "201012345678" alike.
+        .where(`${phoneKeySql('"s"."phoneNum"')} = :key`, { key: phoneMatchKey(digits) })
         .getOne();
       return supervisor as unknown as ISupervisorDoc | null;
     } catch (err: any) {

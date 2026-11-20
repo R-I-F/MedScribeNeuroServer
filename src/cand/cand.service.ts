@@ -1,4 +1,5 @@
 import { inject, injectable } from "inversify";
+import { phoneKeySql, phoneMatchKey } from "../utils/personData";
 import { DataSource } from "typeorm";
 import { IExternalRow } from "../types/externalRow.interface";
 import { ICand, ICandDoc } from "./cand.interface";
@@ -97,7 +98,8 @@ export class CandService {
       const cand = await candRepository
         .createQueryBuilder("c")
         // Postgres needs the 'g' flag to strip ALL non-digit runs (without it, only the first is removed).
-        .where("REGEXP_REPLACE(c.phoneNum, '[^0-9]+', '', 'g') = :digits", { digits })
+        // Last 10 digits: matches "01012345678", "+201012345678" and WhatsApp's "201012345678" alike.
+        .where(`${phoneKeySql('"c"."phoneNum"')} = :key`, { key: phoneMatchKey(digits) })
         // Promoted candidates are archived and are no longer a candidate identity.
         .andWhere("c.archivedAt IS NULL")
         .getOne();

@@ -1,4 +1,5 @@
 import { checkSchema } from "express-validator";
+import { phoneSchema, nameSanitizerSchema } from "./personFields";
 
 export const createSupervisorValidator = checkSchema({
   email: {
@@ -33,18 +34,14 @@ export const createSupervisorValidator = checkSchema({
       errorMessage: "supervisor full name should have a maximum of 100 characters",
     },
     trim: true,
+    ...nameSanitizerSchema,
   },
   phoneNum: {
     in: ["body"],
     notEmpty: true,
     errorMessage: "supervisor phone number is required.",
-    isLength: {
-      options: {
-        min: 11,
-      },
-      errorMessage: "supervisor phone number must be at least 11 digits",
-    },
     trim: true,
+    ...phoneSchema,
   },
   approved: {
     in: ["body"],

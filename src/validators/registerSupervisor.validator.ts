@@ -1,4 +1,5 @@
 import { body } from "express-validator";
+import { sanitizePhone, assertPhone, PHONE_ERROR, sanitizeName } from "./personFields";
 
 export const registerSupervisorValidator = [
   body("email")
@@ -14,13 +15,18 @@ export const registerSupervisorValidator = [
     .isString()
     .trim()
     .notEmpty()
-    .withMessage("fullName is required"),
+    .withMessage("fullName is required")
+    .customSanitizer(sanitizeName),
 
   body("phoneNum")
     .isString()
     .trim()
     .notEmpty()
-    .withMessage("phoneNum is required"),
+    .withMessage("phoneNum is required")
+    .bail()
+    .customSanitizer(sanitizePhone)
+    .custom(assertPhone)
+    .withMessage(PHONE_ERROR),
 
   // Single-institution (KA spoke) mode: institutionId is accepted and ignored; optional.
   body("institutionId")

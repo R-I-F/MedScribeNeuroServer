@@ -1,4 +1,5 @@
 import { checkSchema } from "express-validator";
+import { phoneSchema, nameSanitizerSchema } from "./personFields";
 import { uuidValidator } from "./uuidValidator.util";
 
 export const updateClerkValidator = checkSchema({
@@ -38,17 +39,13 @@ export const updateClerkValidator = checkSchema({
       errorMessage: "clerk full name should have a maximum of 100 characters",
     },
     trim: true,
+    ...nameSanitizerSchema,
   },
   phoneNum: {
     in: ["body"],
     optional: true,
-    isLength: {
-      options: {
-        min: 11,
-      },
-      errorMessage: "clerk phone number must be at least 11 digits",
-    },
     trim: true,
+    ...phoneSchema,
   },
   approved: {
     in: ["body"],

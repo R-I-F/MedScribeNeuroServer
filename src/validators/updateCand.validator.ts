@@ -1,4 +1,5 @@
 import { checkSchema } from "express-validator";
+import { phoneSchema, nameSanitizerSchema, nationalitySchema } from "./personFields";
 import { uuidValidator } from "./uuidValidator.util";
 import { Rank, RegDegree } from "../cand/cand.interface";
 
@@ -42,17 +43,13 @@ export const updateCandValidator = checkSchema({
       errorMessage: "full name should have a maximum of 255 characters",
     },
     trim: true,
+    ...nameSanitizerSchema,
   },
   phoneNum: {
     in: ["body"],
     optional: true,
-    isLength: {
-      options: {
-        min: 11,
-      },
-      errorMessage: "phone number must be at least 11 characters",
-    },
     trim: true,
+    ...phoneSchema,
   },
   regNum: {
     in: ["body"],
@@ -75,6 +72,7 @@ export const updateCandValidator = checkSchema({
       errorMessage: "nationality should have a maximum of 100 characters",
     },
     trim: true,
+    ...nationalitySchema,
   },
   rank: {
     in: ["body"],
