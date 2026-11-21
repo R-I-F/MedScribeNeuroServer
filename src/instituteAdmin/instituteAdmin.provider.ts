@@ -53,6 +53,9 @@ function operationYear(sub: any): number {
   return ts ? new Date(ts).getFullYear() : new Date().getFullYear();
 }
 
+/** Public site that hosts the certificate check page; printed on every E-Certificate. */
+const CERTIFICATE_VERIFY_BASE_URL = "https://libeluspro.com";
+
 /** Title-case a string (capitalize first letter of each word). */
 function toTitleCase(s: string | undefined | null): string {
   if (s == null || typeof s !== "string") return "—";
@@ -1077,7 +1080,9 @@ export class InstituteAdminProvider {
       aiSummary,
       aiSummaryHash,
     });
-    const verifyUrl = `${(process.env.FRONTEND_URL || "https://libeluspro.com").replace(/\/+$/, "")}/verify/${issued.code}`;
+    // Fixed public address, deliberately not taken from FRONTEND_URL: the link is printed on a
+    // signed document and in its QR code, so it must not change with deployment settings.
+    const verifyUrl = `${CERTIFICATE_VERIFY_BASE_URL}/verify/${issued.code}`;
     const qrPng = await QRCode.toBuffer(verifyUrl, { errorCorrectionLevel: "M", margin: 1, width: 360 });
     const cover: CertificateCoverInfo = {
       institutionName: toTitleCase(docInstitution.name),
