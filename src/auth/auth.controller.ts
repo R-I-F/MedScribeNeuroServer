@@ -1,6 +1,14 @@
 import bcryptjs from "bcryptjs";
 import { inject, injectable } from "inversify";
-import { DataSource, IsNull } from "typeorm";
+import { DataSource, IsNull, Raw } from "typeorm";
+
+/**
+ * Email match for sign-in that ignores case and surrounding spaces, so "Ahmed@Gmail.com " finds
+ * the account stored as "ahmed@gmail.com" (and an account stored with capitals is found whatever
+ * the user types). Verified 2026-11-21: no two accounts in any user table differ only by case.
+ */
+const emailMatch = (email: string) =>
+  Raw((alias) => `LOWER(TRIM(${alias})) = :loginEmail`, { loginEmail: String(email ?? "").trim().toLowerCase() });
 import { CandService } from "../cand/cand.service";
 import { SupervisorService } from "../supervisor/supervisor.service";
 import { SuperAdminService } from "../superAdmin/superAdmin.service";
@@ -135,7 +143,7 @@ export class AuthController {
       // Helper function to query user by email from DataSource
       const findUserByEmail = async (entityClass: any, email: string, where: object = {}): Promise<any> => {
         const repository = targetDataSource.getRepository(entityClass);
-        return await repository.findOne({ where: { email, ...where } });
+        return await repository.findOne({ where: { email: emailMatch(email), ...where } });
       };
 
       // Try candidate first, then supervisor.
@@ -222,7 +230,7 @@ export class AuthController {
       // Helper function to query user by email from DataSource
       const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
         const repository = targetDataSource.getRepository(entityClass);
-        return await repository.findOne({ where: { email } });
+        return await repository.findOne({ where: { email: emailMatch(email) } });
       };
 
       // Query super admin from institution-specific database
@@ -293,7 +301,7 @@ export class AuthController {
       // Helper function to query user by email from DataSource
       const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
         const repository = targetDataSource.getRepository(entityClass);
-        return await repository.findOne({ where: { email } });
+        return await repository.findOne({ where: { email: emailMatch(email) } });
       };
 
       // Query institute admin from institution-specific database
@@ -367,7 +375,7 @@ export class AuthController {
       // Helper function to query user by email from DataSource
       const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
         const repository = targetDataSource.getRepository(entityClass);
-        return await repository.findOne({ where: { email } });
+        return await repository.findOne({ where: { email: emailMatch(email) } });
       };
 
       // Try superAdmin first, then instituteAdmin
@@ -441,7 +449,7 @@ export class AuthController {
       // Helper function to query user by email from DataSource
       const findUserByEmail = async (entityClass: any, email: string): Promise<any> => {
         const repository = targetDataSource.getRepository(entityClass);
-        return await repository.findOne({ where: { email } });
+        return await repository.findOne({ where: { email: emailMatch(email) } });
       };
 
       // Query clerk from institution-specific database

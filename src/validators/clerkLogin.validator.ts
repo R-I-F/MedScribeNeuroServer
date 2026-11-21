@@ -2,6 +2,7 @@ import { body } from "express-validator";
 
 export const clerkLoginValidator = [
   body("email")
+    .trim()
     .isEmail()
     .withMessage("email must be a valid email address"),
 
