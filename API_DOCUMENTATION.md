@@ -9501,6 +9501,35 @@ Each result mirrors the public shape, plus `procedure.numCode`:
 ```
 Diagnoses instead carry `diagnosis: { icdCode, icdName, icdArName }`. **401** if the JWT carries no user id; **400** on validation; **429** from the IP limiter. A successful (non-exhausted) search spends one daily credit and records a row in `in_app_search_events`.
 
+#### "Not listed?" search and the search log (Stage J, docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md)
+The same endpoint serves the "Not listed? Search" tile that replaces the bare "Other" procedure/diagnosis in the submission form. Optional body fields:
+- `purpose`: `assist` (default, the AI assist above Main Diagnosis, 5/day) or `missing` (the "Not listed?" search, **20/day**, env `IN_APP_MISSING_SEARCH_MAX_PER_DAY`). Each purpose has its own daily count.
+- `mainDiagId` (UUID): the category the user is in. Each result then carries `inCurrentMainDiag: boolean` (checked against the local mirror, since a procedure can sit in several categories) and in-category results come first.
+
+Every response with `status: "ok"` also carries `eventId`. The catalogue's "other" rows (`00000-00` / `AAAA`) are never returned. **Every search is logged**: what was typed (`query`), the category, and the results shown, in `in_app_search_events`. Visible to the super admin only (`GET /searchAnalytics/queries`).
+
+### Record what the user did after a search
+**POST** `/inAppSearch/events/:id/outcome` -- same middleware chain. Body `{ outcome: "picked" | "none", pickedCode?: string }`. Only the caller's own event can be updated (**404** otherwise); **400** on validation. `data`: `{ "ok": true }`. The form sends it fire-and-forget; a failure never affects the form.
+
+---
+
+## Not in catalogue (`/catalogGaps`)
+
+**Authenticated, institute admin (superAdmin admitted hierarchically).** What users described because the catalogue did not have it (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md, Stage J). One `catalog_gaps` row is written per described item when a submission is created. The department is locked from the admin's DB row, as in Case Analytics; `?deptCode` is honoured only for an institution-wide caller.
+
+### List
+**GET** `/catalogGaps?status=open|reported|dismissed&kind=procedure|diagnosis&deptCode=` -- grouped by category + kind + normalized text. `data`:
+```json
+{ "items": [ { "kind": "procedure", "mainDiagId": "uuid", "mainDiagTitle": "cranial trauma", "mainDiagArTitle": "...",
+  "deptCode": "NS", "normalizedText": "endoscopic arachnoid cyst fenestration", "text": "Endoscopic arachnoid cyst fenestration",
+  "times": 1, "firstSeen": "...", "lastSeen": "...", "status": "open" } ] }
+```
+### Set the status of a group
+**PATCH** `/catalogGaps/status` body `{ kind, mainDiagId (uuid|null), normalizedText, status: open|reported|dismissed, deptCode? }`. `data`: `{ "updated": n }`. **404** when nothing in the caller's scope matches; **400** on a bad field.
+
+### Submissions: describing a missing item
+`POST /sub/candidate/submissions` and `POST /sub/supervisor/submissions` accept four optional fields: `otherProcedureText`, `otherDiagnosisText` (3-120 chars, trimmed, stored as typed) and `otherProcedureSearchEventId`, `otherDiagnosisSearchEventId` (the "Not listed?" search event, linked only when it is the caller's own). A text adds the catalogue's "other" row by code and its name to `procedureName` / `diagnosisName`. With env **`REQUIRE_OTHER_DESCRIPTION=true`**, picking "other" without a text is a **400** (`... "Other" needs a description.`). Submissions return `otherProcedureText` / `otherDiagnosisText` (NULL on older rows).
+
 ---
 
 ## AI Search Usage Analytics (`/searchAnalytics`)
@@ -9544,6 +9573,8 @@ Two filter axes match Active Users: `scope` = `institution` (all departments) or
 Ordered by `searchCount` desc, then most recent.
 
 ### Per-user drill-down
+**GET** `/searchAnalytics/queries?window=today|week|month|quarter&deptCode=&type=procedure|diagnosis&purpose=assist|missing&outcome=picked|none|open|empty&limit=` -- super admin only (queries can carry clinical detail or a patient name). What users typed, newest first: `{ window, items: [ { id, occurredAt, userId, userRole, name, deptCode, type, purpose, query, resultCount, topResult, outcome, pickedCode } ] }`. Only searches logged since Stage J carry text. Each `/searchAnalytics/user` timeline event now also carries `purpose`, `query`, `resultCount`, `outcome`, `pickedCode`.
+
 **GET** `/searchAnalytics/user?actorId=&role=&window=`
 ```jsonc
 {
@@ -10476,7 +10507,11 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /superAdmin`, `GET /superAdmin/:id` | Yes | Super Admin (POST/PUT/DELETE **removed**) |
 | `GET /activeUsers/analytics`, `/activeUsers/list`, `/activeUsers/user`, `PATCH /activeUsers/cap` | Yes | **Super Admin only**; active-users analytics + signup cap |
 | `POST /publicSearch/session`, `/verify`, `/resend`, `/query`, `/explain` | No | Public data-explorer; soft email+OTP gate; 5 free queries/email; proxies search to the hub |
-| `POST /inAppSearch/query` | Yes | Candidate, Supervisor, or Admin; in-form AI assist; department auto from JWT; 5 searches/user/UTC-day; returns CPT numCode |
+| `POST /inAppSearch/query` | Yes | Candidate, Supervisor, or Admin; in-form AI assist (5/day) or "Not listed?" search (`purpose: missing`, 20/day); department auto from JWT; logs the query; returns CPT numCode + eventId |
+| `POST /inAppSearch/events/:id/outcome` | Yes | Candidate, Supervisor, or Admin; own events only; picked / none |
+| `GET /catalogGaps` | Yes | Institute Admin (own department) or Super Admin |
+| `PATCH /catalogGaps/status` | Yes | Institute Admin (own department) or Super Admin |
+| `GET /searchAnalytics/queries` | Yes | Super Admin only; what users typed into the in-app search |
 | `GET /searchAnalytics/analytics`, `/list`, `/user` | Yes | Super Admin only; AI search-usage breakdown (reads in_app_search_events; separate from activity; superAdmin excluded) |
 | `GET /publicSearchAnalytics/analytics`, `/list` | Yes | Super Admin only; public /explore usage (reads public_search_sessions; people/searches/funnel, session-only) |
 | `GET /caseAnalytics/filters`, `/summary`, `/cases` | Yes | Institute Admin (superAdmin hierarchically); surgical case statistics over cal_surgs; department AUTO-LOCKED from the admin DB row, deptCode honoured only for an institution-wide caller |

@@ -1,5 +1,6 @@
 import { checkSchema } from "express-validator";
 import { uuidValidator } from "./uuidValidator.util";
+import { describedItemFields } from "./describedItem.fields";
 
 const ROLE_IN_SURG = [
   "operator",
@@ -122,6 +123,7 @@ export const createSupervisorSubmissionValidator = checkSchema({
   preOpClinCond: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 1000 } }, trim: true },
   consDetails: { in: ["body"], optional: true, isString: true, isLength: { options: { max: 1000 } }, trim: true },
   surgNotes: { in: ["body"], optional: true, isString: true, trim: true },
+  ...describedItemFields,
   answers: {
     in: ["body"],
     optional: true,

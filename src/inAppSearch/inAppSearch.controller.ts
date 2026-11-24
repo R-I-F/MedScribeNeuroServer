@@ -12,4 +12,8 @@ export class InAppSearchController {
   handleQuery(actor: Actor, input: InAppSearchInput, ds: DataSource) {
     return this.provider.query(actor, input, ds);
   }
+
+  handleOutcome(actor: Actor, eventId: string, outcome: "picked" | "none", pickedCode: string | null, ds: DataSource) {
+    return this.provider.setOutcome(actor, eventId, outcome, pickedCode, ds);
+  }
 }

@@ -31,6 +31,29 @@ export class InAppSearchEventEntity {
   @Column({ type: "varchar", length: 16 })
   type!: string;
 
+  /** 'assist' (AI assist above Main Diagnosis, 5/day) | 'missing' ("Not listed?" search, 20/day). */
+  @Column({ type: "varchar", length: 16, default: "assist" })
+  purpose!: string;
+
+  /** Exactly what the user typed (NULL on rows recorded before 2026-11). */
+  @Column({ type: "text", nullable: true })
+  query!: string | null;
+
+  /** The category the user was in ('missing' searches). */
+  @Column({ type: "uuid", nullable: true })
+  mainDiagId!: string | null;
+
+  /** What came back, in order: [{kind, code, title, mainDiagTitle, inCurrentMainDiag, similarity}]. */
+  @Column({ type: "jsonb", nullable: true })
+  results!: unknown[] | null;
+
+  /** 'picked' | 'none' | NULL (left without choosing). */
+  @Column({ type: "varchar", length: 16, nullable: true })
+  outcome!: string | null;
+
+  @Column({ type: "varchar", length: 32, nullable: true })
+  pickedCode!: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

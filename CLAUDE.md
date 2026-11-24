@@ -29,6 +29,39 @@ MedScribeNeuroServer — Node/TypeScript/Express backend (TypeORM + Inversify DI
 
 ## 📍 Where we stopped (2026-07-08)
 
+### ▶ UPDATE 2026-11-24: Stage J built (read first)
+- **Stage J ("Other" becomes search, then a required description) + search query log: BUILT and verified locally,
+  UNCOMMITTED, NOT deployed.** Plan + build log + ship steps: `docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md`.
+  Branch `feat/describe-missing-item` in BOTH repos. Migration 360 (`DescribeMissingCatalogItems`) applied only on the
+  local Docker copy `ka-cert` (port 54329, restored from `F:\DB_BACKUPS\ka-institute-pre-describe-missing-item-20261124161446.sql.gz`).
+  Ship order: fresh backup, user runs migration 360, push backend (flag off), push frontend, then
+  `REQUIRE_OTHER_DESCRIPTION=true` on Railway. PDFs/certificate deliberately NOT changed (user: later).
+- 2026-11-24 also: 214 missing English patient names backfilled on production without Gemini (see below).
+
+### ▶ UPDATE 2026-11-21 (read with the note below)
+- **Stage B (verifiable E-Certificate) SHIPPED**: migration 350 applied by the user, backend `42c48f5` + frontend
+  `103154a`; verify link hard-coded to `https://libeluspro.com` (`5060c37`, Railway FRONTEND_URL still holds the old
+  neurologbook.com domain: user to update it). Test certificate `LP-S225-RWEK` carries the old link: revoke it.
+  Railway once failed a build on an expired registry TLS cert; a dashboard Redeploy fixed it.
+- **Login ignores email case + spaces** on all four login routes (`6f3708b`, live).
+- **Gemini outage 2026-11-16 to 11-21**: Google moved the Gemini API to PREPAY; Cloud billing credit ($5.93) is
+  NOT usable ("$0 eligible GCP credits"). User added $10 prepay on 11-21; key `...DnrQ` (VoiceToSpeech project)
+  verified working. Gaps left: 213 cal_surgs from 2026-11-17 with NULL patientNameEn (needs a backfill, list to user
+  first), 26 clerk_procs self-heal via the 5-min retry. Offered: warn-log on Gemini failures; `gemini-2.5-flash`
+  is deprecated and auto-routes to 3.5 Flash-Lite on 2026-12-01.
+- Offered, not built: "superseded" status for older certificates when a newer one is issued.
+- **2026-11-22**: user updated Railway shared FRONTEND_URL to libeluspro.com; still to confirm it was applied and
+  redeployed (check the CORS header for libeluspro.com). Candidate Hesham Nasr (`3c6a3955-...`) reported no OTP,
+  then signed up fine at 14:40 UTC. **Production data write (user-approved)**: he was added as attendee to all 17
+  events Wed 18 to Fri 20 Nov 2026 (`event_attendance`, self-registration shape, 1 point each, 17 total). Rollback:
+  delete his `event_attendance` rows (he had 0 before).
+- **2026-11-24 DONE: patientNameEn backfill applied to production WITHOUT Gemini** (user asked to spare the
+  paid API): 214 cal_surgs (213 from 11-17 + 1 from 08-02), words reused from the 7,056 existing pairs,
+  12 new first names transliterated by Claude, initials via the service's digraph table. 0 NULL slots left.
+  Rollback = set patientNameEn NULL for the ids in the session scratchpad `names/applied-ids.json`.
+- Still open, awaiting user: Gemini warn-log, superseded certificates, revoke
+  `LP-S225-RWEK`, data normalization N2 onward.
+
 ### ▶ NEXT SESSION START HERE (2026-11-20 evening)
 - **Stage B (verifiable E-Certificate)** is the next build: decisions recorded in `docs/PLATFORM_ENHANCEMENT_PLAN.md`
   ("Decisions for Stage B onward"): signed BY HAND (blank signature/stamp lines, no printed name), landscape cover,

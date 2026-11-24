@@ -29,6 +29,15 @@ import { IExternalResponse } from "../externalService/external.interface";
 import { MailerService } from "../mailer/mailer.service";
 import { AiAgentProvider } from "../aiAgent/aiAgent.provider";
 import { UserRole } from "../types/role.types";
+import { OTHER_PROC_NUMCODE, OTHER_DIAG_ICDCODE } from "../inAppSearch/inAppSearch.provider";
+
+/** Optional create-submission fields for an item the catalogue did not have. */
+export interface IDescribedItemBody {
+  otherProcedureText?: string;
+  otherDiagnosisText?: string;
+  otherProcedureSearchEventId?: string;
+  otherDiagnosisSearchEventId?: string;
+}
 
 /** Frontend path for supervisor submission review (base URL from FRONTEND_URL env). Note: "a-ins" was removed from supervisor dashboard routes on the frontend. */
 const SUBMISSION_REVIEW_PATH = "/dashboard/supervisor/submissions";
@@ -68,6 +77,119 @@ export class SubProvider {
     @inject(CandService) private candService: CandService,
     @inject(SupervisorService) private supervisorService: SupervisorService
   ) {}
+
+  /**
+   * "Other" needs a description (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md).
+   *
+   * - A described procedure / diagnosis is stored next to the catalogue's "other" row, which is
+   *   linked by CODE (it is not linked to every department's categories, so it cannot be found
+   *   through the main diagnosis). The canonical name is added to procedureName / diagnosisName.
+   * - With REQUIRE_OTHER_DESCRIPTION=true, picking "other" without a description is refused.
+   *   The flag lets the backend ship before the new form, so open old forms keep working.
+   * Mutates the id and name arrays in place (subBase already holds the id arrays).
+   */
+  private async applyDescribedItems(
+    body: IDescribedItemBody,
+    procCptDocIds: string[],
+    icdDocIds: string[],
+    procedureName: string[],
+    diagnosisName: string[],
+    dataSource: DataSource
+  ): Promise<{ otherProcedureText: string | null; otherDiagnosisText: string | null }> {
+    const clean = (s: unknown) =>
+      typeof s === "string" && s.trim().length > 0 ? s.trim().replace(/\s+/g, " ").slice(0, 120) : null;
+    const procText = clean(body.otherProcedureText);
+    const diagText = clean(body.otherDiagnosisText);
+    const required = process.env.REQUIRE_OTHER_DESCRIPTION === "true";
+
+    const procRows = await dataSource.query(
+      `SELECT "id", lower(trim("title")) AS name FROM "proc_cpts" WHERE "numCode" = $1 LIMIT 1`,
+      [OTHER_PROC_NUMCODE]
+    );
+    const diagRows = await dataSource.query(
+      `SELECT "id", lower(trim("icdName")) AS name FROM "diagnoses" WHERE "icdCode" = $1 LIMIT 1`,
+      [OTHER_DIAG_ICDCODE]
+    );
+    const otherProc: { id: string; name: string } | undefined = procRows[0];
+    const otherDiag: { id: string; name: string } | undefined = diagRows[0];
+
+    const settle = (
+      text: string | null,
+      sentinel: { id: string; name: string } | undefined,
+      ids: string[],
+      names: string[],
+      label: "procedure" | "diagnosis"
+    ): string | null => {
+      if (!sentinel) return text; // catalogue has no "other" row: keep the text, nothing to link
+      const picked = ids.includes(sentinel.id) || names.includes(sentinel.name);
+      if (text) {
+        if (!ids.includes(sentinel.id)) ids.push(sentinel.id);
+        if (!names.includes(sentinel.name)) names.push(sentinel.name);
+        return text;
+      }
+      if (picked && required) {
+        throw new Error(`Describe the ${label} you could not find: "Other" needs a description.`);
+      }
+      return null;
+    };
+
+    return {
+      otherProcedureText: settle(procText, otherProc, procCptDocIds, procedureName, "procedure"),
+      otherDiagnosisText: settle(diagText, otherDiag, icdDocIds, diagnosisName, "diagnosis"),
+    };
+  }
+
+  /**
+   * One catalog_gaps row per described item, for the department's "Not in catalogue" list.
+   * Written after the submission is saved (same pattern as writeAnswers). The search event is
+   * linked only when it is the submitter's own 'missing' search. A failure here is logged and
+   * never fails the submission: the text itself is already on the submission row.
+   */
+  private async recordCatalogGaps(
+    savedSub: unknown,
+    subBase: ISubBase,
+    body: IDescribedItemBody,
+    described: { otherProcedureText: string | null; otherDiagnosisText: string | null },
+    actorId: string,
+    dataSource: DataSource
+  ): Promise<void> {
+    const submissionId = (savedSub as { id?: string })?.id;
+    if (!submissionId) return;
+    const items = [
+      { kind: "procedure", text: described.otherProcedureText, eventId: body.otherProcedureSearchEventId },
+      { kind: "diagnosis", text: described.otherDiagnosisText, eventId: body.otherDiagnosisSearchEventId },
+    ].filter((i) => !!i.text);
+    for (const item of items) {
+      try {
+        let searchEventId: string | null = null;
+        if (item.eventId) {
+          const own = await dataSource.query(
+            `SELECT "id" FROM "in_app_search_events"
+              WHERE "id" = $1::uuid AND "userId" = $2::uuid AND "purpose" = 'missing' LIMIT 1`,
+            [item.eventId, actorId]
+          );
+          searchEventId = own[0]?.id ?? null;
+        }
+        await dataSource.query(
+          `INSERT INTO "catalog_gaps"
+             ("departmentId", "mainDiagId", "kind", "text", "normalizedText", "submissionId", "searchEventId")
+           VALUES ($1::uuid, $2::uuid, $3::varchar, $4::varchar, $5::varchar, $6::uuid, $7::uuid)
+           ON CONFLICT ("submissionId", "kind") DO NOTHING`,
+          [
+            subBase.departmentId ?? null,
+            subBase.mainDiagDocId ?? null,
+            item.kind,
+            item.text,
+            item.text!.toLowerCase(),
+            submissionId,
+            searchEventId,
+          ]
+        );
+      } catch (err: any) {
+        console.warn(`[catalogGaps] could not record ${item.kind} gap for ${submissionId}: ${err?.message ?? err}`);
+      }
+    }
+  }
 
   /** Persist keyed answers into submission_question_answers (idempotent per submission+question). */
   private async writeAnswers(
@@ -378,7 +500,7 @@ export class SubProvider {
       consDetails?: string;
       surgNotes?: string;
       answers?: Array<{ questionId: string; questionKey?: string; optionId?: string | null; value?: string | null }>;
-    },
+    } & IDescribedItemBody,
     dataSource: DataSource,
     institutionId?: string
   ): Promise<ISubDoc> {
@@ -513,14 +635,19 @@ export class SubProvider {
 
     const diagnosisName = toArr(body.diagnosisName);
     const procedureName = toArr(body.procedureName);
+    // "Other" now needs a description (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md).
+    const described = await this.applyDescribedItems(body, procCptDocIds, icdDocIds, procedureName, diagnosisName, dataSource);
     const payload: ISub = {
       ...subBase,
       diagnosisName,
       procedureName,
       surgNotes: toOpt(body.surgNotes),
+      otherProcedureText: described.otherProcedureText,
+      otherDiagnosisText: described.otherDiagnosisText,
     } as ISub;
 
     const savedSub = await this.subService.createOneSub(payload, dataSource);
+    await this.recordCatalogGaps(savedSub, subBase, body, described, candidateId, dataSource);
 
     // Additional-question answers → flexible store (dynamic-questions framework).
     await this.writeAnswers(dataSource, (savedSub as any).id, body.answers);
@@ -553,7 +680,7 @@ export class SubProvider {
       consDetails?: string;
       surgNotes?: string;
       answers?: Array<{ questionId: string; questionKey?: string; optionId?: string | null; value?: string | null }>;
-    },
+    } & IDescribedItemBody,
     dataSource: DataSource
   ): Promise<ISubDoc> {
     const mainDiag = await this.mainDiagService.getMainDiagById(
@@ -636,14 +763,19 @@ export class SubProvider {
 
     const diagnosisName = toArr(body.diagnosisName);
     const procedureName = toArr(body.procedureName);
+    // "Other" now needs a description (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md).
+    const described = await this.applyDescribedItems(body, procCptDocIds, icdDocIds, procedureName, diagnosisName, dataSource);
     const payload: ISub = {
       ...subBase,
       diagnosisName,
       procedureName,
       surgNotes: toOpt(body.surgNotes),
+      otherProcedureText: described.otherProcedureText,
+      otherDiagnosisText: described.otherDiagnosisText,
     } as ISub;
 
     const savedSub = await this.subService.createOneSub(payload, dataSource);
+    await this.recordCatalogGaps(savedSub, subBase, body, described, supervisorId, dataSource);
     await this.writeAnswers(dataSource, (savedSub as any).id, body.answers);
     return savedSub;
   }
@@ -1729,6 +1861,41 @@ export class SubProvider {
     }
   }
 
+  /** Minimal HTML escaping for user-typed text placed in emails. */
+  private escapeEmailHtml(value: unknown): string {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  /**
+   * The candidate's own picks for the email (Stage J): the catalogue's "other" entry is replaced by
+   * what the candidate typed, marked "(not in catalogue)". Older rows without a text keep "other".
+   */
+  private emailPicks(submission: ISubDoc): { procedures: string; diagnoses: string; firstProcedure: string | null } {
+    const subAny = submission as any;
+    const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+    const swap = (names: unknown, otherName: string, text: string | null | undefined): string[] => {
+      const list = Array.isArray(names) ? names.map((n) => String(n ?? "").trim()).filter(Boolean) : [];
+      const described = (text ?? "").trim();
+      const out = list
+        .filter((n) => !(described && n.toLowerCase() === otherName))
+        .map(titleCase);
+      if (described) out.push(`${described} (not in catalogue)`);
+      return out;
+    };
+    const procs = swap(subAny.procedureName, "other procedure", subAny.otherProcedureText);
+    const diags = swap(subAny.diagnosisName, "other", subAny.otherDiagnosisText);
+    return {
+      procedures: procs.length ? procs.join(", ") : "-",
+      diagnoses: diags.length ? diags.join(", ") : "-",
+      firstProcedure: procs[0] ?? null,
+    };
+  }
+
   private getSupervisorNewSubmissionEmailHtml(
     supervisorName: string,
     candidateName: string,
@@ -1743,8 +1910,10 @@ export class SubProvider {
       : "—";
     const roleInSurg = submission.roleInSurg ?? "—";
     const calSurg = subAny.calSurg;
-    const procedureLabel =
-      calSurg?.procCpt?.arTitle ?? calSurg?.procCpt?.title ?? (Array.isArray(submission.procedureName) && submission.procedureName[0]) ?? "—";
+    const picks = this.emailPicks(submission);
+    const procedureLabel = this.escapeEmailHtml(
+      calSurg?.procCpt?.arTitle ?? calSurg?.procCpt?.title ?? picks.firstProcedure ?? "-"
+    );
     const mainDiag = subAny.mainDiag;
     const mainDiagTitle = mainDiag?.title ?? (submission as any).mainDiagDocId ?? "—";
     const hospitalName = calSurg?.hospital?.engName ?? calSurg?.hospital?.arabName ?? "—";
@@ -1779,6 +1948,8 @@ export class SubProvider {
                     <tr><td style="padding: 4px 0; color: #6b7280;">Role in surgery</td><td style="padding: 4px 0; color: #374151;">${roleInSurg}</td></tr>
                     <tr><td style="padding: 4px 0; color: #6b7280;">Procedure</td><td style="padding: 4px 0; color: #374151;">${procedureLabel}</td></tr>
                     <tr><td style="padding: 4px 0; color: #6b7280;">Main diagnosis</td><td style="padding: 4px 0; color: #374151;">${mainDiagTitle}</td></tr>
+                    <tr><td style="padding: 4px 0; color: #6b7280;">Procedures chosen</td><td style="padding: 4px 0; color: #374151;" dir="auto">${this.escapeEmailHtml(picks.procedures)}</td></tr>
+                    <tr><td style="padding: 4px 0; color: #6b7280;">Diagnoses chosen</td><td style="padding: 4px 0; color: #374151;" dir="auto">${this.escapeEmailHtml(picks.diagnoses)}</td></tr>
                     <tr><td style="padding: 4px 0; color: #6b7280;">Hospital</td><td style="padding: 4px 0; color: #374151;">${hospitalName}</td></tr>
                   </table>
                 </td></tr>
@@ -1821,12 +1992,13 @@ export class SubProvider {
       : "—";
     const roleInSurg = submission.roleInSurg ?? "—";
     const calSurg = subAny.calSurg;
-    const procedureLabel = calSurg?.procCpt?.arTitle ?? calSurg?.procCpt?.title ?? (Array.isArray(submission.procedureName) && submission.procedureName[0]) ?? "—";
+    const picks = this.emailPicks(submission);
+    const procedureLabel = calSurg?.procCpt?.arTitle ?? calSurg?.procCpt?.title ?? picks.firstProcedure ?? "-";
     const mainDiag = subAny.mainDiag;
     const mainDiagTitle = mainDiag?.title ?? "—";
     const hospitalName = calSurg?.hospital?.engName ?? calSurg?.hospital?.arabName ?? "—";
     return [
-      "LibelusPro — New submission to review",
+      "LibelusPro: New submission to review",
       "",
       `Dear ${supervisorName},`,
       "",
@@ -1840,6 +2012,8 @@ export class SubProvider {
       `Role in surgery: ${roleInSurg}`,
       `Procedure: ${procedureLabel}`,
       `Main diagnosis: ${mainDiagTitle}`,
+      `Procedures chosen: ${picks.procedures}`,
+      `Diagnoses chosen: ${picks.diagnoses}`,
       `Hospital: ${hospitalName}`,
       "",
       "Review submission:",

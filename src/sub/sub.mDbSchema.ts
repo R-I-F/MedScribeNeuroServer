@@ -112,6 +112,15 @@ export class SubmissionEntity {
   @Column({ type: "text", nullable: true })
   surgNotes?: string;
 
+  // What the user typed when the procedure / diagnosis was not in the catalogue (they searched,
+  // then pressed "None of these"). Set only together with the "other" sentinel link. NULL on
+  // every submission created before this feature (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md).
+  @Column({ type: "varchar", length: 120, nullable: true })
+  otherProcedureText?: string | null;
+
+  @Column({ type: "varchar", length: 120, nullable: true })
+  otherDiagnosisText?: string | null;
+
   // The 6 legacy additional-question answer columns (spOrCran/pos/approach/region/clinPres/
   // IntEvents) were removed — answers now live in `submission_question_answers` and are
   // resolved onto the doc at read time (SubService.attachAnswerFields).

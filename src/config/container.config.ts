@@ -109,6 +109,9 @@ import { CaseAnalyticsProvider } from "../caseAnalytics/caseAnalytics.provider";
 import { CaseAnalyticsService } from "../caseAnalytics/caseAnalytics.service";
 import { CaseAnalyticsController } from "../caseAnalytics/caseAnalytics.controller";
 import { CaseAnalyticsRouter } from "../caseAnalytics/caseAnalytics.router";
+import { CatalogGapsProvider } from "../catalogGaps/catalogGaps.provider";
+import { CatalogGapsController } from "../catalogGaps/catalogGaps.controller";
+import { CatalogGapsRouter } from "../catalogGaps/catalogGaps.router";
 
 import { SuperAdminController } from "../superAdmin/superAdmin.controller";
 import { SuperAdminRouter } from "../superAdmin/superAdmin.router";
@@ -291,6 +294,9 @@ container.bind(CaseAnalyticsProvider).toSelf().inTransientScope();
 container.bind(CaseAnalyticsService).toSelf().inTransientScope();
 container.bind(CaseAnalyticsController).toSelf().inTransientScope();
 container.bind(CaseAnalyticsRouter).toSelf().inTransientScope();
+container.bind(CatalogGapsProvider).toSelf().inTransientScope();
+container.bind(CatalogGapsController).toSelf().inTransientScope();
+container.bind(CatalogGapsRouter).toSelf().inTransientScope();
 
 container.bind(SuperAdminController).toSelf().inTransientScope();
 container.bind(SuperAdminRouter).toSelf().inTransientScope();

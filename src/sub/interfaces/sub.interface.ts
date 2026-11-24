@@ -172,6 +172,9 @@ export interface ISubBase {
   icdDocId: string[]; // UUID[] (replaces Types.ObjectId[])
   /** Department the submission belongs to (stamped from the submitting user's row). */
   departmentId?: string | null;
+  /** Described item the catalogue did not have (only with the "other" sentinel). */
+  otherProcedureText?: string | null;
+  otherDiagnosisText?: string | null;
 }
 
 export interface ISubCongAnom extends ISubBase, ICongAnom {}

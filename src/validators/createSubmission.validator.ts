@@ -1,5 +1,6 @@
 import { checkSchema } from "express-validator";
 import { uuidValidator } from "./uuidValidator.util";
+import { describedItemFields } from "./describedItem.fields";
 
 const ROLE_IN_SURG = [
   "operator",
@@ -148,6 +149,7 @@ export const createSubmissionValidator = checkSchema({
     isString: true,
     trim: true,
   },
+  ...describedItemFields,
   // Dynamic additional-question answers (hub framework). Optional during the dual-write
   // transition; each item: { questionId (uuid), questionKey?, optionId?, value? }.
   answers: {

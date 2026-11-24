@@ -1,6 +1,6 @@
 # Platform Enhancement Plan: verifiable E-Certificate, fresher dashboards, smart tools, realtime
 
-Status: **A and A2 BUILT and verified locally (2026-11-20), uncommitted, not deployed.** B onward not started.
+Status (updated 2026-11-24): **A, A2, B and D are LIVE in production.** C, E, F, G, H and I are not started.
 Created 2026-11-20. Repos: backend `MedScribeNeuroServer`, frontend `NeuroLogBookFront`.
 Each piece of work gets its own purpose-named branch off `main`. Nothing is committed or pushed without an explicit ask (pushing `main` deploys production).
 
@@ -8,18 +8,25 @@ Each piece of work gets its own purpose-named branch off `main`. Nothing is comm
 
 | # | Stage | Status | Notes |
 |---|-------|--------|-------|
-| A | Certificate bug fixes (6 items) | **built, verified locally** | backend branch `feat/logbook-record-and-cert-fixes`; no migration |
-| A2 | Full Logbook Record PDF (landscape, every submission, institute admin only) | **built, verified locally** | backend same branch + frontend `feat/logbook-record`; no migration |
-| B | Verifiable certificate: `certificates` table, QR, public verify page, cover page | **built, verified locally 2026-11-21**, NOT deployed | migration 350 must be applied on production first |
-| C | Candidate self-download of the certificate | not started | depends on B |
-| D | AI summary cache | **built with B** | reuses `aiSummary` when the snapshot hash matches |
-| E | Dashboard freshness via `/me/updates` polling | not started | no infra change |
-| F | Milestone and gap tracker | not started | needs a user decision on targets |
-| G | Smart tools (case pre-fill, duplicate flags, supervisor triage, weekly digest, NL analytics) | not started | each one gets its own mini-plan |
-| H | True realtime push (WebSocket or SSE on an `api.` subdomain) | not started | infra decision |
-| I | UI/UX pass (progress hero, quick log, offline drafts, error messages) | not started | frontend |
+| A | Certificate bug fixes (6 items) | **LIVE 2026-11-20** | backend `29ef189` on main; no migration |
+| A2 | Full Logbook Record PDF (landscape, every submission, institute admin only) | **LIVE 2026-11-20** | backend `29ef189` + frontend `e6b13df` on main; no migration |
+| B | Verifiable certificate: `certificates` table, QR, public verify page, cover page | **LIVE 2026-11-21** | migration 350 applied by the user; backend `42c48f5` + frontend `103154a`; verify link pinned to `https://libeluspro.com` (`5060c37`) |
+| C | Candidate self-download of the certificate | **not started** | next in line; B is live, so nothing blocks it |
+| D | AI summary cache | **LIVE with B** | reuses `aiSummary` when the snapshot hash matches |
+| E | Dashboard freshness via `/me/updates` polling | **not started** | no infra change |
+| F | Milestone and gap tracker | **not started** | blocked on a user decision: who supplies the target numbers |
+| G | Smart tools (case pre-fill, duplicate flags, supervisor triage, weekly digest, NL analytics) | **not started** | each one gets its own mini-plan |
+| H | True realtime push (WebSocket or SSE on an `api.` subdomain) | **not started** | infra decision (Q6) not asked yet |
+| I | UI/UX pass (progress hero, quick log, offline drafts, error messages) | **not started** | frontend |
+| J | Replace "Other" on procedures/diagnoses with search, then a required description | **built + verified locally 2026-11-24, uncommitted, not deployed** | full plan: `docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md`; certificate/PDF part deferred |
 
-Recommended order: **A, B, C, D, E together (Tier 1)**, then F, then G items one at a time, then H when live seat counts are wanted, I alongside.
+Recommended order: **C and E next (finishing Tier 1)**, then F, then G items one at a time, then H when live seat counts are wanted, I alongside.
+
+### Loose ends from the shipped stages (still open)
+- Test certificate `LP-S225-RWEK` was issued before the link fix and carries the old neurologbook.com link: revoke it.
+- Railway shared `FRONTEND_URL` was updated to libeluspro.com by the user on 2026-11-22; confirm the redeploy picked it up (CORS header for libeluspro.com).
+- Offered, not built: a "superseded" status for older certificates when a newer one is issued.
+- The i-admin certificate panel was verified over the API only, never click-tested in a browser.
 
 ---
 
@@ -172,6 +179,7 @@ Verify: migration apply/revert/re-apply on a throwaway PG17; HTTP E2E (issue, ve
 - Frontend: public `VerifyCertificatePage` (`/verify`, `/verify/:code`, EN + AR), `CandidateCertificatesPanel` on the i-admin candidate page (list, open the public check, revoke with a required reason), API types.
 - Verified on the local restore: migration applied; 14/14 HTTP checks (issue with code, filename, list with issuer, public valid, private fields hidden, loose code input, unknown 404, scope 404, revoke validation, revoke, public revoked, second revoke 409, superAdmin issue on an empty logbook); cover rendered and read; verify page click-tested EN and AR (valid and revoked). Backend + frontend tsc and build clean, 0 em-dashes. The admin panel itself was not click-tested (API verified).
 - **Deploy order**: verified production backup, user applies migration 350, push backend, then frontend. Check that Railway `FRONTEND_URL` is `https://libeluspro.com` (the QR link uses it).
+- **Shipped 2026-11-21** in that order. Railway once failed a build on an expired registry TLS cert; a dashboard Redeploy fixed it. Because `FRONTEND_URL` still held the old domain, the verify link was then hard-coded to `https://libeluspro.com` (`5060c37`).
 
 ## Stage C: candidate self-download
 

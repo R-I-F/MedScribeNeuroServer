@@ -195,6 +195,12 @@ export function addRoutes(app: Application) {
   const caseAnalyticsRouter = container.get(CaseAnalyticsRouter) as any;
   app.use("/caseAnalytics", caseAnalyticsRouter.router);
 
+  // "Not in catalogue" list: what users described because the catalogue did not have it,
+  // institute-admin only, department locked (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md J5).
+  const { CatalogGapsRouter } = require("../catalogGaps/catalogGaps.router");
+  const catalogGapsRouter = container.get(CatalogGapsRouter) as any;
+  app.use("/catalogGaps", catalogGapsRouter.router);
+
   // Public semantic-search tool, no auth (docs/PUBLIC_SEMANTIC_SEARCH_TOOL_PLAN.md).
   const { PublicSearchRouter } = require("../publicSearch/publicSearch.router");
   const publicSearchRouter = container.get(PublicSearchRouter) as any;

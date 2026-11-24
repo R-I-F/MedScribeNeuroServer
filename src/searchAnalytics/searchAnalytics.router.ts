@@ -74,5 +74,25 @@ export class SearchAnalyticsRouter {
         }
       }
     );
+
+    // GET /searchAnalytics/queries?window=&deptCode=&type=&purpose=&outcome=&limit=
+    // What users typed (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md J5b). Super admin only: queries
+    // can carry clinical detail or a patient name.
+    this.router.get(
+      "/queries",
+      extractJWT,
+      institutionResolver,
+      userBasedRateLimiter,
+      requireSuperAdmin,
+      async (req: Request, res: Response) => {
+        try {
+          const resp = await this.controller.handleGetQueries(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          const status = /^Unknown deptCode/.test(err?.message ?? "") ? StatusCodes.NOT_FOUND : StatusCodes.INTERNAL_SERVER_ERROR;
+          res.status(status).json({ error: err.message });
+        }
+      }
+    );
   }
 }

@@ -99,7 +99,8 @@ export class SubRouter {
               err.message?.includes("not found") ||
               err.message?.includes("Main diagnosis") ||
               err.message?.includes("cannot add more entries for this procedure") ||
-              err.message?.includes("You have already submitted an entry for this procedure with this role")
+              err.message?.includes("You have already submitted an entry for this procedure with this role") ||
+              err.message?.includes("needs a description")
             ) {
               res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
             } else {
@@ -129,7 +130,11 @@ export class SubRouter {
           } catch (err: any) {
             if (err.message?.includes("Unauthorized")) {
               res.status(StatusCodes.UNAUTHORIZED).json({ error: err.message });
-            } else if (err.message?.includes("not found") || err.message?.includes("Main diagnosis")) {
+            } else if (
+              err.message?.includes("not found") ||
+              err.message?.includes("Main diagnosis") ||
+              err.message?.includes("needs a description")
+            ) {
               res.status(StatusCodes.BAD_REQUEST).json({ error: err.message });
             } else {
               res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: err.message });

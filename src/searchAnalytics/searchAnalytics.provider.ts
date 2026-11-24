@@ -317,7 +317,10 @@ export class SearchAnalyticsProvider {
     );
 
     const eventsP = dataSource.query(
-      `SELECT e."type" AS t, e."createdAt" AS occurred_at, d."code" AS dept_code
+      `SELECT e."type" AS t, e."createdAt" AS occurred_at, d."code" AS dept_code,
+              e."purpose" AS purpose, e."query" AS query, e."outcome" AS outcome,
+              e."pickedCode" AS picked_code,
+              CASE WHEN e."results" IS NULL THEN NULL ELSE jsonb_array_length(e."results") END AS result_count
          FROM "in_app_search_events" e
          LEFT JOIN "departments" d ON d."id" = e."departmentId"
         WHERE e."userId" = $1
@@ -331,7 +334,16 @@ export class SearchAnalyticsProvider {
 
     const [identityRows, rows] = (await Promise.all([identityP, eventsP])) as [
       Array<{ name: string | null; email: string | null; dept_code: string | null; dept_name: string | null; dept_ar_name: string | null }>,
-      Array<{ t: string; occurred_at: string; dept_code: string | null }>
+      Array<{
+        t: string;
+        occurred_at: string;
+        dept_code: string | null;
+        purpose: string;
+        query: string | null;
+        outcome: string | null;
+        picked_code: string | null;
+        result_count: number | null;
+      }>
     ];
     const id = identityRows[0] ?? ({} as any);
 
@@ -353,6 +365,88 @@ export class SearchAnalyticsProvider {
         type: r.t,
         occurredAt: r.occurred_at,
         deptCode: r.dept_code ?? null,
+        purpose: r.purpose,
+        query: r.query ?? null,
+        resultCount: r.result_count ?? null,
+        outcome: r.outcome ?? null,
+        pickedCode: r.picked_code ?? null,
+      })),
+    };
+  }
+
+  /**
+   * What users typed into the in-app semantic search, newest first (docs/OTHER_FIELD_SEMANTIC_SEARCH_PLAN.md
+   * J5b). Only rows recorded since the query log shipped carry text. superAdmin rows excluded, as elsewhere.
+   */
+  public async getQueries(
+    dataSource: DataSource,
+    q: {
+      window: UsageWindow;
+      deptCode?: string | null;
+      type?: string | null;
+      purpose?: string | null;
+      outcome?: string | null; // 'picked' | 'none' | 'open' (no choice) | 'empty' (no results)
+      limit: number;
+    }
+  ) {
+    const w: UsageWindow = WINDOW_INTERVAL[q.window] ? q.window : "quarter";
+    const deptId = q.deptCode ? await this.resolveDeptId(dataSource, q.deptCode) : null;
+    const rows: Array<{
+      id: string;
+      occurred_at: string;
+      user_id: string;
+      user_role: string;
+      name: string | null;
+      dept_code: string | null;
+      type: string;
+      purpose: string;
+      query: string;
+      results: Array<{ code: string | null; title: string | null; inCurrentMainDiag?: boolean }> | null;
+      outcome: string | null;
+      picked_code: string | null;
+    }> = await dataSource.query(
+      `SELECT e."id", e."createdAt" AS occurred_at, e."userId" AS user_id, e."userRole" AS user_role,
+              COALESCE(c."fullName", s."fullName", ia."fullName") AS name,
+              d."code" AS dept_code, e."type", e."purpose", e."query", e."results",
+              e."outcome", e."pickedCode" AS picked_code
+         FROM "in_app_search_events" e
+         LEFT JOIN "candidates" c        ON c."id"  = e."userId"
+         LEFT JOIN "supervisors" s       ON s."id"  = e."userId"
+         LEFT JOIN "institute_admins" ia ON ia."id" = e."userId"
+         LEFT JOIN "departments" d       ON d."id"  = e."departmentId"
+        WHERE e."query" IS NOT NULL
+          AND e."userRole" <> $1
+          AND e."createdAt" >= now() - ($2)::interval
+          AND ($3::uuid IS NULL OR e."departmentId" = $3::uuid)
+          AND ($4::text IS NULL OR e."type" = $4)
+          AND ($5::text IS NULL OR e."purpose" = $5)
+          AND (
+                $6::text IS NULL
+             OR ($6 = 'picked' AND e."outcome" = 'picked')
+             OR ($6 = 'none'   AND e."outcome" = 'none')
+             OR ($6 = 'open'   AND e."outcome" IS NULL)
+             OR ($6 = 'empty'  AND COALESCE(jsonb_array_length(e."results"), 0) = 0)
+          )
+        ORDER BY e."createdAt" DESC
+        LIMIT $7`,
+      [EXCLUDE_ROLE, WINDOW_INTERVAL[w], deptId, q.type ?? null, q.purpose ?? null, q.outcome ?? null, q.limit]
+    );
+    return {
+      window: w,
+      items: rows.map((r) => ({
+        id: r.id,
+        occurredAt: r.occurred_at,
+        userId: r.user_id,
+        userRole: r.user_role,
+        name: r.name,
+        deptCode: r.dept_code,
+        type: r.type,
+        purpose: r.purpose,
+        query: r.query,
+        resultCount: Array.isArray(r.results) ? r.results.length : null,
+        topResult: Array.isArray(r.results) && r.results[0] ? r.results[0].title ?? null : null,
+        outcome: r.outcome,
+        pickedCode: r.picked_code,
       })),
     };
   }

@@ -46,4 +46,15 @@ export class SearchAnalyticsService {
       throw new Error(err?.message ?? "Failed to load user search usage");
     }
   }
+
+  async getQueries(
+    dataSource: DataSource,
+    query: Parameters<SearchAnalyticsProvider["getQueries"]>[1]
+  ) {
+    try {
+      return await this.provider.getQueries(dataSource, query);
+    } catch (err: any) {
+      throw new Error(err?.message ?? "Failed to load search queries");
+    }
+  }
 }
