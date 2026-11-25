@@ -353,6 +353,35 @@ export class EventProvider {
    * `adminDepartmentId` null means institution-wide (superAdmin, or an admin row
    * with no department). Out of scope reads as not found, like the i-admin by-id guards.
    */
+  /**
+   * Open (true) or lock (false) candidate self-registration for one event regardless of
+   * its date. An event outside the admin's department reads as not found.
+   */
+  public async setAttendanceOpen(
+    eventId: string,
+    open: boolean,
+    adminDepartmentId: string | null,
+    dataSource: DataSource
+  ): Promise<{ id: string; attendanceOpen: boolean }> {
+    const params: unknown[] = [eventId, open];
+    let deptClause = "";
+    if (adminDepartmentId) {
+      params.push(adminDepartmentId);
+      deptClause = ` AND "departmentId" = $3`;
+    }
+    // query() on UPDATE ... RETURNING yields [rows, affectedCount].
+    const [rows] = await dataSource.query(
+      `UPDATE "events" SET "attendanceOpen" = $2, "updatedAt" = now()
+        WHERE "id" = $1${deptClause}
+        RETURNING "id", "attendanceOpen"`,
+      params
+    );
+    if (!rows || rows.length === 0) {
+      throw new EventPresenterError("EVENT_NOT_FOUND", 404, "Event not found");
+    }
+    return { id: rows[0].id, attendanceOpen: rows[0].attendanceOpen };
+  }
+
   public async changePresenter(
     eventId: string,
     presenterId: string,

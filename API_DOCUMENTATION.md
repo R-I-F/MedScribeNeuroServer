@@ -9102,6 +9102,26 @@ Sending the unchanged presenter still succeeds.
 
 ---
 
+### Open or Lock Event Attendance Registration
+
+**PATCH** `/event/:id/attendanceOpen`
+
+Candidates normally confirm their own attendance only on the event day or the day after
+(enforced by the frontend). Setting `open: true` lets them register whatever the date (for
+example a multi-day conference); `open: false` returns the event to the normal window.
+
+- **Auth:** Institute Admin (own department, scope read from the admin's DB row; an admin
+  token with no admin row gets 403), Super Admin (institution-wide).
+- **Body:** `{ "open": true | false }` (strict boolean, required).
+- **200:** `{ "id": "<eventId>", "attendanceOpen": true }`
+- **400:** validation error. **404:** `{ "error": "Event not found", "code": "EVENT_NOT_FOUND" }`
+  (also returned for an event outside the admin's department).
+
+Every event read (`GET /event`, `GET /event/:id`, dashboard) now carries `attendanceOpen`
+(boolean, default `false`, migration `1783782610370`).
+
+---
+
 ### Change Event Presenter
 
 **PATCH** `/event/:id/presenter`
@@ -10576,6 +10596,7 @@ All authenticated endpoints operate on the single KA institution. "Dept-scoped" 
 | `GET /event/by-presenter/:supervisorId`, `GET /event/:id` | Yes | Supervisor (own id) / admins; all roles (unscoped) |
 | `POST /event`, `PATCH /event/:id`, `DELETE /event/:id` | Yes | Clerk, Institute Admin, Super Admin (create stamps the department) |
 | `PATCH /event/:id/presenter` | Yes | Institute Admin (own department, from the DB row), Super Admin |
+| `PATCH /event/:id/attendanceOpen` | Yes | Institute Admin (own department, from the DB row), Super Admin |
 | `POST /event/bulk-import-attendance` | Yes | Institute Admin or Super Admin |
 | `GET /event/candidate/points`, `GET /event/candidate/:candidateId/points` | Yes | Candidate+ |
 | `GET /event/academicRanking` | Yes | Candidate+; **dept-scoped** |

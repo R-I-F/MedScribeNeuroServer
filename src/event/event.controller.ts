@@ -123,6 +123,25 @@ export class EventController {
     if (!dataSource) {
       throw new Error("Institution DataSource not resolved");
     }
+    const adminDepartmentId = await this.resolveAdminDepartment(res, dataSource);
+    return this.eventProvider.changePresenter(req.params.id, presenterId, adminDepartmentId, dataSource);
+  }
+
+  /**
+   * Open or lock candidate self-registration for one event, regardless of its date.
+   * Same scope rule as the presenter change (admin's DB row, superAdmin institution-wide).
+   */
+  public async handleSetAttendanceOpen(req: Request, res: Response) {
+    const { open } = matchedData(req) as { open: boolean };
+    const dataSource = (req as any).institutionDataSource;
+    if (!dataSource) {
+      throw new Error("Institution DataSource not resolved");
+    }
+    const adminDepartmentId = await this.resolveAdminDepartment(res, dataSource);
+    return this.eventProvider.setAttendanceOpen(req.params.id, open, adminDepartmentId, dataSource);
+  }
+
+  private async resolveAdminDepartment(res: Response, dataSource: any): Promise<string | null> {
     const jwt = (res as any).locals?.jwt;
     const callerId = jwt?.id || jwt?._id;
     let adminDepartmentId: string | null = null;
@@ -137,7 +156,7 @@ export class EventController {
       }
       adminDepartmentId = rows[0].departmentId ?? null;
     }
-    return this.eventProvider.changePresenter(req.params.id, presenterId, adminDepartmentId, dataSource);
+    return adminDepartmentId;
   }
 
   public async handleDeleteEvent(req: Request, res: Response) {

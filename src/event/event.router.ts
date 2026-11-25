@@ -7,6 +7,7 @@ import { getEventsByPresenterValidator } from "../validators/getEventsByPresente
 import { updateEventValidator } from "../validators/updateEvent.validator";
 import { deleteEventValidator } from "../validators/deleteEvent.validator";
 import { changeEventPresenterValidator } from "../validators/changeEventPresenter.validator";
+import { setEventAttendanceOpenValidator } from "../validators/setEventAttendanceOpen.validator";
 import { EventPresenterError } from "./event.interface";
 import { addAttendanceValidator } from "../validators/addAttendance.validator";
 import { removeAttendanceValidator } from "../validators/removeAttendance.validator";
@@ -286,6 +287,35 @@ export class EventRouter {
           }
           console.error("[event] presenter change failed:", err);
           res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Could not change the presenter" });
+        }
+      }
+    );
+
+    // Open or lock candidate self-registration regardless of the event date (institute
+    // admin, own department; superAdmin institution-wide). Declared before PATCH /:id.
+    this.router.patch(
+      "/:id/attendanceOpen",
+      extractJWT,
+      institutionResolver,
+      userBasedStrictRateLimiter,
+      requireInstituteAdmin,
+      setEventAttendanceOpenValidator,
+      async (req: Request, res: Response) => {
+        const result = validationResult(req);
+        if (!result.isEmpty()) {
+          res.status(StatusCodes.BAD_REQUEST).json(result.array());
+          return;
+        }
+        try {
+          const resp = await this.eventController.handleSetAttendanceOpen(req, res);
+          res.status(StatusCodes.OK).json(resp);
+        } catch (err: any) {
+          if (err instanceof EventPresenterError) {
+            res.status(err.status).json({ error: err.message, code: err.code });
+            return;
+          }
+          console.error("[event] attendanceOpen change failed:", err);
+          res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: "Could not change attendance registration" });
         }
       }
     );

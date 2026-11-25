@@ -59,6 +59,11 @@ export class EventEntity {
   @Column({ type: "enum", enum: ["booked", "held", "canceled"], default: "booked" })
   status!: TEventStatus;
 
+  // Institute-admin override: candidates may self-register regardless of the date
+  // while this is true (normal window = event day + the day after).
+  @Column({ type: "boolean", default: false })
+  attendanceOpen!: boolean;
+
   @OneToMany(() => EventAttendanceEntity, (attendance) => attendance.event)
   attendance!: EventAttendanceEntity[];
 
